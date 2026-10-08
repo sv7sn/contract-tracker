@@ -1,29 +1,6 @@
 import { useState, useMemo, useRef, useEffect, type CSSProperties, type ReactNode } from "react";
-
-// ─── TYPES ───────────────────────────────────────────────────
-type Role = "manager" | "buyer" | "bo";
-type Urgency = "green" | "yellow" | "red" | "gray";
-type StepStatus = "upcoming" | "done" | "pending_bo";
-type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "detail";
-
-interface User { id: string; name: string; email: string; role: Role; avatar: string; color: string; title: string }
-interface Contract {
-  id: number; supplier: string; object: string; category: string; country: string;
-  value: number; currency: string; start: string; end: string; owner: string; boEmail: string;
-  renewal: string; type: string; notes: string; ceased: boolean; fileName: string | null;
-}
-type ContractData = Omit<Contract, "id">;
-interface PlanStep {
-  contractId: number; stepId: string; scheduledDate: string; originalDate: string; status: StepStatus;
-  completedAt: string | null; completedBy: string | null; boDecision: string | null; boNotes: string;
-  boRespondedAt: string | null; modified: boolean; modifiedReason: string;
-}
-interface StepTemplate { id: string; daysBeforeEnd: number; icon: string; label: string; actor: string }
-interface AuditEntry { ts: string; user: string; action: string; detail: string }
-type Plans = Record<number, PlanStep[]>;
-type AuditLogs = Record<number, AuditEntry[]>;
-interface Suggestion { contractId: number; supplier: string; owner: string; reason: string; recommendedOffset: number }
-interface MonthLoad { label: string; total: number; byBuyer: Record<string, number> }
+import type { Role, Urgency, View, User, Contract, ContractData, PlanStep, StepTemplate, AuditEntry, Plans, AuditLogs, Suggestion, MonthLoad, AppState, CommitPayload } from "./types.ts";
+import { api } from "./api.ts";
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────
 const C = {
@@ -141,20 +118,19 @@ function initialAudit(): AuditLogs {
   return Object.fromEntries(MOCK_CONTRACTS.map(c => [c.id, [{ ts: `${fmtDate(c.start)}, 09:00`, user: c.owner, action: "Contratto creato", detail: `${c.supplier} · ${c.object}` }]]));
 }
 
-// ─── PERSISTENCE ─────────────────────────────────────────────
-interface StoredState { contracts: Contract[]; plans: Plans; auditLogs: AuditLogs }
-function loadState(): StoredState | null {
+// ─── PERSISTENCE (solo modalità locale, quando l'API non è raggiungibile) ───
+function loadLocal(): AppState | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
-    const data = JSON.parse(raw) as StoredState;
+    const data = JSON.parse(raw) as AppState;
     return Array.isArray(data.contracts) && data.plans && data.auditLogs ? data : null;
   } catch { return null; }
 }
-function saveState(state: StoredState) {
+function saveLocal(state: AppState) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* storage pieno o non disponibile */ }
 }
-function clearState() {
+function clearLocal() {
   try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
 }
 
@@ -212,7 +188,7 @@ function getSuggestions(contracts: Contract[], plans: Plans) {
 }
 
 // ─── LOGIN SCREEN ─────────────────────────────────────────────
-function LoginScreen({ onLogin, onResetDemo }: { onLogin: (u: User) => void; onResetDemo: () => void }) {
+function LoginScreen({ onLogin, onResetDemo }: { onLogin: (u: User) => void; onResetDemo?: () => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [hoverId, setHoverId] = useState<string | null>(null);
 
@@ -260,10 +236,12 @@ function LoginScreen({ onLogin, onResetDemo }: { onLogin: (u: User) => void; onR
           style={{ ...sans, width: "100%", padding: 16, background: selected ? C.accent : "rgba(255,255,255,0.1)", border: "none", borderRadius: 12, color: selected ? "#fff" : "rgba(255,255,255,0.3)", fontWeight: 700, cursor: selected ? "pointer" : "default", fontSize: 16, marginTop: 8, transition: "all 0.2s" }}>
           {selected ? `Accedi come ${USERS.find(u => u.id === selected)?.name} →` : "Seleziona un profilo"}
         </button>
-        <button onClick={() => { if (window.confirm("Ripristinare i dati demo? Tutte le modifiche salvate andranno perse.")) onResetDemo(); }}
-          style={{ ...sans, width: "100%", marginTop: 12, padding: 8, background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: 12, textDecoration: "underline" }}>
-          ↺ Ripristina dati demo
-        </button>
+        {onResetDemo && (
+          <button onClick={() => { if (window.confirm("Ripristinare i dati demo? Tutte le modifiche salvate in questo browser andranno perse.")) onResetDemo(); }}
+            style={{ ...sans, width: "100%", marginTop: 12, padding: 8, background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: 12, textDecoration: "underline" }}>
+            ↺ Ripristina dati demo
+          </button>
+        )}
       </div>
     </div>
   );
@@ -915,14 +893,17 @@ function AlertsView({ contracts, currentUser }: { contracts: Contract[]; current
 }
 
 // ─── APP ─────────────────────────────────────────────────────
+type Mode = "loading" | "api" | "local";
+const demoState = (): AppState => ({ contracts: MOCK_CONTRACTS, plans: initialPlans(), auditLogs: initialAudit() });
+
 export default function App() {
-  const [stored] = useState(loadState);
+  const [mode, setMode] = useState<Mode>("loading");
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [view, setView] = useState<View>("dashboard");
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [contracts, setContracts] = useState<Contract[]>(() => stored?.contracts ?? MOCK_CONTRACTS);
-  const [plans, setPlans] = useState<Plans>(() => stored?.plans ?? initialPlans());
-  const [auditLogs, setAuditLogs] = useState<AuditLogs>(() => stored?.auditLogs ?? initialAudit());
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [plans, setPlans] = useState<Plans>({});
+  const [auditLogs, setAuditLogs] = useState<AuditLogs>({});
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [showForm, setShowForm] = useState(false);
@@ -932,83 +913,134 @@ export default function App() {
   // Il dettaglio legge sempre la versione aggiornata del contratto (es. dopo una risposta BO).
   const selected = selectedId !== null ? contracts.find(c => c.id === selectedId) ?? null : null;
 
-  useEffect(() => { saveState({ contracts, plans, auditLogs }); }, [contracts, plans, auditLogs]);
+  const applyState = (st: AppState) => { setContracts(st.contracts); setPlans(st.plans); setAuditLogs(st.auditLogs); };
+
+  // Caricamento iniziale: dal database se disponibile, altrimenti dati locali del browser.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        let st = await api.loadState();
+        if (st.contracts.length === 0) { await api.seed(demoState()); st = await api.loadState(); }
+        if (!cancelled) { applyState(st); setMode("api"); }
+      } catch {
+        if (!cancelled) { applyState(loadLocal() ?? demoState()); setMode("local"); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Con più utenti sul database, ricarica i dati quando si torna sulla scheda.
+  useEffect(() => {
+    if (mode !== "api") return;
+    const refresh = () => { if (document.visibilityState === "visible") api.loadState().then(applyState).catch(() => undefined); };
+    document.addEventListener("visibilitychange", refresh);
+    return () => document.removeEventListener("visibilitychange", refresh);
+  }, [mode]);
+
+  useEffect(() => { if (mode === "local") saveLocal({ contracts, plans, auditLogs }); }, [mode, contracts, plans, auditLogs]);
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   const showToast = (msg: string) => { clearTimeout(toastTimer.current); setToast(msg); toastTimer.current = setTimeout(() => setToast(null), 3000); };
-  const addAudit = (contractId: number, action: string, detail: string, user?: string) => setAuditLogs(prev => ({ ...prev, [contractId]: [...(prev[contractId] || []), { ts: tsNow(), user: user || currentUser?.name || "Sistema", action, detail }] }));
+  const entry = (action: string, detail: string, user?: string): AuditEntry => ({ ts: tsNow(), user: user || currentUser?.name || "Sistema", action, detail });
+  const pushAudit = (id: number, entries: AuditEntry[]) => setAuditLogs(prev => ({ ...prev, [id]: [...(prev[id] || []), ...entries] }));
+
+  // Salva sul database (no-op in modalità locale). Se fallisce ricarica lo stato dal server per annullare le modifiche ottimistiche.
+  const persist = async (payload: CommitPayload): Promise<{ ok: boolean; contractId?: number }> => {
+    if (mode !== "api") return { ok: true };
+    try { return { ok: true, contractId: (await api.commit(payload)).contractId }; }
+    catch {
+      showToast("⚠️ Salvataggio non riuscito: dati ricaricati dal server");
+      api.loadState().then(applyState).catch(() => undefined);
+      return { ok: false };
+    }
+  };
 
   const handleLogin = (user: User) => { setCurrentUser(user); setView(user.role === ROLES.BO ? "bo" : "dashboard"); };
   const handleLogout = () => { setCurrentUser(null); setView("dashboard"); setSelectedId(null); };
   const handleResetDemo = () => {
-    clearState();
-    setContracts(MOCK_CONTRACTS); setPlans(initialPlans()); setAuditLogs(initialAudit());
+    clearLocal();
+    applyState(demoState());
     showToast("↺ Dati demo ripristinati");
   };
   const openDetail = (c: Contract) => { setSelectedId(c.id); setView("detail"); };
 
-  const handleSave = (data: ContractData) => {
+  const handleSave = async (data: ContractData) => {
     if (!currentUser) return;
     if (editingContract) {
       const id = editingContract.id;
-      setContracts(cs => cs.map(c => c.id === id ? { ...c, ...data } : c));
-      addAudit(id, "Contratto modificato", `Da ${currentUser.name}`);
+      const audit = [entry("Contratto modificato", `Da ${currentUser.name}`)];
+      let plan: PlanStep[] | undefined;
       if (data.end !== editingContract.end) {
-        setPlans(p => ({ ...p, [id]: reschedulePlan(p[id] || [], id, data.end) }));
-        addAudit(id, "Piano ricalcolato", `Nuova scadenza: ${fmtDate(data.end)}`, "Sistema");
+        plan = reschedulePlan(plans[id] || [], id, data.end);
+        audit.push(entry("Piano ricalcolato", `Nuova scadenza: ${fmtDate(data.end)}`, "Sistema"));
       }
+      const res = await persist({ contract: { ...data, id }, plan, audit });
+      if (!res.ok) return;
+      setContracts(cs => cs.map(c => c.id === id ? { ...c, ...data } : c));
+      if (plan) setPlans(p => ({ ...p, [id]: plan }));
+      pushAudit(id, audit);
       showToast("💾 Aggiornato");
     } else {
-      const newId = Math.max(...contracts.map(c => c.id), 0) + 1;
+      const audit = [entry("Contratto creato", `${data.supplier} · ${data.object}`)];
+      const plan = makePlan(0, data.end);
+      const res = await persist({ contract: data, plan, audit });
+      if (!res.ok) return;
+      const newId = res.contractId ?? Math.max(...contracts.map(c => c.id), 0) + 1;
       setContracts(cs => [...cs, { ...data, id: newId }]);
-      setPlans(p => ({ ...p, [newId]: makePlan(newId, data.end) }));
-      addAudit(newId, "Contratto creato", `${data.supplier} · ${data.object}`, currentUser.name);
+      setPlans(p => ({ ...p, [newId]: plan.map(st => ({ ...st, contractId: newId })) }));
+      pushAudit(newId, audit);
       showToast("✅ Contratto aggiunto");
     }
     setShowForm(false); setEditingContract(null);
   };
 
-  const handleSendBO = (id: number) => {
-    const c = contracts.find(x => x.id === id);
-    if (!c) return;
-    setPlans(p => ({ ...p, [id]: p[id].map(s => s.stepId === "bo_notify" ? { ...s, status: "done", completedAt: fmtDate(new Date()), completedBy: "Sistema" } : s.stepId === "bo_response" ? { ...s, status: "pending_bo" } : s) }));
-    addAudit(id, "Notifica BO inviata", `A: ${c.boEmail || "—"}`, "Sistema");
-    showToast(c.boEmail ? `✉️ Notifica inviata a ${c.boEmail}` : "⚠️ Nessuna email BO impostata per questo contratto");
+  const updatePlan = async (id: number, plan: PlanStep[], audit: AuditEntry[], contract?: Contract) => {
+    const res = await persist({ contractId: id, contract, plan, audit });
+    if (!res.ok) return false;
+    setPlans(p => ({ ...p, [id]: plan }));
+    if (contract) setContracts(cs => cs.map(c => c.id === id ? contract : c));
+    pushAudit(id, audit);
+    return true;
   };
 
-  const handleBOResponse = (id: number, { decision, notes }: { decision: string; notes: string }) => {
+  const handleSendBO = async (id: number) => {
+    const c = contracts.find(x => x.id === id);
+    if (!c) return;
+    const plan = (plans[id] || []).map(s => s.stepId === "bo_notify" ? { ...s, status: "done" as const, completedAt: fmtDate(new Date()), completedBy: "Sistema" } : s.stepId === "bo_response" ? { ...s, status: "pending_bo" as const } : s);
+    if (await updatePlan(id, plan, [entry("Notifica BO inviata", `A: ${c.boEmail || "—"}`, "Sistema")]))
+      showToast(c.boEmail ? `✉️ Notifica inviata a ${c.boEmail}` : "⚠️ Nessuna email BO impostata per questo contratto");
+  };
+
+  const handleBOResponse = async (id: number, { decision, notes }: { decision: string; notes: string }) => {
     const c = contracts.find(x => x.id === id);
     if (!c) return;
     const boUser = userByEmail(c.boEmail);
-    setPlans(p => ({ ...p, [id]: p[id].map(s => s.stepId === "bo_response" ? { ...s, status: "done", completedAt: fmtDate(new Date()), completedBy: c.boEmail, boDecision: decision, boNotes: notes, boRespondedAt: fmtDate(new Date()) } : s) }));
+    const plan = (plans[id] || []).map(s => s.stepId === "bo_response" ? { ...s, status: "done" as const, completedAt: fmtDate(new Date()), completedBy: c.boEmail, boDecision: decision, boNotes: notes, boRespondedAt: fmtDate(new Date()) } : s);
     const rm: Record<string, string> = { "Rinnovare alle stesse condizioni": "Rinnovo automatico", "Rinnovare con rinegoziazione": "In negoziazione", "Mettere in gara (RFQ/RFP)": "Da rilanciare a gara", "Prorogare temporaneamente": "In negoziazione", "Cessare l'attività": "Da rescindere" };
-    if (rm[decision]) setContracts(cs => cs.map(c2 => c2.id === id ? { ...c2, renewal: rm[decision] } : c2));
-    addAudit(id, "Risposta BO ricevuta", `Decisione: ${decision}${notes ? ` · "${notes}"` : ""}`, boUser?.name || c.boEmail);
+    const updated = rm[decision] ? { ...c, renewal: rm[decision] } : c;
+    const audit = [entry("Risposta BO ricevuta", `Decisione: ${decision}${notes ? ` · "${notes}"` : ""}`, boUser?.name || c.boEmail)];
+    if (await updatePlan(id, plan, audit, updated)) showToast("✅ Decisione BO registrata");
     setBOFormContract(null);
-    showToast("✅ Decisione BO registrata");
   };
 
-  const handleCompleteStep = (id: number, stepId: string) => {
+  const handleCompleteStep = async (id: number, stepId: string) => {
     if (!currentUser) return;
     const tmpl = stepTemplate(stepId);
-    setPlans(p => ({ ...p, [id]: p[id].map(s => s.stepId === stepId ? { ...s, status: "done", completedAt: fmtDate(new Date()), completedBy: currentUser.name } : s) }));
-    addAudit(id, `Attività completata: ${tmpl.label}`, `Da ${currentUser.name}`);
-    showToast(`✓ "${tmpl.label}" completata`);
+    const plan = (plans[id] || []).map(s => s.stepId === stepId ? { ...s, status: "done" as const, completedAt: fmtDate(new Date()), completedBy: currentUser.name } : s);
+    if (await updatePlan(id, plan, [entry(`Attività completata: ${tmpl.label}`, `Da ${currentUser.name}`)])) showToast(`✓ "${tmpl.label}" completata`);
   };
 
-  const handleUpdateStepDate = (id: number, stepId: string, newDate: string, reason: string) => {
+  const handleUpdateStepDate = async (id: number, stepId: string, newDate: string, reason: string) => {
     const tmpl = stepTemplate(stepId);
-    setPlans(p => ({ ...p, [id]: p[id].map(s => s.stepId === stepId ? { ...s, scheduledDate: newDate, modified: true, modifiedReason: reason } : s) }));
-    addAudit(id, `Data modificata: ${tmpl.label}`, `Nuova data: ${fmtDate(newDate)} · Motivo: ${reason}`);
-    showToast("📅 Data aggiornata");
+    const plan = (plans[id] || []).map(s => s.stepId === stepId ? { ...s, scheduledDate: newDate, modified: true, modifiedReason: reason } : s);
+    if (await updatePlan(id, plan, [entry(`Data modificata: ${tmpl.label}`, `Nuova data: ${fmtDate(newDate)} · Motivo: ${reason}`)])) showToast("📅 Data aggiornata");
   };
 
-  const handleApplySuggestion = (id: number, offset: number) => {
+  const handleApplySuggestion = async (id: number, offset: number) => {
     const c = contracts.find(x => x.id === id);
     if (!c) return;
-    setPlans(p => ({ ...p, [id]: makePlan(id, c.end, offset) }));
-    addAudit(id, "Piano anticipato", `Anticipo di ${offset} giorni`, "Sistema");
-    showToast(`⏩ Piano anticipato di ${offset} giorni`);
+    if (await updatePlan(id, makePlan(id, c.end, offset), [entry("Piano anticipato", `Anticipo di ${offset} giorni`, "Sistema")])) showToast(`⏩ Piano anticipato di ${offset} giorni`);
   };
 
   const toastEl = toast && (
@@ -1017,7 +1049,9 @@ export default function App() {
     </div>
   );
 
-  if (!currentUser) return <><LoginScreen onLogin={handleLogin} onResetDemo={handleResetDemo} />{toastEl}</>;
+  if (mode === "loading") return <div style={{ ...sans, minHeight: "100vh", background: C.navy, color: "rgba(255,255,255,0.6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>Caricamento…</div>;
+
+  if (!currentUser) return <><LoginScreen onLogin={handleLogin} onResetDemo={mode === "local" ? handleResetDemo : undefined} />{toastEl}</>;
 
   // Nav by role
   const navByRole: Record<Role, { key: View; icon: string; label: string }[]> = {
@@ -1063,6 +1097,12 @@ export default function App() {
           </div>
         </div>
       </div>
+
+      {mode === "local" && (
+        <div style={{ ...sans, background: C.yellowBg, color: C.yellow, fontSize: 11, fontWeight: 600, textAlign: "center", padding: "6px 12px" }}>
+          ⚠️ Database non raggiungibile: i dati sono salvati solo in questo browser
+        </div>
+      )}
 
       {/* Content */}
       <div style={{ padding: "18px 16px", maxWidth: 480, margin: "0 auto", paddingBottom: 90 }}>
