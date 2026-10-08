@@ -32,23 +32,24 @@ export function RoleBadge({ role }: { role: Role }) {
   return <span style={{ ...sans, background: `${ROLE_COLORS[role]}1c`, color: ROLE_COLORS[role], borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 650 }}>{ROLE_LABELS[role]}</span>;
 }
 
-/** Tessera con numero in evidenza e icona. */
-export function StatCard({ label, value, sub, color = C.accent, icon }: { label: string; value: ReactNode; sub?: string; color?: string; icon?: ReactNode }) {
+/** Tessera con numero in evidenza e icona: stessa altezza per tutte, il valore non esce mai dal riquadro. */
+export function StatCard({ label, value, sub, color = C.accent, icon, title }: { label: string; value: ReactNode; sub?: string; color?: string; icon?: ReactNode; title?: string }) {
   return (
-    <div className="lift" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: radius.lg, padding: "16px 18px", boxShadow: shadow.sm, display: "flex", gap: 14, alignItems: "flex-start" }}>
-      {icon && <div aria-hidden style={{ width: 40, height: 40, borderRadius: 12, background: `${color}14`, color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{icon}</div>}
-      <div style={{ minWidth: 0 }}>
-        <div style={{ ...sans, fontSize: 12, color: C.muted, fontWeight: 550, marginBottom: 4 }}>{label}</div>
-        <div className="tabular" style={{ ...font, fontSize: 26, fontWeight: 700, color: C.text, lineHeight: 1.1 }}>{value}</div>
-        {sub && <div style={{ ...sans, fontSize: 11.5, color: C.subtle, marginTop: 4 }}>{sub}</div>}
+    <div className="lift" title={title} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: radius.lg, padding: "16px 18px 15px", boxShadow: shadow.sm, display: "flex", flexDirection: "column", gap: 10, minWidth: 0, height: "100%", boxSizing: "border-box" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <div style={{ ...sans, fontSize: 12.5, color: C.muted, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
+        {icon && <div aria-hidden style={{ width: 34, height: 34, borderRadius: 10, background: `${color}14`, color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{icon}</div>}
       </div>
+      <div className="tabular" style={{ ...font, fontSize: "clamp(24px, 2.2vw, 30px)", fontWeight: 700, color: C.text, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
+      <div style={{ ...sans, fontSize: 12, color: C.subtle, marginTop: "auto", minHeight: 16 }}>{sub ?? "\u00a0"}</div>
     </div>
   );
 }
 
 /** Griglia che passa da 1 colonna (telefono) a più colonne (desktop) senza media query. */
-export function Grid({ min = 320, gap = 14, children, style }: { min?: number; gap?: number; children: ReactNode; style?: CSSProperties }) {
-  return <div style={{ display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${min}px), 1fr))`, gap, alignItems: "start", ...style }}>{children}</div>;
+export function Grid({ min = 320, gap = 14, children, style, fill = false }: { min?: number; gap?: number; children: ReactNode; style?: CSSProperties; fill?: boolean }) {
+  // fill: le colonne si allargano per occupare tutta la riga (auto-fit) e le schede hanno tutte la stessa altezza.
+  return <div style={{ display: "grid", gridTemplateColumns: `repeat(${fill ? "auto-fit" : "auto-fill"}, minmax(min(100%, ${min}px), 1fr))`, gap, alignItems: fill ? "stretch" : "start", ...style }}>{children}</div>;
 }
 
 export function Card({ children, style, onClick, ...rest }: { children: ReactNode; style?: CSSProperties; onClick?: () => void } & Omit<React.HTMLAttributes<HTMLDivElement>, "style" | "onClick">) {

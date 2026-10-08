@@ -1,6 +1,6 @@
 import type { Contract, Plans, User, View } from "../types.ts";
 import { C, font, radius, sans, shadow, URGENCY_COLORS } from "../theme.ts";
-import { daysToExpiry, fmt, NOW, urgency } from "../lib/format.ts";
+import { daysToExpiry, fmt, fmtCompact, NOW, urgency } from "../lib/format.ts";
 import { getSuggestions } from "../lib/plan.ts";
 import { canCreateContract } from "../permissions.ts";
 import { Card, CardTitle, DaysChip, EmptyState, Grid, StatCard } from "../components/ui.tsx";
@@ -37,13 +37,13 @@ export function Dashboard({ contracts, plans, currentUser, onNavigate, onNew }: 
         {canCreateContract(currentUser) && <button className="mobile-only" onClick={onNew} style={{ ...sans, display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, fontSize: 13.5, cursor: "pointer", boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={17} />Nuovo contratto</button>}
       </div>
 
-      <Grid min={210} gap={14}>
-        <StatCard label={isManager ? "Contratti attivi" : "I tuoi contratti"} value={mine.length} color={C.blue} icon={<FileText size={20} />} />
-        <StatCard label="Valore in euro" value={fmt(totalEUR)} color={C.accent} icon={<Wallet size={20} />} sub="contratti attivi" />
-        <StatCard label="Da gestire subito" value={red} color={C.red} icon={<AlertTriangle size={20} />} sub="scaduti o entro 30 giorni" />
+      <Grid min={220} gap={14} fill>
+        <StatCard label={isManager ? "Contratti attivi" : "I tuoi contratti"} value={mine.length} color={C.blue} icon={<FileText size={18} />} sub="in portafoglio" />
+        <StatCard label="Valore in euro" value={fmtCompact(totalEUR)} title={fmt(totalEUR)} color={C.accent} icon={<Wallet size={18} />} sub="dei contratti attivi" />
+        <StatCard label="Da gestire subito" value={red} color={C.red} icon={<AlertTriangle size={18} />} sub="scaduti o entro 30 giorni" />
         {isManager
-          ? <StatCard label="In attesa del BO" value={pendingBO} color={C.yellow} icon={<Hourglass size={20} />} sub="decisioni da ricevere" />
-          : <StatCard label="In scadenza" value={yellow} color={C.yellow} icon={<CalendarClock size={20} />} sub="entro 90 giorni" />}
+          ? <StatCard label="In attesa del BO" value={pendingBO} color={C.yellow} icon={<Hourglass size={18} />} sub="decisioni da ricevere" />
+          : <StatCard label="In scadenza" value={yellow} color={C.yellow} icon={<CalendarClock size={18} />} sub="entro 90 giorni" />}
       </Grid>
 
       {mine.length === 0 ? (
