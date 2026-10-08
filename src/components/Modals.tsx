@@ -3,7 +3,8 @@ import type { Contract, ContractData, NewUserInput, PlanStep, Role, StepTemplate
 import { btnGhost, btnPrimary, C, font, iStyle, ROLE_LABELS, sans } from "../theme.ts";
 import { fmt, fmtDate } from "../lib/format.ts";
 import { BO_COLORS, BO_DECISIONS } from "../lib/plan.ts";
-import { Avatar, Field, RoleBadge } from "./ui.tsx";
+import { Avatar, Field, RoleBadge, StepIcon } from "./ui.tsx";
+import { Check, CheckCircle2, FileText, KeyRound, Loader2, Paperclip, Pencil, Plus, Save, Send, UserRound, X, AlertCircle } from "./icons.tsx";
 import { api, ApiError, checkDocument, uploadDocument } from "../api.ts";
 
 // ─── Risposta del Business Owner ─────────────────────────────
@@ -15,7 +16,7 @@ export function BOFormModal({ contract, currentUser, onSubmit, onClose }: { cont
       <div className="dialog">
         {submitted ? (
           <div style={{ textAlign: "center", padding: "32px 0" }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
+            <div style={{ color: C.green, marginBottom: 12, display: "flex", justifyContent: "center" }}><CheckCircle2 size={56} strokeWidth={1.6} /></div>
             <h3 style={{ ...font, color: C.green, margin: "0 0 8px" }}>Risposta registrata</h3>
             <p style={{ ...sans, color: C.muted, fontSize: 14 }}>Il piano verrà aggiornato automaticamente.</p>
           </div>
@@ -32,13 +33,13 @@ export function BOFormModal({ contract, currentUser, onSubmit, onClose }: { cont
             </p>
             <div style={{ marginBottom: 14 }}>
               {BO_DECISIONS.map(d => { const s = BO_COLORS[d]; const sel = decision === d; return (
-                <button key={d} onClick={() => setDecision(d)} aria-pressed={sel} style={{ ...sans, width: "100%", marginBottom: 8, padding: "10px 14px", borderRadius: 8, border: `2px solid ${sel ? s.color : C.border}`, background: sel ? s.bg : "transparent", color: sel ? s.color : C.text, cursor: "pointer", fontSize: 13, fontWeight: sel ? 700 : 400, textAlign: "left" }}>{sel ? "✓ " : ""}{d}</button>
+                <button key={d} onClick={() => setDecision(d)} aria-pressed={sel} style={{ ...sans, width: "100%", marginBottom: 8, padding: "10px 14px", borderRadius: 8, border: `2px solid ${sel ? s.color : C.border}`, background: sel ? s.bg : "transparent", color: sel ? s.color : C.text, cursor: "pointer", fontSize: 13, fontWeight: sel ? 700 : 400, textAlign: "left", display: "flex", alignItems: "center", gap: 8 }}>{sel ? <Check size={16} /> : <span style={{ width: 16 }} />}{d}</button>
               ); })}
             </div>
             <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Note / motivazioni..." aria-label="Note" style={{ ...iStyle, height: 72, resize: "none", marginBottom: 14 }} />
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={onClose} style={{ ...btnGhost, flex: 1 }}>Annulla</button>
-              <button onClick={handleSubmit} disabled={!decision} style={{ ...btnPrimary, flex: 2, background: decision ? C.accent : C.border, cursor: decision ? "pointer" : "default" }}>✓ Invia risposta</button>
+              <button onClick={handleSubmit} disabled={!decision} style={{ ...btnPrimary, flex: 2, background: decision ? C.accent : C.border, cursor: decision ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Send size={16} />Invia risposta</button>
             </div>
           </>
         )}
@@ -55,7 +56,7 @@ export function StepDateEditor({ step, tmpl, onSave, onClose }: { step: PlanStep
   return (
     <div className="dialog-overlay" role="dialog" aria-modal="true" style={{ zIndex: 300 }}>
       <div className="dialog" style={{ maxWidth: 380 }}>
-        <h4 style={{ ...font, margin: "0 0 16px", fontSize: 16, color: C.navy }}>{tmpl.icon} {tmpl.label}</h4>
+        <h4 style={{ ...font, margin: "0 0 16px", fontSize: 17, color: C.text, display: "flex", alignItems: "center", gap: 10 }}><span style={{ width: 34, height: 34, borderRadius: 10, background: C.blueBg, color: C.blue, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><StepIcon id={tmpl.id} size={18} /></span>{tmpl.label}</h4>
         <Field label="Data originale"><div style={{ ...sans, fontSize: 13, color: C.muted, padding: "8px 12px", background: C.bg, borderRadius: 6 }}>{fmtDate(step.originalDate)}</div></Field>
         <Field label="Nuova data" req htmlFor="step-date"><input id="step-date" type="date" value={newDate} onChange={e => setNewDate(e.target.value)} style={iStyle} /></Field>
         {newDate !== step.originalDate && diff !== 0 && (
@@ -66,7 +67,7 @@ export function StepDateEditor({ step, tmpl, onSave, onClose }: { step: PlanStep
         <Field label="Motivazione" req htmlFor="step-reason"><textarea id="step-reason" value={reason} onChange={e => setReason(e.target.value)} placeholder="Es. Distribuzione carico, periodo festivo..." style={{ ...iStyle, height: 64, resize: "none" }} /></Field>
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={onClose} style={{ ...btnGhost, flex: 1 }}>Annulla</button>
-          <button onClick={() => ok && onSave(newDate, reason)} disabled={!ok} style={{ ...btnPrimary, flex: 2, background: ok ? C.accent : C.border, cursor: ok ? "pointer" : "default" }}>💾 Salva</button>
+          <button onClick={() => ok && onSave(newDate, reason)} disabled={!ok} style={{ ...btnPrimary, flex: 2, background: ok ? C.accent : C.border, cursor: ok ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}><Save size={16} />Salva</button>
         </div>
       </div>
     </div>
@@ -127,8 +128,8 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
     <div className="sheet-overlay" role="dialog" aria-modal="true">
       <div className="sheet">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <h3 style={{ ...font, margin: 0, fontSize: 17, color: C.navy }}>{isNew ? "➕ Nuovo contratto" : "✏️ Modifica contratto"}</h3>
-          <button onClick={onClose} aria-label="Chiudi" style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.muted }}>×</button>
+          <h3 style={{ ...font, margin: 0, fontSize: 19, color: C.text }}>{isNew ? "Nuovo contratto" : "Modifica contratto"}</h3>
+          <button onClick={onClose} aria-label="Chiudi" style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, display: "flex", padding: 4 }}><X size={22} /></button>
         </div>
         <div style={two}>
           <Field label="Fornitore" req error={errors.supplier} htmlFor="f-supplier">{fi("supplier", "Es. Acme Srl")}</Field>
@@ -156,19 +157,19 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
         <Field label="Documento" req={isNew}>
           <input ref={fileRef} type="file" accept=".pdf,.doc,.docx" onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; const err = checkDocument(f); if (err) { setErrors(x => ({ ...x, file: err })); return; } setErrors(x => ({ ...x, file: undefined })); setAttachedFile({ name: f.name, file: f }); }} style={{ display: "none" }} />
           {!attachedFile
-            ? <button type="button" onClick={() => fileRef.current?.click()} style={{ ...sans, width: "100%", padding: "12px", background: errors.file ? C.redBg : C.bg, border: `2px dashed ${errors.file ? C.red : C.border}`, borderRadius: 8, color: errors.file ? C.red : C.muted, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>📎 Allega PDF o Word{isNew && <span style={{ color: C.red }}>*</span>}</button>
-            : <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.greenBg, border: `1px solid ${C.green}`, borderRadius: 8 }}>📄<div style={{ flex: 1, minWidth: 0, ...sans, fontSize: 13, fontWeight: 600, color: C.green, overflow: "hidden", textOverflow: "ellipsis" }}>{attachedFile.name}{attachedFile.file && canUpload && <span style={{ fontWeight: 400, color: C.muted }}> · verrà caricato al salvataggio</span>}{!attachedFile.file && !attachedFile.path && canUpload && <span style={{ fontWeight: 400, color: C.yellow }}> · non salvato: ricarica il file</span>}</div><button type="button" onClick={() => fileRef.current?.click()} style={{ ...sans, background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Sostituisci</button><button type="button" onClick={() => setAttachedFile(null)} aria-label="Rimuovi documento" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}>×</button></div>}
-          {errors.file && <div role="alert" style={{ ...sans, fontSize: 11, color: C.red, marginTop: 6 }}>⚠️ {errors.file}</div>}
+            ? <button type="button" onClick={() => fileRef.current?.click()} style={{ ...sans, width: "100%", padding: "16px", background: errors.file ? C.redBg : "#fafbfc", border: `1.5px dashed ${errors.file ? C.red : "#c9ceda"}`, borderRadius: 12, color: errors.file ? C.red : C.muted, cursor: "pointer", fontSize: 13.5, fontWeight: 550, display: "flex", alignItems: "center", justifyContent: "center", gap: 9 }}><Paperclip size={17} />Allega il documento (PDF o Word, max 25 MB){isNew && <span style={{ color: C.red }}>*</span>}</button>
+            : <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "11px 14px", background: C.greenBg, border: `1px solid #b6e0c9`, borderRadius: 12 }}><FileText size={18} color={C.green} style={{ flexShrink: 0 }} /><div style={{ flex: 1, minWidth: 0, ...sans, fontSize: 13, fontWeight: 600, color: C.green, overflow: "hidden", textOverflow: "ellipsis" }}>{attachedFile.name}{attachedFile.file && canUpload && <span style={{ fontWeight: 400, color: C.muted }}> · verrà caricato al salvataggio</span>}{!attachedFile.file && !attachedFile.path && canUpload && <span style={{ fontWeight: 400, color: C.yellow }}> · non salvato: ricarica il file</span>}</div><button type="button" onClick={() => fileRef.current?.click()} style={{ ...sans, background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Sostituisci</button><button type="button" onClick={() => setAttachedFile(null)} aria-label="Rimuovi documento" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}>×</button></div>}
+          {errors.file && <div role="alert" style={{ ...sans, fontSize: 12, color: C.red, marginTop: 6, display: "flex", alignItems: "center", gap: 6 }}><AlertCircle size={14} />{errors.file}</div>}
         </Field>
         {initial && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: 12, background: form.ceased ? C.grayBg : C.greenBg, borderRadius: 8 }}>
             <input type="checkbox" checked={form.ceased} onChange={e => up("ceased")(e.target.checked)} id="ceased" style={{ width: 18, height: 18 }} />
-            <label htmlFor="ceased" style={{ ...sans, fontSize: 13, color: form.ceased ? C.gray : C.green, fontWeight: 600, cursor: "pointer" }}>{form.ceased ? "⚫ Cessato" : "🟢 Attivo"}</label>
+            <label htmlFor="ceased" style={{ ...sans, fontSize: 13, color: form.ceased ? C.gray : C.green, fontWeight: 600, cursor: "pointer" }}>{form.ceased ? "Contratto cessato: andrà in archivio" : "Segna come cessato (va in archivio)"}</label>
           </div>
         )}
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={onClose} style={{ ...btnGhost, flex: 1, padding: 12 }}>Annulla</button>
-          <button onClick={handleSave} disabled={busy} style={{ ...btnPrimary, flex: 2, padding: 12, opacity: busy ? 0.7 : 1 }}>{busy ? "Caricamento documento…" : isNew ? "➕ Aggiungi" : "💾 Salva"}</button>
+          <button onClick={handleSave} disabled={busy} style={{ ...btnPrimary, flex: 2, padding: 12, opacity: busy ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{busy ? <><Loader2 className="spin" size={16} />Caricamento documento…</> : isNew ? <><Plus size={16} />Aggiungi contratto</> : <><Save size={16} />Salva modifiche</>}</button>
         </div>
       </div>
     </div>
@@ -229,7 +230,7 @@ export function NewUserModal({ onSave, onClose }: { onSave: (input: NewUserInput
   return (
     <div className="dialog-overlay" role="dialog" aria-modal="true">
       <form className="dialog" onSubmit={submit}>
-        <h3 style={{ ...font, margin: "0 0 16px", fontSize: 17, color: C.navy }}>➕ Nuovo utente</h3>
+        <h3 style={{ ...font, margin: "0 0 16px", fontSize: 17, color: C.navy }}><span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}><UserRound size={19} />Nuovo utente</span></h3>
         <Field label="Nome e cognome" req htmlFor="u-name"><input id="u-name" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} style={iStyle} /></Field>
         <Field label="Email" req htmlFor="u-email"><input id="u-email" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} style={iStyle} /></Field>
         <Field label="Ruolo" req htmlFor="u-role">
@@ -254,7 +255,7 @@ export function ResetPasswordModal({ user, onSave, onClose }: { user: User; onSa
   return (
     <div className="dialog-overlay" role="dialog" aria-modal="true">
       <form className="dialog" onSubmit={submit}>
-        <h3 style={{ ...font, margin: "0 0 6px", fontSize: 17, color: C.navy }}>🔑 Reimposta password</h3>
+        <h3 style={{ ...font, margin: "0 0 6px", fontSize: 17, color: C.navy }}><span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}><KeyRound size={19} />Reimposta password</span></h3>
         <p style={{ ...sans, fontSize: 13, color: C.muted, margin: "0 0 16px" }}>{user.name} · {user.email}</p>
         <Field label="Nuova password (min. 8 caratteri)" req htmlFor="r-pw"><input id="r-pw" type="text" autoComplete="off" required minLength={8} value={pw} onChange={e => setPw(e.target.value)} style={iStyle} /></Field>
         {error && <div role="alert" style={{ ...sans, background: C.redBg, color: C.red, borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 14 }}>{error}</div>}
@@ -274,7 +275,7 @@ export function EditUserModal({ user, isSelf, onSave, onClose }: { user: User; i
   return (
     <div className="dialog-overlay" role="dialog" aria-modal="true">
       <form className="dialog" onSubmit={submit}>
-        <h3 style={{ ...font, margin: "0 0 6px", fontSize: 17, color: C.navy }}>✏️ Modifica utente</h3>
+        <h3 style={{ ...font, margin: "0 0 6px", fontSize: 17, color: C.navy }}><span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}><Pencil size={19} />Modifica utente</span></h3>
         <p style={{ ...sans, fontSize: 13, color: C.muted, margin: "0 0 16px" }}>{user.name} · {user.email}</p>
         <Field label="Ruolo" htmlFor="e-role">
           <select id="e-role" value={role} disabled={isSelf} onChange={e => setRole(e.target.value as Role)} style={iStyle}>{(Object.keys(ROLE_LABELS) as Role[]).map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select>

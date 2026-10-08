@@ -3,13 +3,13 @@ import { C } from "../theme.ts";
 import { addDays, fmtDate, fmtMonth, isoDate, monthKey, NOW } from "./format.ts";
 
 export const PLANNING_STEPS: StepTemplate[] = [
-  { id: "analysis",    daysBeforeEnd: 90, icon: "📊", label: "Analisi spend",           actor: "buyer"  },
-  { id: "bo_notify",   daysBeforeEnd: 75, icon: "✉️",  label: "Notifica Business Owner", actor: "system" },
-  { id: "bo_response", daysBeforeEnd: 60, icon: "📋",  label: "Risposta Business Owner", actor: "bo"     },
-  { id: "action",      daysBeforeEnd: 45, icon: "🎯",  label: "Avvio azione",            actor: "buyer"  },
-  { id: "negotiation", daysBeforeEnd: 30, icon: "🤝",  label: "Negoziazione",            actor: "buyer"  },
-  { id: "signature",   daysBeforeEnd: 15, icon: "✍️",  label: "Firma / formalizzazione", actor: "buyer"  },
-  { id: "expiry",      daysBeforeEnd: 0,  icon: "🏁",  label: "Scadenza",                actor: "system" },
+  { id: "analysis",    daysBeforeEnd: 90, icon: "analysis", label: "Analisi spend",           actor: "buyer"  },
+  { id: "bo_notify",   daysBeforeEnd: 75, icon: "bo_notify",  label: "Notifica Business Owner", actor: "system" },
+  { id: "bo_response", daysBeforeEnd: 60, icon: "bo_response",  label: "Risposta Business Owner", actor: "bo"     },
+  { id: "action",      daysBeforeEnd: 45, icon: "action",  label: "Avvio azione",            actor: "buyer"  },
+  { id: "negotiation", daysBeforeEnd: 30, icon: "negotiation",  label: "Negoziazione",            actor: "buyer"  },
+  { id: "signature",   daysBeforeEnd: 15, icon: "signature",  label: "Firma / formalizzazione", actor: "buyer"  },
+  { id: "expiry",      daysBeforeEnd: 0,  icon: "expiry",  label: "Scadenza",                actor: "system" },
 ];
 export const stepTemplate = (id: string) => PLANNING_STEPS.find(s => s.id === id)!;
 
