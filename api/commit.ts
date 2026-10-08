@@ -1,4 +1,4 @@
-import { cleanPayload, commit, ensureSchema, errorResponse, HttpError } from "./_db.ts";
+import { cleanPayload, commit, ensureSchema, errorResponse, HttpError } from "./_db.js";
 import type { CommitResult } from "../src/types.ts";
 
 export async function POST(request: Request) {
