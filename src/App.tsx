@@ -333,7 +333,7 @@ export default function App() {
       <aside className="sidebar" aria-label="Menu principale">
         <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "2px 8px 26px" }}>
           <BrandMark size={38} />
-          <div><div style={{ ...font, fontSize: 16, fontWeight: 700, color: "#fff" }}>Contract Tracker</div><div style={{ fontSize: 11, color: "rgba(255,255,255,.45)" }}>Procurement indiretto</div></div>
+          <div><div style={{ ...font, fontSize: 16, fontWeight: 700, color: "#fff" }}>Procurement Hub</div><div style={{ fontSize: 11, color: "rgba(255,255,255,.45)" }}>Procurement indiretto</div></div>
         </div>
         <div style={{ fontSize: 10.5, fontWeight: 650, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.35)", padding: "0 12px 8px" }}>Menu</div>
         <nav>{navItems.map(n => navBtn(n, true))}</nav>
