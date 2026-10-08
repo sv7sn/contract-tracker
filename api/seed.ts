@@ -1,4 +1,4 @@
-import { ensureSchema, errorResponse, HttpError, seedIfEmpty } from "./_db.ts";
+import { ensureSchema, errorResponse, HttpError, seedIfEmpty } from "./_db.js";
 import type { AppState } from "../src/types.ts";
 
 // Carica i dati demo solo se il database è vuoto: non sovrascrive mai dati esistenti.

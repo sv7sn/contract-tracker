@@ -1,4 +1,4 @@
-import { ensureSchema, errorResponse, loadState } from "./_db.ts";
+import { ensureSchema, errorResponse, loadState } from "./_db.js";
 
 export async function GET() {
   try {
