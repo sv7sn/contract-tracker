@@ -1,4 +1,29 @@
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect, type CSSProperties, type ReactNode } from "react";
+
+// ─── TYPES ───────────────────────────────────────────────────
+type Role = "manager" | "buyer" | "bo";
+type Urgency = "green" | "yellow" | "red" | "gray";
+type StepStatus = "upcoming" | "done" | "pending_bo";
+type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "detail";
+
+interface User { id: string; name: string; email: string; role: Role; avatar: string; color: string; title: string }
+interface Contract {
+  id: number; supplier: string; object: string; category: string; country: string;
+  value: number; currency: string; start: string; end: string; owner: string; boEmail: string;
+  renewal: string; type: string; notes: string; ceased: boolean; fileName: string | null;
+}
+type ContractData = Omit<Contract, "id">;
+interface PlanStep {
+  contractId: number; stepId: string; scheduledDate: string; originalDate: string; status: StepStatus;
+  completedAt: string | null; completedBy: string | null; boDecision: string | null; boNotes: string;
+  boRespondedAt: string | null; modified: boolean; modifiedReason: string;
+}
+interface StepTemplate { id: string; daysBeforeEnd: number; icon: string; label: string; actor: string }
+interface AuditEntry { ts: string; user: string; action: string; detail: string }
+type Plans = Record<number, PlanStep[]>;
+type AuditLogs = Record<number, AuditEntry[]>;
+interface Suggestion { contractId: number; supplier: string; owner: string; reason: string; recommendedOffset: number }
+interface MonthLoad { label: string; total: number; byBuyer: Record<string, number> }
 
 // ─── DESIGN TOKENS ────────────────────────────────────────────
 const C = {
@@ -13,14 +38,15 @@ const C = {
   gray: "#4b5563", grayBg: "#f0ece4",
   purple: "#6d28d9", purpleBg: "#ede9fe",
 };
-const font = { fontFamily: "'Georgia','Times New Roman',serif" };
-const sans = { fontFamily: "'Helvetica Neue','Arial',sans-serif" };
-const iStyle = { fontFamily: "'Helvetica Neue','Arial',sans-serif", width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", fontSize: 14, color: C.text, outline: "none" };
+const URGENCY_COLORS: Record<Urgency, string> = { green: C.green, yellow: C.yellow, red: C.red, gray: "#9ca3af" };
+const font: CSSProperties = { fontFamily: "'Georgia','Times New Roman',serif" };
+const sans: CSSProperties = { fontFamily: "'Helvetica Neue','Arial',sans-serif" };
+const iStyle: CSSProperties = { fontFamily: "'Helvetica Neue','Arial',sans-serif", width: "100%", boxSizing: "border-box", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, padding: "9px 12px", fontSize: 14, color: C.text, outline: "none" };
 
 // ─── USERS & ROLES ───────────────────────────────────────────
-const ROLES = { MANAGER: "manager", BUYER: "buyer", BO: "bo" };
+const ROLES = { MANAGER: "manager", BUYER: "buyer", BO: "bo" } as const satisfies Record<string, Role>;
 
-const USERS = [
+const USERS: User[] = [
   { id: "salvatore",    name: "Salvatore",          email: "salvatore@prometeon.com",        role: ROLES.MANAGER, avatar: "S",  color: "#c8522a", title: "Head of Indirect Procurement" },
   { id: "andrea",       name: "Andrea Lizza",        email: "andrea.lizza@prometeon.com",     role: ROLES.BUYER,   avatar: "AL", color: "#1a5c9e", title: "Senior Buyer" },
   { id: "teresa",       name: "Teresa Mingione",     email: "teresa.mingione@prometeon.com",  role: ROLES.BUYER,   avatar: "TM", color: "#2d7d4f", title: "Buyer" },
@@ -34,11 +60,11 @@ const USERS = [
   { id: "bo_fac",       name: "Roberto Neri",        email: "fac@prometeon.com",              role: ROLES.BO,      avatar: "RN", color: "#4b5563", title: "Facility Manager" },
 ];
 
-const ROLE_LABELS = { manager: "Manager", buyer: "Buyer", bo: "Business Owner" };
-const ROLE_COLORS = { manager: C.accent, buyer: C.blue, bo: C.green };
+const ROLE_LABELS: Record<Role, string> = { manager: "Manager", buyer: "Buyer", bo: "Business Owner" };
+const ROLE_COLORS: Record<Role, string> = { manager: C.accent, buyer: C.blue, bo: C.green };
 
 // ─── PLANNING ────────────────────────────────────────────────
-const PLANNING_STEPS = [
+const PLANNING_STEPS: StepTemplate[] = [
   { id: "analysis",    daysBeforeEnd: 90, icon: "📊", label: "Analisi spend",           actor: "buyer"  },
   { id: "bo_notify",   daysBeforeEnd: 75, icon: "✉️",  label: "Notifica Business Owner", actor: "system" },
   { id: "bo_response", daysBeforeEnd: 60, icon: "📋",  label: "Risposta Business Owner", actor: "bo"     },
@@ -47,9 +73,10 @@ const PLANNING_STEPS = [
   { id: "signature",   daysBeforeEnd: 15, icon: "✍️",  label: "Firma / formalizzazione", actor: "buyer"  },
   { id: "expiry",      daysBeforeEnd: 0,  icon: "🏁",  label: "Scadenza",                actor: "system" },
 ];
+const stepTemplate = (id: string) => PLANNING_STEPS.find(s => s.id === id)!;
 
 const BO_DECISIONS = ["Rinnovare alle stesse condizioni", "Rinnovare con rinegoziazione", "Mettere in gara (RFQ/RFP)", "Prorogare temporaneamente", "Cessare l'attività"];
-const BO_COLORS = {
+const BO_COLORS: Record<string, { bg: string; color: string }> = {
   "Rinnovare alle stesse condizioni": { bg: C.greenBg,  color: C.green  },
   "Rinnovare con rinegoziazione":     { bg: C.blueBg,   color: C.blue   },
   "Mettere in gara (RFQ/RFP)":        { bg: C.yellowBg, color: C.yellow },
@@ -59,61 +86,94 @@ const BO_COLORS = {
 
 const WORKLOAD_THRESHOLD = 3;
 const NOW = new Date();
+const STORAGE_KEY = "contract-tracker:v1";
 
 // ─── HELPERS ─────────────────────────────────────────────────
-function daysToExpiry(end) { return Math.ceil((new Date(end) - NOW) / 864e5); }
-function urgency(c) { if (c.ceased) return "gray"; const d = daysToExpiry(c.end); return d < 0 ? "red" : d <= 30 ? "red" : d <= 90 ? "yellow" : "green"; }
-function fmt(n, cur = "EUR") { try { return new Intl.NumberFormat("it-IT", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(n); } catch { return `${n} ${cur}`; } }
-function fmtDate(d) { return new Date(d).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" }); }
-function fmtMonth(d) { return new Date(d).toLocaleDateString("it-IT", { month: "short", year: "2-digit" }); }
-function addDays(date, days) { const d = new Date(date); d.setDate(d.getDate() + days); return d; }
-function tsNow() { return NOW.toLocaleString("it-IT"); }
-function userByEmail(email) { return USERS.find(u => u.email === email); }
+function daysToExpiry(end: string) { return Math.ceil((new Date(end).getTime() - NOW.getTime()) / 864e5); }
+function urgency(c: Contract): Urgency { if (c.ceased) return "gray"; const d = daysToExpiry(c.end); return d <= 30 ? "red" : d <= 90 ? "yellow" : "green"; }
+function fmt(n: number, cur = "EUR") { try { return new Intl.NumberFormat("it-IT", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(n); } catch { return `${n} ${cur}`; } }
+function fmtDate(d: string | Date) { return new Date(d).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" }); }
+function fmtMonth(d: string | Date) { return new Date(d).toLocaleDateString("it-IT", { month: "short", year: "2-digit" }); }
+function addDays(date: string | Date, days: number) { const d = new Date(date); d.setDate(d.getDate() + days); return d; }
+function isoDate(d: Date) { return d.toISOString().slice(0, 10); }
+function tsNow() { return new Date().toLocaleString("it-IT"); }
+function monthKey(d: Date) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; }
+function userByEmail(email: string) { return USERS.find(u => u.email === email); }
+function userByName(name: string) { return USERS.find(u => u.name === name); }
+function planProgress(plan: PlanStep[]) { return plan.length ? Math.round((plan.filter(s => s.status === "done").length / plan.length) * 100) : 0; }
 
-function makePlan(contractId, end, offsetDays = 0) {
-  const endDate = new Date(end);
+function makePlan(contractId: number, end: string, offsetDays = 0): PlanStep[] {
   return PLANNING_STEPS.map(s => {
-    const scheduled = addDays(endDate, -(s.daysBeforeEnd + offsetDays));
+    const scheduled = addDays(end, -(s.daysBeforeEnd + offsetDays));
     const isPast = scheduled < NOW;
-    return { contractId, stepId: s.id, scheduledDate: scheduled.toISOString().slice(0, 10), originalDate: scheduled.toISOString().slice(0, 10), status: isPast ? (s.id === "bo_response" ? "pending_bo" : "done") : "upcoming", completedAt: isPast && s.id !== "bo_response" ? fmtDate(scheduled) : null, completedBy: isPast && s.id !== "bo_response" ? (s.actor === "system" ? "Sistema" : "Buyer") : null, boDecision: null, boNotes: "", boRespondedAt: null, modified: false, modifiedReason: "" };
+    return { contractId, stepId: s.id, scheduledDate: isoDate(scheduled), originalDate: isoDate(scheduled), status: isPast ? (s.id === "bo_response" ? "pending_bo" : "done") : "upcoming", completedAt: isPast && s.id !== "bo_response" ? fmtDate(scheduled) : null, completedBy: isPast && s.id !== "bo_response" ? (s.actor === "system" ? "Sistema" : "Buyer") : null, boDecision: null, boNotes: "", boRespondedAt: null, modified: false, modifiedReason: "" };
+  });
+}
+
+// Ricalcola le date del piano su una nuova scadenza mantenendo lo stato delle attività già avviate/completate.
+function reschedulePlan(oldPlan: PlanStep[], contractId: number, end: string): PlanStep[] {
+  return makePlan(contractId, end).map(ns => {
+    const old = oldPlan.find(s => s.stepId === ns.stepId);
+    return old && old.status !== "upcoming" ? { ...old, scheduledDate: ns.scheduledDate, originalDate: ns.originalDate, modified: false, modifiedReason: "" } : ns;
   });
 }
 
 // ─── MOCK DATA ────────────────────────────────────────────────
-const MOCK_CONTRACTS = [
-  { id: 1,  supplier: "Mesnac Co. Ltd",      object: "Macchinari - Linea Egitto",  category: "Capex",    country: "Cina",     value: 2400000, currency: "EUR", start: "2024-03-01", end: "2025-06-30", owner: "Andrea Lizza",      boEmail: "ops@prometeon.com",   renewal: "Da rilanciare a gara", type: "Fornitura", notes: "", ceased: false, fileName: "mesnac.pdf" },
-  { id: 2,  supplier: "Deloitte Consulting", object: "SAP S/4HANA",               category: "IT",       country: "Italia",   value: 850000,  currency: "EUR", start: "2024-01-01", end: "2025-12-31", owner: "Salvatore",         boEmail: "it@prometeon.com",    renewal: "In negoziazione",      type: "Servizi",  notes: "", ceased: false, fileName: null },
-  { id: 3,  supplier: "DHL Supply Chain",    object: "Logistica outbound Europa", category: "Logistica",country: "Germania", value: 320000,  currency: "EUR", start: "2023-07-01", end: "2025-12-31", owner: "Teresa Mingione",   boEmail: "supply@prometeon.com",renewal: "In negoziazione",      type: "Servizi",  notes: "", ceased: false, fileName: "dhl.pdf" },
-  { id: 4,  supplier: "Oracle Italia Srl",   object: "Licenze database AMS",      category: "ICT",      country: "Italia",   value: 180000,  currency: "EUR", start: "2022-01-01", end: "2025-12-31", owner: "Marzia",            boEmail: "it@prometeon.com",    renewal: "Da rescindere",        type: "AMS",      notes: "", ceased: false, fileName: null },
-  { id: 5,  supplier: "Aeolus Tyre Co.",     object: "Raw materials supply",      category: "Mat.Prime",country: "Cina",     value: 5600000, currency: "USD", start: "2024-06-01", end: "2026-05-31", owner: "Harris Xia",        boEmail: "ops@prometeon.com",   renewal: "Rinnovo automatico",   type: "Fornitura",notes: "", ceased: false, fileName: "aeolus.pdf" },
-  { id: 6,  supplier: "Securitas Italia",    object: "Vigilanza stabilimenti",    category: "Facility", country: "Italia",   value: 95000,   currency: "EUR", start: "2021-01-01", end: "2025-12-31", owner: "Rafael Latorre Jr.",boEmail: "fac@prometeon.com",   renewal: "Da rilanciare a gara", type: "Servizi",  notes: "", ceased: false, fileName: null },
-  { id: 7,  supplier: "Microsoft Azure",     object: "Cloud & M365",              category: "ICT",      country: "USA",      value: 240000,  currency: "EUR", start: "2024-01-01", end: "2026-12-31", owner: "Marzia",            boEmail: "it@prometeon.com",    renewal: "Rinnovo automatico",   type: "SaaS",     notes: "", ceased: false, fileName: null },
-  { id: 8,  supplier: "Manpower Group",      object: "Somministrazione lavoro",   category: "HR",       country: "Italia",   value: 410000,  currency: "EUR", start: "2024-04-01", end: "2025-12-31", owner: "Teresa Mingione",   boEmail: "hr@prometeon.com",    renewal: "In negoziazione",      type: "Servizi",  notes: "", ceased: false, fileName: null },
-  { id: 9,  supplier: "Randstad Italia",     object: "Ricerca & selezione",       category: "HR",       country: "Italia",   value: 85000,   currency: "EUR", start: "2024-01-01", end: "2025-12-31", owner: "Teresa Mingione",   boEmail: "hr@prometeon.com",    renewal: "In negoziazione",      type: "Servizi",  notes: "", ceased: false, fileName: null },
-  { id: 10, supplier: "IBM Italia",          object: "Manutenzione server legacy",category: "ICT",      country: "Italia",   value: 120000,  currency: "EUR", start: "2023-01-01", end: "2025-12-31", owner: "Marzia",            boEmail: "it@prometeon.com",    renewal: "Da rescindere",        type: "AMS",      notes: "", ceased: false, fileName: null },
+// Le date sono relative a oggi, così la demo mostra sempre un mix realistico di scadenze.
+const rel = (days: number) => isoDate(addDays(NOW, days));
+const MOCK_CONTRACTS: Contract[] = [
+  { id: 1,  supplier: "Mesnac Co. Ltd",      object: "Macchinari - Linea Egitto",  category: "Capex",    country: "Cina",     value: 2400000, currency: "EUR", start: rel(-480),  end: rel(-15),  owner: "Andrea Lizza",      boEmail: "ops@prometeon.com",   renewal: "Da rilanciare a gara", type: "Fornitura", notes: "", ceased: false, fileName: "mesnac.pdf" },
+  { id: 2,  supplier: "Deloitte Consulting", object: "SAP S/4HANA",               category: "IT",       country: "Italia",   value: 850000,  currency: "EUR", start: rel(-700),  end: rel(25),   owner: "Salvatore",         boEmail: "it@prometeon.com",    renewal: "In negoziazione",      type: "Servizi",  notes: "", ceased: false, fileName: null },
+  { id: 3,  supplier: "DHL Supply Chain",    object: "Logistica outbound Europa", category: "Logistica",country: "Germania", value: 320000,  currency: "EUR", start: rel(-850),  end: rel(40),   owner: "Teresa Mingione",   boEmail: "supply@prometeon.com",renewal: "In negoziazione",      type: "Servizi",  notes: "", ceased: false, fileName: "dhl.pdf" },
+  { id: 4,  supplier: "Oracle Italia Srl",   object: "Licenze database AMS",      category: "ICT",      country: "Italia",   value: 180000,  currency: "EUR", start: rel(-1390), end: rel(70),   owner: "Marzia",            boEmail: "it@prometeon.com",    renewal: "Da rescindere",        type: "AMS",      notes: "", ceased: false, fileName: null },
+  { id: 5,  supplier: "Aeolus Tyre Co.",     object: "Raw materials supply",      category: "Mat.Prime",country: "Cina",     value: 5600000, currency: "USD", start: rel(-490),  end: rel(240),  owner: "Harris Xia",        boEmail: "ops@prometeon.com",   renewal: "Rinnovo automatico",   type: "Fornitura",notes: "", ceased: false, fileName: "aeolus.pdf" },
+  { id: 6,  supplier: "Securitas Italia",    object: "Vigilanza stabilimenti",    category: "Facility", country: "Italia",   value: 95000,   currency: "EUR", start: rel(-1770), end: rel(55),   owner: "Rafael Latorre Jr.",boEmail: "fac@prometeon.com",   renewal: "Da rilanciare a gara", type: "Servizi",  notes: "", ceased: false, fileName: null },
+  { id: 7,  supplier: "Microsoft Azure",     object: "Cloud & M365",              category: "ICT",      country: "USA",      value: 240000,  currency: "EUR", start: rel(-640),  end: rel(420),  owner: "Marzia",            boEmail: "it@prometeon.com",    renewal: "Rinnovo automatico",   type: "SaaS",     notes: "", ceased: false, fileName: null },
+  { id: 8,  supplier: "Manpower Group",      object: "Somministrazione lavoro",   category: "HR",       country: "Italia",   value: 410000,  currency: "EUR", start: rel(-630),  end: rel(100),  owner: "Teresa Mingione",   boEmail: "hr@prometeon.com",    renewal: "In negoziazione",      type: "Servizi",  notes: "", ceased: false, fileName: null },
+  { id: 9,  supplier: "Randstad Italia",     object: "Ricerca & selezione",       category: "HR",       country: "Italia",   value: 85000,   currency: "EUR", start: rel(-620),  end: rel(110),  owner: "Teresa Mingione",   boEmail: "hr@prometeon.com",    renewal: "In negoziazione",      type: "Servizi",  notes: "", ceased: false, fileName: null },
+  { id: 10, supplier: "IBM Italia",          object: "Manutenzione server legacy",category: "ICT",      country: "Italia",   value: 120000,  currency: "EUR", start: rel(-1000), end: rel(85),   owner: "Marzia",            boEmail: "it@prometeon.com",    renewal: "Da rescindere",        type: "AMS",      notes: "", ceased: false, fileName: null },
 ];
 
-const INIT_PLANS = {};
-MOCK_CONTRACTS.forEach(c => { INIT_PLANS[c.id] = makePlan(c.id, c.end); });
-const INIT_AUDIT = {};
-MOCK_CONTRACTS.forEach(c => { INIT_AUDIT[c.id] = [{ ts: "01 gen 2025, 09:00", user: c.owner, action: "Contratto creato", detail: `${c.supplier} · ${c.object}` }]; });
+function initialPlans(): Plans {
+  return Object.fromEntries(MOCK_CONTRACTS.map(c => [c.id, makePlan(c.id, c.end)]));
+}
+function initialAudit(): AuditLogs {
+  return Object.fromEntries(MOCK_CONTRACTS.map(c => [c.id, [{ ts: `${fmtDate(c.start)}, 09:00`, user: c.owner, action: "Contratto creato", detail: `${c.supplier} · ${c.object}` }]]));
+}
+
+// ─── PERSISTENCE ─────────────────────────────────────────────
+interface StoredState { contracts: Contract[]; plans: Plans; auditLogs: AuditLogs }
+function loadState(): StoredState | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw) as StoredState;
+    return Array.isArray(data.contracts) && data.plans && data.auditLogs ? data : null;
+  } catch { return null; }
+}
+function saveState(state: StoredState) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* storage pieno o non disponibile */ }
+}
+function clearState() {
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+}
 
 // ─── SMALL COMPONENTS ────────────────────────────────────────
-function UrgencyDot({ level, size = 8 }) {
-  return <span style={{ display: "inline-block", width: size, height: size, borderRadius: "50%", background: { green: C.green, yellow: C.yellow, red: C.red, gray: "#9ca3af" }[level] || C.muted, flexShrink: 0 }} />;
+function UrgencyDot({ level, size = 8 }: { level: Urgency; size?: number }) {
+  return <span style={{ display: "inline-block", width: size, height: size, borderRadius: "50%", background: URGENCY_COLORS[level], flexShrink: 0 }} />;
 }
-function RenewalBadge({ status }) {
-  const map = { "In negoziazione": { bg: C.blueBg, color: C.blue }, "Rinnovo automatico": { bg: C.greenBg, color: C.green }, "Da rescindere": { bg: C.redBg, color: C.red }, "Da rilanciare a gara": { bg: C.yellowBg, color: C.yellow }, "Non definito": { bg: "#f0ece4", color: C.muted } };
+function RenewalBadge({ status }: { status: string }) {
+  const map: Record<string, { bg: string; color: string }> = { "In negoziazione": { bg: C.blueBg, color: C.blue }, "Rinnovo automatico": { bg: C.greenBg, color: C.green }, "Da rescindere": { bg: C.redBg, color: C.red }, "Da rilanciare a gara": { bg: C.yellowBg, color: C.yellow }, "Non definito": { bg: "#f0ece4", color: C.muted } };
   const s = map[status] || map["Non definito"];
   return <span style={{ ...sans, background: s.bg, color: s.color, borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" }}>{status || "Non definito"}</span>;
 }
-function Avatar({ user, size = 36 }) {
+function Avatar({ user, size = 36 }: { user: User; size?: number }) {
   return <div style={{ width: size, height: size, borderRadius: "50%", background: user.color, color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.35, fontWeight: 700, flexShrink: 0, ...sans }}>{user.avatar}</div>;
 }
-function RoleBadge({ role }) {
+function RoleBadge({ role }: { role: Role }) {
   return <span style={{ ...sans, background: `${ROLE_COLORS[role]}20`, color: ROLE_COLORS[role], borderRadius: 4, padding: "2px 8px", fontSize: 11, fontWeight: 700 }}>{ROLE_LABELS[role]}</span>;
 }
-function StatCard({ label, value, sub, color = C.accent }) {
+function StatCard({ label, value, sub, color = C.accent }: { label: string; value: ReactNode; sub?: string; color?: string }) {
   return (
     <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "16px 18px", flex: 1 }}>
       <div style={{ ...sans, fontSize: 10, color: C.subtle, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{label}</div>
@@ -124,40 +184,37 @@ function StatCard({ label, value, sub, color = C.accent }) {
 }
 
 // ─── WORKLOAD ─────────────────────────────────────────────────
-function calcWorkload(contracts, plans) {
-  const months = {};
+function calcWorkload(contracts: Contract[], plans: Plans) {
+  const months: Record<string, MonthLoad> = {};
   for (let i = -1; i < 12; i++) {
     const d = new Date(NOW.getFullYear(), NOW.getMonth() + i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    months[key] = { label: fmtMonth(d), total: 0, byBuyer: {} };
+    months[monthKey(d)] = { label: fmtMonth(d), total: 0, byBuyer: {} };
   }
   contracts.filter(c => !c.ceased).forEach(c => {
     (plans[c.id] || []).filter(s => s.status !== "done" && s.stepId !== "expiry").forEach(s => {
-      const d = new Date(s.scheduledDate);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      const key = monthKey(new Date(s.scheduledDate));
       if (months[key]) { months[key].total++; if (!months[key].byBuyer[c.owner]) months[key].byBuyer[c.owner] = 0; months[key].byBuyer[c.owner]++; }
     });
   });
   return months;
 }
 
-function getSuggestions(contracts, plans) {
+function getSuggestions(contracts: Contract[], plans: Plans) {
   const workload = calcWorkload(contracts, plans);
   return contracts.filter(c => !c.ceased).reduce((acc, c) => {
     const first = (plans[c.id] || []).find(s => s.stepId === "analysis");
     if (!first || first.status === "done") return acc;
     const d = new Date(first.scheduledDate);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    const load = workload[key]?.byBuyer[c.owner] || 0;
+    const load = workload[monthKey(d)]?.byBuyer[c.owner] || 0;
     if (load >= WORKLOAD_THRESHOLD) acc.push({ contractId: c.id, supplier: c.supplier, owner: c.owner, reason: `${c.owner} ha ${load} attività a ${fmtMonth(d)}`, recommendedOffset: 30 });
     return acc;
-  }, []);
+  }, [] as Suggestion[]);
 }
 
 // ─── LOGIN SCREEN ─────────────────────────────────────────────
-function LoginScreen({ onLogin }) {
-  const [selected, setSelected] = useState(null);
-  const [hoverId, setHoverId] = useState(null);
+function LoginScreen({ onLogin, onResetDemo }: { onLogin: (u: User) => void; onResetDemo: () => void }) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const [hoverId, setHoverId] = useState<string | null>(null);
 
   const groups = [
     { label: "Management", users: USERS.filter(u => u.role === ROLES.MANAGER) },
@@ -198,10 +255,14 @@ function LoginScreen({ onLogin }) {
           </div>
         ))}
 
-        <button onClick={() => selected && onLogin(USERS.find(u => u.id === selected))}
+        <button onClick={() => { const u = USERS.find(x => x.id === selected); if (u) onLogin(u); }}
           disabled={!selected}
           style={{ ...sans, width: "100%", padding: 16, background: selected ? C.accent : "rgba(255,255,255,0.1)", border: "none", borderRadius: 12, color: selected ? "#fff" : "rgba(255,255,255,0.3)", fontWeight: 700, cursor: selected ? "pointer" : "default", fontSize: 16, marginTop: 8, transition: "all 0.2s" }}>
           {selected ? `Accedi come ${USERS.find(u => u.id === selected)?.name} →` : "Seleziona un profilo"}
+        </button>
+        <button onClick={() => { if (window.confirm("Ripristinare i dati demo? Tutte le modifiche salvate andranno perse.")) onResetDemo(); }}
+          style={{ ...sans, width: "100%", marginTop: 12, padding: 8, background: "none", border: "none", color: "rgba(255,255,255,0.35)", cursor: "pointer", fontSize: 12, textDecoration: "underline" }}>
+          ↺ Ripristina dati demo
         </button>
       </div>
     </div>
@@ -209,7 +270,7 @@ function LoginScreen({ onLogin }) {
 }
 
 // ─── BO FORM MODAL ────────────────────────────────────────────
-function BOFormModal({ contract, currentUser, onSubmit, onClose }) {
+function BOFormModal({ contract, currentUser, onSubmit, onClose }: { contract: Contract; currentUser: User; onSubmit: (id: number, r: { decision: string; notes: string }) => void; onClose: () => void }) {
   const [decision, setDecision] = useState(""); const [notes, setNotes] = useState(""); const [submitted, setSubmitted] = useState(false);
   const handleSubmit = () => { if (!decision) return; setSubmitted(true); setTimeout(() => { onSubmit(contract.id, { decision, notes }); onClose(); }, 1500); };
   return (
@@ -250,9 +311,9 @@ function BOFormModal({ contract, currentUser, onSubmit, onClose }) {
 }
 
 // ─── STEP DATE EDITOR ─────────────────────────────────────────
-function StepDateEditor({ step, tmpl, onSave, onClose }) {
+function StepDateEditor({ step, tmpl, onSave, onClose }: { step: PlanStep; tmpl: StepTemplate; onSave: (date: string, reason: string) => void; onClose: () => void }) {
   const [newDate, setNewDate] = useState(step.scheduledDate); const [reason, setReason] = useState("");
-  const diff = newDate ? Math.round((new Date(newDate) - new Date(step.originalDate)) / 864e5) : 0;
+  const diff = newDate ? Math.round((new Date(newDate).getTime() - new Date(step.originalDate).getTime()) / 864e5) : 0;
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
       <div style={{ background: C.surface, borderRadius: 14, padding: 22, width: "100%", maxWidth: 360 }}>
@@ -276,7 +337,7 @@ function StepDateEditor({ step, tmpl, onSave, onClose }) {
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={onClose} style={{ ...sans, flex: 1, padding: 11, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 8, color: C.muted, cursor: "pointer" }}>Annulla</button>
-          <button onClick={() => newDate && reason.trim() && onSave(newDate, reason)} disabled={!newDate || !reason.trim()} style={{ ...sans, flex: 2, padding: 11, background: newDate && reason.trim() ? C.accent : C.border, border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, cursor: "pointer" }}>💾 Salva</button>
+          <button onClick={() => newDate && reason.trim() && onSave(newDate, reason)} disabled={!newDate || !reason.trim()} style={{ ...sans, flex: 2, padding: 11, background: newDate && reason.trim() ? C.accent : C.border, border: "none", borderRadius: 8, color: "#fff", fontWeight: 700, cursor: newDate && reason.trim() ? "pointer" : "default" }}>💾 Salva</button>
         </div>
       </div>
     </div>
@@ -284,24 +345,47 @@ function StepDateEditor({ step, tmpl, onSave, onClose }) {
 }
 
 // ─── CONTRACT FORM ────────────────────────────────────────────
-function ContractForm({ initial, currentUser, onSave, onClose }) {
-  const CATEGORIES = ["Capex / Machinery","Professional Services IT","Logistica","ICT / Software","Materie Prime","Facility Services","HR Services","AMS","Utilities","Marketing","Legal","Finance","Altro"];
-  const TYPES = ["Fornitura","Servizi","AMS","SaaS","Licenza","Framework","NDA","Altro"];
-  const CURRENCIES = ["EUR","USD","GBP","CNY","CHF"];
-  const BUYER_NAMES = USERS.filter(u => u.role === ROLES.BUYER || u.role === ROLES.MANAGER).map(u => u.name);
-  const RENEWAL_OPTIONS = ["In negoziazione","Rinnovo automatico","Da rescindere","Da rilanciare a gara","Non definito"];
+const CATEGORIES = ["Capex / Machinery","Professional Services IT","Logistica","ICT / Software","Materie Prime","Facility Services","HR Services","AMS","Utilities","Marketing","Legal","Finance","Altro"];
+const TYPES = ["Fornitura","Servizi","AMS","SaaS","Licenza","Framework","NDA","Altro"];
+const CURRENCIES = ["EUR","USD","GBP","CNY","CHF"];
+const BUYER_NAMES = USERS.filter(u => u.role === ROLES.BUYER || u.role === ROLES.MANAGER).map(u => u.name);
+const RENEWAL_OPTIONS = ["In negoziazione","Rinnovo automatico","Da rescindere","Da rilanciare a gara","Non definito"];
+
+type FormState = Omit<ContractData, "value"> & { value: string | number };
+type FormErrors = Partial<Record<"supplier" | "object" | "end" | "file", string>>;
+type TextField = "supplier" | "object" | "country" | "boEmail" | "category" | "type" | "currency" | "renewal";
+
+function Field({ label, children, req, error }: { label: string; children: ReactNode; req?: boolean; error?: string }) {
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ ...sans, display: "block", fontSize: 11, color: C.subtle, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>{label}{req && <span style={{ color: C.red }}> *</span>}</label>
+      {children}
+      {error && <div style={{ ...sans, fontSize: 11, color: C.red, marginTop: 4 }}>{error}</div>}
+    </div>
+  );
+}
+
+function ContractForm({ initial, currentUser, onSave, onClose }: { initial: Contract | null; currentUser: User; onSave: (data: ContractData) => void; onClose: () => void }) {
   const defaultOwner = currentUser.role === ROLES.BUYER ? currentUser.name : "";
-  const [form, setForm] = useState(initial || { supplier: "", object: "", category: "", country: "Italia", value: "", currency: "EUR", start: "", end: "", owner: defaultOwner, boEmail: "", renewal: "Non definito", type: "Servizi", notes: "", ceased: false });
-  const [errors, setErrors] = useState({});
-  const [attachedFile, setAttachedFile] = useState(initial?.fileName ? { name: initial.fileName } : null);
-  const fileRef = useRef();
-  const up = k => v => setForm(f => ({ ...f, [k]: v }));
+  const [form, setForm] = useState<FormState>(initial || { supplier: "", object: "", category: "", country: "Italia", value: "", currency: "EUR", start: "", end: "", owner: defaultOwner, boEmail: "", renewal: "Non definito", type: "Servizi", notes: "", ceased: false, fileName: null });
+  const [errors, setErrors] = useState<FormErrors>({});
+  const [attachedFile, setAttachedFile] = useState<{ name: string } | null>(initial?.fileName ? { name: initial.fileName } : null);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const up = <K extends keyof FormState>(k: K) => (v: FormState[K]) => setForm(f => ({ ...f, [k]: v }));
   const isNew = !initial;
-  const validate = () => { const e = {}; if (!form.supplier.trim()) e.supplier = "Obbligatorio"; if (!form.object.trim()) e.object = "Obbligatorio"; if (!form.end) e.end = "Obbligatorio"; if (isNew && !attachedFile) e.file = "Documento obbligatorio"; setErrors(e); return !Object.keys(e).length; };
-  const handleSave = () => { if (validate()) onSave({ ...form, value: parseFloat(String(form.value).replace(",", ".")) || 0, fileName: attachedFile?.name || form.fileName || null }); };
-  const fi = (key, ph, type = "text") => <input value={form[key]} onChange={e => up(key)(e.target.value)} placeholder={ph} type={type} style={{ ...iStyle, borderColor: errors[key] ? C.red : C.border }} />;
-  const sel = (key, opts) => <select value={form[key]} onChange={e => up(key)(e.target.value)} style={iStyle}><option value="">— Seleziona —</option>{opts.map(o => <option key={o}>{o}</option>)}</select>;
-  const F = ({ label, children, req }) => <div style={{ marginBottom: 14 }}><label style={{ ...sans, display: "block", fontSize: 11, color: C.subtle, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 5 }}>{label}{req && <span style={{ color: C.red }}> *</span>}</label>{children}</div>;
+  const validate = () => {
+    const e: FormErrors = {};
+    if (!form.supplier.trim()) e.supplier = "Obbligatorio";
+    if (!form.object.trim()) e.object = "Obbligatorio";
+    if (!form.end) e.end = "Obbligatorio";
+    else if (form.start && form.end < form.start) e.end = "La scadenza deve essere successiva alla data di inizio";
+    if (isNew && !attachedFile) e.file = "Documento obbligatorio";
+    setErrors(e);
+    return !Object.keys(e).length;
+  };
+  const handleSave = () => { if (validate()) onSave({ ...form, owner: form.owner || currentUser.name, value: parseFloat(String(form.value).replace(",", ".")) || 0, fileName: attachedFile?.name || form.fileName || null }); };
+  const fi = (key: TextField, ph: string, type = "text") => <input value={form[key]} onChange={e => up(key)(e.target.value)} placeholder={ph} type={type} style={{ ...iStyle, borderColor: (errors as Record<string, string | undefined>)[key] ? C.red : C.border }} />;
+  const sel = (key: TextField, opts: string[]) => <select value={form[key]} onChange={e => up(key)(e.target.value)} style={iStyle}><option value="">— Seleziona —</option>{opts.map(o => <option key={o}>{o}</option>)}</select>;
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "flex-end" }}>
       <div style={{ background: C.surface, borderRadius: "16px 16px 0 0", padding: 20, width: "100%", boxSizing: "border-box", maxHeight: "90vh", overflowY: "auto" }}>
@@ -309,30 +393,27 @@ function ContractForm({ initial, currentUser, onSave, onClose }) {
           <h3 style={{ ...font, margin: 0, fontSize: 17, color: C.navy }}>{isNew ? "➕ Nuovo contratto" : "✏️ Modifica"}</h3>
           <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.muted }}>×</button>
         </div>
-        <F label="Fornitore" req>{fi("supplier", "Es. Acme Srl")}</F>
-        {errors.supplier && <div style={{ ...sans, fontSize: 11, color: C.red, marginTop: -10, marginBottom: 10 }}>{errors.supplier}</div>}
-        <F label="Oggetto" req>{fi("object", "Es. Fornitura logistica")}</F>
-        {errors.object && <div style={{ ...sans, fontSize: 11, color: C.red, marginTop: -10, marginBottom: 10 }}>{errors.object}</div>}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}><F label="Categoria">{sel("category", CATEGORIES)}</F><F label="Tipo">{sel("type", TYPES)}</F></div>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}><F label="Valore"><input value={form.value} onChange={e => up("value")(e.target.value)} type="number" style={iStyle} /></F><F label="Valuta">{sel("currency", CURRENCIES)}</F></div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}><F label="Inizio"><input value={form.start} onChange={e => up("start")(e.target.value)} type="date" style={iStyle} /></F><F label="Scadenza" req><input value={form.end} onChange={e => up("end")(e.target.value)} type="date" style={{ ...iStyle, borderColor: errors.end ? C.red : C.border }} /></F></div>
-        {errors.end && <div style={{ ...sans, fontSize: 11, color: C.red, marginTop: -10, marginBottom: 10 }}>{errors.end}</div>}
-        <F label="Paese">{fi("country", "Es. Italia")}</F>
-        <F label="Contract Owner">
+        <Field label="Fornitore" req error={errors.supplier}>{fi("supplier", "Es. Acme Srl")}</Field>
+        <Field label="Oggetto" req error={errors.object}>{fi("object", "Es. Fornitura logistica")}</Field>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}><Field label="Categoria">{sel("category", CATEGORIES)}</Field><Field label="Tipo">{sel("type", TYPES)}</Field></div>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12 }}><Field label="Valore"><input value={form.value} onChange={e => up("value")(e.target.value)} type="number" style={iStyle} /></Field><Field label="Valuta">{sel("currency", CURRENCIES)}</Field></div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}><Field label="Inizio"><input value={form.start} onChange={e => up("start")(e.target.value)} type="date" style={iStyle} /></Field><Field label="Scadenza" req error={errors.end}><input value={form.end} onChange={e => up("end")(e.target.value)} type="date" style={{ ...iStyle, borderColor: errors.end ? C.red : C.border }} /></Field></div>
+        <Field label="Paese">{fi("country", "Es. Italia")}</Field>
+        <Field label="Contract Owner">
           {currentUser.role === ROLES.BUYER
             ? <div style={{ ...iStyle, background: "#f0ece4", color: C.muted }}>{currentUser.name} (tu)</div>
             : <select value={form.owner} onChange={e => up("owner")(e.target.value)} style={iStyle}><option value="">— Seleziona —</option>{BUYER_NAMES.map(o => <option key={o}>{o}</option>)}</select>}
-        </F>
-        <F label="Email Business Owner">{fi("boEmail", "bo@prometeon.com", "email")}</F>
-        <F label="Stato rinnovo">{sel("renewal", RENEWAL_OPTIONS)}</F>
-        <F label="Note"><textarea value={form.notes} onChange={e => up("notes")(e.target.value)} style={{ ...iStyle, height: 60, resize: "none" }} /></F>
-        <F label="Documento" req={isNew}>
-          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx" onChange={e => { const f = e.target.files[0]; if (f) setAttachedFile(f); }} style={{ display: "none" }} />
+        </Field>
+        <Field label="Email Business Owner">{fi("boEmail", "bo@prometeon.com", "email")}</Field>
+        <Field label="Stato rinnovo">{sel("renewal", RENEWAL_OPTIONS)}</Field>
+        <Field label="Note"><textarea value={form.notes} onChange={e => up("notes")(e.target.value)} style={{ ...iStyle, height: 60, resize: "none" }} /></Field>
+        <Field label="Documento" req={isNew}>
+          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx" onChange={e => { const f = e.target.files?.[0]; if (f) setAttachedFile(f); }} style={{ display: "none" }} />
           {!attachedFile
-            ? <button onClick={() => fileRef.current.click()} style={{ ...sans, width: "100%", padding: "12px", background: errors.file ? C.redBg : C.bg, border: `2px dashed ${errors.file ? C.red : C.border}`, borderRadius: 8, color: errors.file ? C.red : C.muted, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>📎 Allega PDF o Word{isNew && <span style={{ color: C.red }}>*</span>}</button>
+            ? <button onClick={() => fileRef.current?.click()} style={{ ...sans, width: "100%", padding: "12px", background: errors.file ? C.redBg : C.bg, border: `2px dashed ${errors.file ? C.red : C.border}`, borderRadius: 8, color: errors.file ? C.red : C.muted, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>📎 Allega PDF o Word{isNew && <span style={{ color: C.red }}>*</span>}</button>
             : <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.greenBg, border: `1px solid ${C.green}`, borderRadius: 8 }}>📄<div style={{ flex: 1, ...sans, fontSize: 13, fontWeight: 600, color: C.green, overflow: "hidden", textOverflow: "ellipsis" }}>{attachedFile.name}</div><button onClick={() => setAttachedFile(null)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}>×</button></div>}
           {errors.file && <div style={{ ...sans, fontSize: 11, color: C.red, marginTop: 6 }}>⚠️ {errors.file}</div>}
-        </F>
+        </Field>
         {initial && currentUser.role !== ROLES.BO && (
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, padding: 12, background: form.ceased ? C.grayBg : C.greenBg, borderRadius: 8 }}>
             <input type="checkbox" checked={form.ceased} onChange={e => up("ceased")(e.target.checked)} id="ceased" style={{ width: 18, height: 18 }} />
@@ -349,7 +430,7 @@ function ContractForm({ initial, currentUser, onSave, onClose }) {
 }
 
 // ─── BO VIEW ─────────────────────────────────────────────────
-function BOView({ contracts, plans, currentUser, onOpenBOForm }) {
+function BOView({ contracts, plans, currentUser, onOpenBOForm }: { contracts: Contract[]; plans: Plans; currentUser: User; onOpenBOForm: (c: Contract) => void }) {
   const myContracts = contracts.filter(c => !c.ceased && c.boEmail === currentUser.email);
   const pending = myContracts.filter(c => { const plan = plans[c.id] || []; return plan.some(s => s.stepId === "bo_response" && s.status === "pending_bo"); });
   const others = myContracts.filter(c => !pending.find(p => p.id === c.id));
@@ -366,7 +447,7 @@ function BOView({ contracts, plans, currentUser, onOpenBOForm }) {
         </div>
         <div style={{ display: "flex", gap: 20 }}>
           <div><div style={{ ...sans, fontSize: 10, color: "rgba(255,255,255,0.4)" }}>CONTRATTI</div><div style={{ ...font, fontSize: 20, fontWeight: 700 }}>{myContracts.length}</div></div>
-          <div><div style={{ ...sans, fontSize: 10, color: "rgba(255,255,255,0.4)" }}>IN ATTESA RISPOSTA</div><div style={{ ...font, fontSize: 20, fontWeight: 700, color: C.yellow === "#b07d10" ? "#f5c55a" : C.yellow }}>{pending.length}</div></div>
+          <div><div style={{ ...sans, fontSize: 10, color: "rgba(255,255,255,0.4)" }}>IN ATTESA RISPOSTA</div><div style={{ ...font, fontSize: 20, fontWeight: 700, color: "#f5c55a" }}>{pending.length}</div></div>
         </div>
       </div>
 
@@ -390,8 +471,8 @@ function BOView({ contracts, plans, currentUser, onOpenBOForm }) {
         <div>
           <div style={{ ...sans, fontSize: 12, fontWeight: 700, color: C.muted, marginBottom: 10 }}>I tuoi contratti ({others.length})</div>
           {others.map(c => {
-            const u = urgency(c); const days = daysToExpiry(c.end);
-            const lc = { green: C.green, yellow: C.yellow, red: C.red }[u] || C.muted;
+            const days = daysToExpiry(c.end);
+            const lc = URGENCY_COLORS[urgency(c)];
             const plan = plans[c.id] || [];
             const boStep = plan.find(s => s.stepId === "bo_response");
             return (
@@ -423,9 +504,13 @@ function BOView({ contracts, plans, currentUser, onOpenBOForm }) {
 }
 
 // ─── PLANNING VIEW ────────────────────────────────────────────
-function PlanningView({ contracts, plans, auditLogs, currentUser, onSendBO, onCompleteStep, onOpenBOForm, onUpdateStepDate }) {
-  const [selectedId, setSelectedId] = useState(null);
-  const [editingStep, setEditingStep] = useState(null);
+function PlanningView({ contracts, plans, auditLogs, currentUser, onSendBO, onCompleteStep, onOpenBOForm, onUpdateStepDate }: {
+  contracts: Contract[]; plans: Plans; auditLogs: AuditLogs; currentUser: User;
+  onSendBO: (id: number) => void; onCompleteStep: (id: number, stepId: string) => void;
+  onOpenBOForm: (c: Contract) => void; onUpdateStepDate: (id: number, stepId: string, date: string, reason: string) => void;
+}) {
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [editingStep, setEditingStep] = useState<{ step: PlanStep; tmpl: StepTemplate } | null>(null);
 
   const myContracts = currentUser.role === ROLES.MANAGER
     ? contracts.filter(c => !c.ceased && daysToExpiry(c.end) <= 120)
@@ -433,10 +518,10 @@ function PlanningView({ contracts, plans, auditLogs, currentUser, onSendBO, onCo
 
   const sorted = [...myContracts].sort((a, b) => daysToExpiry(a.end) - daysToExpiry(b.end));
 
-  if (selectedId) {
-    const contract = contracts.find(c => c.id === selectedId);
-    const plan = plans[selectedId] || [];
-    const audit = auditLogs[selectedId] || [];
+  const contract = selectedId !== null ? contracts.find(c => c.id === selectedId) : undefined;
+  if (contract) {
+    const plan = plans[contract.id] || [];
+    const audit = auditLogs[contract.id] || [];
     const canEdit = currentUser.role === ROLES.MANAGER || contract.owner === currentUser.name;
 
     return (
@@ -454,7 +539,7 @@ function PlanningView({ contracts, plans, auditLogs, currentUser, onSendBO, onCo
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 18, marginBottom: 14 }}>
           <h4 style={{ ...font, margin: "0 0 16px", fontSize: 15, color: C.navy }}>Piano attività</h4>
           {plan.map((step, i) => {
-            const tmpl = PLANNING_STEPS.find(s => s.id === step.stepId);
+            const tmpl = stepTemplate(step.stepId);
             const isLast = i === plan.length - 1;
             const sc = step.status === "done" ? C.green : step.status === "pending_bo" ? C.yellow : C.subtle;
             const isEditable = canEdit && step.status === "upcoming" && step.stepId !== "expiry";
@@ -515,14 +600,12 @@ function PlanningView({ contracts, plans, auditLogs, currentUser, onSendBO, onCo
       {sorted.length === 0 && <p style={{ ...sans, color: C.muted, fontSize: 13 }}>Nessun contratto da pianificare nei prossimi 120 giorni.</p>}
       {sorted.map(c => {
         const plan = plans[c.id] || [];
-        const done = plan.filter(s => s.status === "done").length;
-        const prog = Math.round((done / plan.length) * 100);
+        const prog = planProgress(plan);
         const next = plan.find(s => s.status !== "done" && s.stepId !== "expiry");
-        const nextTmpl = next ? PLANNING_STEPS.find(s => s.id === next.stepId) : null;
+        const nextTmpl = next ? stepTemplate(next.stepId) : null;
         const days = daysToExpiry(c.end);
-        const u = urgency(c);
-        const uColor = { green: C.green, yellow: C.yellow, red: C.red }[u] || C.muted;
-        const bColor = USERS.find(u2 => u2.name === c.owner)?.color || C.navy;
+        const uColor = URGENCY_COLORS[urgency(c)];
+        const bColor = userByName(c.owner)?.color || C.navy;
         const boStep = plan.find(s => s.stepId === "bo_response");
         return (
           <div key={c.id} onClick={() => setSelectedId(c.id)} style={{ background: C.card, border: `1px solid ${C.border}`, borderLeft: `3px solid ${uColor}`, borderRadius: 10, padding: 14, marginBottom: 10, cursor: "pointer" }}
@@ -554,7 +637,7 @@ function PlanningView({ contracts, plans, auditLogs, currentUser, onSendBO, onCo
 }
 
 // ─── TEAM VIEW (Manager only) ─────────────────────────────────
-function TeamView({ contracts, plans, onApplySuggestion }) {
+function TeamView({ contracts, plans, onApplySuggestion }: { contracts: Contract[]; plans: Plans; onApplySuggestion: (id: number, offset: number) => void }) {
   const [selectedBuyer, setSelectedBuyer] = useState("Tutti");
   const workload = useMemo(() => calcWorkload(contracts, plans), [contracts, plans]);
   const suggestions = useMemo(() => getSuggestions(contracts, plans), [contracts, plans]);
@@ -594,18 +677,18 @@ function TeamView({ contracts, plans, onApplySuggestion }) {
       {suggestions.length > 0 && (
         <div style={{ background: C.yellowBg, border: `1px solid #f0d080`, borderRadius: 12, padding: 14, marginBottom: 16 }}>
           <div style={{ ...font, fontSize: 14, fontWeight: 700, color: C.yellow, marginBottom: 10 }}>💡 {suggestions.length} suggerimento/i di anticipo</div>
-          {suggestions.map((s, i) => (
-            <div key={i} style={{ background: "#fff", borderRadius: 8, padding: 12, marginBottom: 8 }}>
+          {suggestions.map(s => (
+            <div key={s.contractId} style={{ background: "#fff", borderRadius: 8, padding: 12, marginBottom: 8 }}>
               <div style={{ ...sans, fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{s.supplier}</div>
               <div style={{ ...sans, fontSize: 12, color: C.muted, marginBottom: 8 }}>{s.reason}</div>
-              <button onClick={() => onApplySuggestion(s.contractId, s.recommendedOffset)} style={{ ...sans, padding: "6px 14px", background: C.navy, border: "none", borderRadius: 6, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>⏩ Anticipa a -120gg</button>
+              <button onClick={() => onApplySuggestion(s.contractId, s.recommendedOffset)} style={{ ...sans, padding: "6px 14px", background: C.navy, border: "none", borderRadius: 6, color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>⏩ Anticipa di {s.recommendedOffset}gg</button>
             </div>
           ))}
         </div>
       )}
 
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
-        {buyers.map(b => { const u = USERS.find(x => x.name === b); const color = u?.color || C.navy; const sel = selectedBuyer === b; return (
+        {buyers.map(b => { const u = userByName(b); const color = u?.color || C.navy; const sel = selectedBuyer === b; return (
           <button key={b} onClick={() => setSelectedBuyer(b)} style={{ ...sans, padding: "5px 10px", borderRadius: 20, border: `1px solid ${sel ? color : C.border}`, background: sel ? color : "transparent", color: sel ? "#fff" : C.muted, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>{b}</button>
         ); })}
       </div>
@@ -613,12 +696,10 @@ function TeamView({ contracts, plans, onApplySuggestion }) {
       <div style={{ ...font, fontSize: 14, fontWeight: 700, color: C.navy, marginBottom: 10 }}>{selectedBuyer === "Tutti" ? "Tutti" : selectedBuyer} ({filtered.length})</div>
       {filtered.map(c => {
         const plan = plans[c.id] || [];
-        const done = plan.filter(s => s.status === "done").length;
-        const prog = Math.round((done / plan.length) * 100);
-        const u = urgency(c); const days = daysToExpiry(c.end);
-        const uColor = { green: C.green, yellow: C.yellow, red: C.red }[u] || C.muted;
-        const bUser = USERS.find(x => x.name === c.owner);
-        const bColor = bUser?.color || C.navy;
+        const prog = planProgress(plan);
+        const days = daysToExpiry(c.end);
+        const uColor = URGENCY_COLORS[urgency(c)];
+        const bColor = userByName(c.owner)?.color || C.navy;
         const boStep = plan.find(s => s.stepId === "bo_response");
         return (
           <div key={c.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderLeft: `3px solid ${uColor}`, borderRadius: 10, padding: 14, marginBottom: 8 }}>
@@ -644,11 +725,11 @@ function TeamView({ contracts, plans, onApplySuggestion }) {
 }
 
 // ─── DASHBOARD ────────────────────────────────────────────────
-function Dashboard({ contracts, plans, currentUser, onNavigate }) {
+function Dashboard({ contracts, plans, currentUser, onNavigate }: { contracts: Contract[]; plans: Plans; currentUser: User; onNavigate: (v: View, c?: Contract) => void }) {
   const myContracts = currentUser.role === ROLES.BUYER ? contracts.filter(c => !c.ceased && c.owner === currentUser.name) : contracts.filter(c => !c.ceased);
   const totalEUR = myContracts.filter(c => c.currency === "EUR").reduce((a, c) => a + c.value, 0);
   const urgent = [...myContracts].filter(c => urgency(c) !== "green").sort((a, b) => daysToExpiry(a.end) - daysToExpiry(b.end)).slice(0, 4);
-  const pendingBO = currentUser.role === ROLES.MANAGER ? Object.values(plans).flat().filter(s => s.status === "pending_bo").length : 0;
+  const pendingBO = currentUser.role === ROLES.MANAGER ? myContracts.filter(c => (plans[c.id] || []).some(s => s.status === "pending_bo")).length : 0;
   const suggestions = currentUser.role === ROLES.MANAGER ? getSuggestions(contracts, plans) : [];
 
   return (
@@ -700,9 +781,11 @@ function Dashboard({ contracts, plans, currentUser, onNavigate }) {
 }
 
 // ─── CONTRACT LIST ────────────────────────────────────────────
-function ContractList({ contracts, currentUser, onSelect, onNew }) {
+function ContractList({ contracts, currentUser, onSelect, onNew }: { contracts: Contract[]; currentUser: User; onSelect: (c: Contract) => void; onNew: () => void }) {
   const [search, setSearch] = useState(""); const [filter, setFilter] = useState("Attivi"); const [showArchive, setShowArchive] = useState(false); const [sort, setSort] = useState("expiry");
-  const base = currentUser.role === ROLES.BUYER ? contracts.filter(c => c.owner === currentUser.name) : contracts;
+  const base = useMemo(() => currentUser.role === ROLES.BUYER ? contracts.filter(c => c.owner === currentUser.name)
+    : currentUser.role === ROLES.BO ? contracts.filter(c => c.boEmail === currentUser.email)
+    : contracts, [contracts, currentUser]);
   const filtered = useMemo(() => {
     let list = showArchive ? base.filter(c => c.ceased) : base.filter(c => !c.ceased);
     if (search) list = list.filter(c => `${c.supplier} ${c.object} ${c.owner}`.toLowerCase().includes(search.toLowerCase()));
@@ -729,7 +812,7 @@ function ContractList({ contracts, currentUser, onSelect, onNew }) {
         </select>
       </div>
       {filtered.map(c => {
-        const u = urgency(c); const days = daysToExpiry(c.end); const lc = { green: C.green, yellow: C.yellow, red: C.red, gray: "#9ca3af" }[u];
+        const days = daysToExpiry(c.end); const lc = URGENCY_COLORS[urgency(c)];
         return (
           <div key={c.id} onClick={() => onSelect(c)} style={{ background: C.card, border: `1px solid ${C.border}`, borderLeft: `3px solid ${lc}`, borderRadius: 10, padding: 14, marginBottom: 8, cursor: "pointer", opacity: c.ceased ? 0.7 : 1 }}
             onMouseEnter={e => e.currentTarget.style.boxShadow = "0 4px 16px rgba(0,0,0,0.07)"}
@@ -753,10 +836,11 @@ function ContractList({ contracts, currentUser, onSelect, onNew }) {
 }
 
 // ─── CONTRACT DETAIL ──────────────────────────────────────────
-function ContractDetail({ contract, auditLog, currentUser, onBack, onEdit }) {
+function ContractDetail({ contract, auditLog, currentUser, onBack, onEdit }: { contract: Contract; auditLog: AuditEntry[]; currentUser: User; onBack: () => void; onEdit: () => void }) {
   const u = urgency(contract); const days = daysToExpiry(contract.end);
-  const prog = Math.min(100, Math.max(0, ((NOW - new Date(contract.start)) / (new Date(contract.end) - new Date(contract.start))) * 100));
-  const uc = { green: C.green, yellow: C.yellow, red: C.red, gray: "#9ca3af" }[u];
+  const startMs = new Date(contract.start).getTime(), endMs = new Date(contract.end).getTime();
+  const prog = contract.start && endMs > startMs ? Math.min(100, Math.max(0, ((NOW.getTime() - startMs) / (endMs - startMs)) * 100)) : 0;
+  const uc = URGENCY_COLORS[u];
   const canEdit = currentUser.role === ROLES.MANAGER || contract.owner === currentUser.name;
 
   return (
@@ -776,7 +860,7 @@ function ContractDetail({ contract, auditLog, currentUser, onBack, onEdit }) {
       {!contract.ceased && (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <span style={{ ...sans, fontSize: 11, color: C.muted }}>{fmtDate(contract.start)}</span>
+            <span style={{ ...sans, fontSize: 11, color: C.muted }}>{contract.start ? fmtDate(contract.start) : "—"}</span>
             <span style={{ ...sans, fontSize: 11, color: C.muted }}>{fmtDate(contract.end)}</span>
           </div>
           <div style={{ height: 8, background: C.borderLight, borderRadius: 4 }}><div style={{ height: "100%", width: `${prog}%`, background: uc, borderRadius: 4 }} /></div>
@@ -784,7 +868,7 @@ function ContractDetail({ contract, auditLog, currentUser, onBack, onEdit }) {
         </div>
       )}
       <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, marginBottom: 12 }}>
-        {[["Categoria", contract.category], ["Tipo", contract.type], ["Owner", contract.owner || "—"], ["BO Email", contract.boEmail || "—"], ["Rinnovo", contract.renewal]].map(([k, v]) => (
+        {[["Categoria", contract.category || "—"], ["Tipo", contract.type || "—"], ["Owner", contract.owner || "—"], ["BO Email", contract.boEmail || "—"], ["Rinnovo", contract.renewal]].map(([k, v]) => (
           <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.borderLight}` }}>
             <span style={{ ...sans, fontSize: 13, color: C.muted }}>{k}</span>
             <span style={{ ...sans, fontSize: 13, fontWeight: 500 }}>{v}</span>
@@ -793,7 +877,7 @@ function ContractDetail({ contract, auditLog, currentUser, onBack, onEdit }) {
       </div>
       {contract.fileName && <div style={{ background: C.greenBg, border: `1px solid ${C.green}`, borderRadius: 10, padding: 14, marginBottom: 12, display: "flex", alignItems: "center", gap: 10 }}>📄<div style={{ ...sans, fontSize: 13, fontWeight: 600, color: C.green }}>{contract.fileName}</div></div>}
       {contract.notes && <div style={{ background: C.yellowBg, border: `1px solid #f0d080`, borderRadius: 10, padding: 14, marginBottom: 12 }}><div style={{ ...sans, fontSize: 11, color: C.yellow, fontWeight: 700, marginBottom: 4 }}>📝 NOTE</div><div style={{ ...sans, fontSize: 13 }}>{contract.notes}</div></div>}
-      {auditLog?.length > 0 && (
+      {auditLog.length > 0 && (
         <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16 }}>
           <h4 style={{ ...font, margin: "0 0 10px", fontSize: 14, color: C.navy }}>📋 Audit Trail</h4>
           {[...auditLog].reverse().map((log, i) => (
@@ -808,35 +892,75 @@ function ContractDetail({ contract, auditLog, currentUser, onBack, onEdit }) {
   );
 }
 
+// ─── ALERTS VIEW ─────────────────────────────────────────────
+function AlertsView({ contracts, currentUser }: { contracts: Contract[]; currentUser: User }) {
+  const mine = currentUser.role === ROLES.BUYER ? contracts.filter(c => c.owner === currentUser.name) : contracts;
+  const alerts = mine.filter(c => !c.ceased && daysToExpiry(c.end) >= 0 && daysToExpiry(c.end) <= 90).sort((a, b) => daysToExpiry(a.end) - daysToExpiry(b.end));
+  return (
+    <div>
+      <div style={{ background: C.blueBg, border: `1px solid #c0d8f5`, borderRadius: 10, padding: 14, marginBottom: 16 }}>
+        <div style={{ ...sans, fontSize: 12, color: C.blue, fontWeight: 700, marginBottom: 4 }}>ℹ️ Notifiche simulate</div>
+        <div style={{ ...sans, fontSize: 12, color: C.blue }}>In produzione inviate automaticamente con Azure AD.</div>
+      </div>
+      {alerts.length === 0 && <p style={{ ...sans, color: C.muted, fontSize: 13 }}>Nessun contratto in scadenza nei prossimi 90 giorni ✅</p>}
+      {alerts.map(c => { const days = daysToExpiry(c.end); return (
+        <div key={c.id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, marginBottom: 10 }}>
+          <div style={{ ...sans, fontSize: 11, color: C.subtle, marginBottom: 6 }}>A: <b>{userByName(c.owner)?.email || c.owner || "—"}</b></div>
+          <div style={{ ...sans, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>⚠️ Scadenza: {c.supplier}</div>
+          <div style={{ ...sans, fontSize: 12, color: C.muted, background: C.bg, borderRadius: 6, padding: 10, lineHeight: 1.6 }}>Scade il <b>{fmtDate(c.end)}</b> — tra <b style={{ color: days <= 30 ? C.red : C.yellow }}>{days} giorni</b>. Stato: <b>{c.renewal}</b>.</div>
+        </div>
+      ); })}
+    </div>
+  );
+}
+
 // ─── APP ─────────────────────────────────────────────────────
 export default function App() {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [view, setView] = useState("dashboard");
-  const [selected, setSelected] = useState(null);
-  const [contracts, setContracts] = useState(MOCK_CONTRACTS);
-  const [plans, setPlans] = useState(INIT_PLANS);
-  const [auditLogs, setAuditLogs] = useState(INIT_AUDIT);
-  const [toast, setToast] = useState(null);
+  const [stored] = useState(loadState);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [view, setView] = useState<View>("dashboard");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [contracts, setContracts] = useState<Contract[]>(() => stored?.contracts ?? MOCK_CONTRACTS);
+  const [plans, setPlans] = useState<Plans>(() => stored?.plans ?? initialPlans());
+  const [auditLogs, setAuditLogs] = useState<AuditLogs>(() => stored?.auditLogs ?? initialAudit());
+  const [toast, setToast] = useState<string | null>(null);
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [showForm, setShowForm] = useState(false);
-  const [editingContract, setEditingContract] = useState(null);
-  const [boFormContract, setBOFormContract] = useState(null);
+  const [editingContract, setEditingContract] = useState<Contract | null>(null);
+  const [boFormContract, setBOFormContract] = useState<Contract | null>(null);
 
-  const showToast = msg => { setToast(msg); setTimeout(() => setToast(null), 3000); };
-  const addAudit = (contractId, action, detail, user) => setAuditLogs(prev => ({ ...prev, [contractId]: [...(prev[contractId] || []), { ts: tsNow(), user: user || currentUser.name, action, detail }] }));
+  // Il dettaglio legge sempre la versione aggiornata del contratto (es. dopo una risposta BO).
+  const selected = selectedId !== null ? contracts.find(c => c.id === selectedId) ?? null : null;
 
-  const handleLogin = (user) => { setCurrentUser(user); setView(user.role === ROLES.BO ? "bo" : "dashboard"); };
-  const handleLogout = () => { setCurrentUser(null); setView("dashboard"); setSelected(null); };
+  useEffect(() => { saveState({ contracts, plans, auditLogs }); }, [contracts, plans, auditLogs]);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
 
-  const handleSave = (data) => {
-    const owner = data.owner || currentUser.name;
+  const showToast = (msg: string) => { clearTimeout(toastTimer.current); setToast(msg); toastTimer.current = setTimeout(() => setToast(null), 3000); };
+  const addAudit = (contractId: number, action: string, detail: string, user?: string) => setAuditLogs(prev => ({ ...prev, [contractId]: [...(prev[contractId] || []), { ts: tsNow(), user: user || currentUser?.name || "Sistema", action, detail }] }));
+
+  const handleLogin = (user: User) => { setCurrentUser(user); setView(user.role === ROLES.BO ? "bo" : "dashboard"); };
+  const handleLogout = () => { setCurrentUser(null); setView("dashboard"); setSelectedId(null); };
+  const handleResetDemo = () => {
+    clearState();
+    setContracts(MOCK_CONTRACTS); setPlans(initialPlans()); setAuditLogs(initialAudit());
+    showToast("↺ Dati demo ripristinati");
+  };
+  const openDetail = (c: Contract) => { setSelectedId(c.id); setView("detail"); };
+
+  const handleSave = (data: ContractData) => {
+    if (!currentUser) return;
     if (editingContract) {
-      setContracts(cs => cs.map(c => c.id === editingContract.id ? { ...c, ...data } : c));
-      setSelected(s => s?.id === editingContract.id ? { ...s, ...data } : s);
-      addAudit(editingContract.id, "Contratto modificato", `Da ${currentUser.name}`);
+      const id = editingContract.id;
+      setContracts(cs => cs.map(c => c.id === id ? { ...c, ...data } : c));
+      addAudit(id, "Contratto modificato", `Da ${currentUser.name}`);
+      if (data.end !== editingContract.end) {
+        setPlans(p => ({ ...p, [id]: reschedulePlan(p[id] || [], id, data.end) }));
+        addAudit(id, "Piano ricalcolato", `Nuova scadenza: ${fmtDate(data.end)}`, "Sistema");
+      }
       showToast("💾 Aggiornato");
     } else {
       const newId = Math.max(...contracts.map(c => c.id), 0) + 1;
-      setContracts(cs => [...cs, { ...data, id: newId, owner }]);
+      setContracts(cs => [...cs, { ...data, id: newId }]);
       setPlans(p => ({ ...p, [newId]: makePlan(newId, data.end) }));
       addAudit(newId, "Contratto creato", `${data.supplier} · ${data.object}`, currentUser.name);
       showToast("✅ Contratto aggiunto");
@@ -844,49 +968,59 @@ export default function App() {
     setShowForm(false); setEditingContract(null);
   };
 
-  const handleSendBO = (id) => {
+  const handleSendBO = (id: number) => {
     const c = contracts.find(x => x.id === id);
-    setPlans(p => ({ ...p, [id]: p[id].map(s => s.stepId === "bo_notify" ? { ...s, status: "done", completedAt: fmtDate(NOW), completedBy: "Sistema" } : s.stepId === "bo_response" ? { ...s, status: "pending_bo" } : s) }));
-    addAudit(id, "Notifica BO inviata", `A: ${c.boEmail}`, "Sistema");
-    showToast(`✉️ Notifica inviata a ${c.boEmail}`);
+    if (!c) return;
+    setPlans(p => ({ ...p, [id]: p[id].map(s => s.stepId === "bo_notify" ? { ...s, status: "done", completedAt: fmtDate(new Date()), completedBy: "Sistema" } : s.stepId === "bo_response" ? { ...s, status: "pending_bo" } : s) }));
+    addAudit(id, "Notifica BO inviata", `A: ${c.boEmail || "—"}`, "Sistema");
+    showToast(c.boEmail ? `✉️ Notifica inviata a ${c.boEmail}` : "⚠️ Nessuna email BO impostata per questo contratto");
   };
 
-  const handleBOResponse = (id, { decision, notes }) => {
+  const handleBOResponse = (id: number, { decision, notes }: { decision: string; notes: string }) => {
     const c = contracts.find(x => x.id === id);
+    if (!c) return;
     const boUser = userByEmail(c.boEmail);
-    setPlans(p => ({ ...p, [id]: p[id].map(s => s.stepId === "bo_response" ? { ...s, status: "done", completedAt: fmtDate(NOW), completedBy: c.boEmail, boDecision: decision, boNotes: notes, boRespondedAt: fmtDate(NOW) } : s) }));
-    const rm = { "Rinnovare alle stesse condizioni": "Rinnovo automatico", "Rinnovare con rinegoziazione": "In negoziazione", "Mettere in gara (RFQ/RFP)": "Da rilanciare a gara", "Prorogare temporaneamente": "In negoziazione", "Cessare l'attività": "Da rescindere" };
+    setPlans(p => ({ ...p, [id]: p[id].map(s => s.stepId === "bo_response" ? { ...s, status: "done", completedAt: fmtDate(new Date()), completedBy: c.boEmail, boDecision: decision, boNotes: notes, boRespondedAt: fmtDate(new Date()) } : s) }));
+    const rm: Record<string, string> = { "Rinnovare alle stesse condizioni": "Rinnovo automatico", "Rinnovare con rinegoziazione": "In negoziazione", "Mettere in gara (RFQ/RFP)": "Da rilanciare a gara", "Prorogare temporaneamente": "In negoziazione", "Cessare l'attività": "Da rescindere" };
     if (rm[decision]) setContracts(cs => cs.map(c2 => c2.id === id ? { ...c2, renewal: rm[decision] } : c2));
     addAudit(id, "Risposta BO ricevuta", `Decisione: ${decision}${notes ? ` · "${notes}"` : ""}`, boUser?.name || c.boEmail);
     setBOFormContract(null);
     showToast("✅ Decisione BO registrata");
   };
 
-  const handleCompleteStep = (id, stepId) => {
-    const tmpl = PLANNING_STEPS.find(s => s.id === stepId);
-    setPlans(p => ({ ...p, [id]: p[id].map(s => s.stepId === stepId ? { ...s, status: "done", completedAt: fmtDate(NOW), completedBy: currentUser.name } : s) }));
-    addAudit(id, `Attività completata: ${tmpl?.label}`, `Da ${currentUser.name}`);
-    showToast(`✓ "${tmpl?.label}" completata`);
+  const handleCompleteStep = (id: number, stepId: string) => {
+    if (!currentUser) return;
+    const tmpl = stepTemplate(stepId);
+    setPlans(p => ({ ...p, [id]: p[id].map(s => s.stepId === stepId ? { ...s, status: "done", completedAt: fmtDate(new Date()), completedBy: currentUser.name } : s) }));
+    addAudit(id, `Attività completata: ${tmpl.label}`, `Da ${currentUser.name}`);
+    showToast(`✓ "${tmpl.label}" completata`);
   };
 
-  const handleUpdateStepDate = (id, stepId, newDate, reason) => {
-    const tmpl = PLANNING_STEPS.find(s => s.id === stepId);
+  const handleUpdateStepDate = (id: number, stepId: string, newDate: string, reason: string) => {
+    const tmpl = stepTemplate(stepId);
     setPlans(p => ({ ...p, [id]: p[id].map(s => s.stepId === stepId ? { ...s, scheduledDate: newDate, modified: true, modifiedReason: reason } : s) }));
-    addAudit(id, `Data modificata: ${tmpl?.label}`, `Nuova data: ${fmtDate(newDate)} · Motivo: ${reason}`);
+    addAudit(id, `Data modificata: ${tmpl.label}`, `Nuova data: ${fmtDate(newDate)} · Motivo: ${reason}`);
     showToast("📅 Data aggiornata");
   };
 
-  const handleApplySuggestion = (id, offset) => {
+  const handleApplySuggestion = (id: number, offset: number) => {
     const c = contracts.find(x => x.id === id);
+    if (!c) return;
     setPlans(p => ({ ...p, [id]: makePlan(id, c.end, offset) }));
     addAudit(id, "Piano anticipato", `Anticipo di ${offset} giorni`, "Sistema");
     showToast(`⏩ Piano anticipato di ${offset} giorni`);
   };
 
-  if (!currentUser) return <LoginScreen onLogin={handleLogin} />;
+  const toastEl = toast && (
+    <div role="status" style={{ position: "fixed", top: 80, left: "50%", transform: "translateX(-50%)", background: C.navy, color: "#fff", padding: "11px 22px", borderRadius: 24, fontWeight: 600, fontSize: 13, zIndex: 400, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", ...sans, whiteSpace: "nowrap" }}>
+      {toast}
+    </div>
+  );
+
+  if (!currentUser) return <><LoginScreen onLogin={handleLogin} onResetDemo={handleResetDemo} />{toastEl}</>;
 
   // Nav by role
-  const navByRole = {
+  const navByRole: Record<Role, { key: View; icon: string; label: string }[]> = {
     [ROLES.MANAGER]: [
       { key: "dashboard", icon: "◈", label: "Overview" },
       { key: "list",      icon: "≡",  label: "Contratti" },
@@ -905,8 +1039,8 @@ export default function App() {
       { key: "list",      icon: "≡",  label: "Contratti" },
     ],
   };
-  const navItems = navByRole[currentUser.role] || navByRole[ROLES.BUYER];
-  const titles = { dashboard: "Overview", list: "Contratti", planning: currentUser.role === ROLES.MANAGER ? "Piano — Team" : "Il mio piano", team: "Vista Team", notifiche: "Alert Email", bo: "Le mie richieste", detail: selected?.supplier };
+  const navItems = navByRole[currentUser.role];
+  const titles: Record<View, string> = { dashboard: "Overview", list: "Contratti", planning: currentUser.role === ROLES.MANAGER ? "Piano — Team" : "Il mio piano", team: "Vista Team", notifiche: "Alert Email", bo: "Le mie richieste", detail: selected?.supplier ?? "" };
 
   return (
     <div style={{ ...sans, background: C.bg, minHeight: "100vh", color: C.text }}>
@@ -932,31 +1066,13 @@ export default function App() {
 
       {/* Content */}
       <div style={{ padding: "18px 16px", maxWidth: 480, margin: "0 auto", paddingBottom: 90 }}>
-        {view === "dashboard" && <Dashboard contracts={contracts} plans={plans} currentUser={currentUser} onNavigate={(v, c) => { setView(v); if (c) setSelected(c); }} />}
-        {view === "list" && <ContractList contracts={contracts} currentUser={currentUser} onSelect={c => { setSelected(c); setView("detail"); }} onNew={() => { setEditingContract(null); setShowForm(true); }} />}
+        {view === "dashboard" && <Dashboard contracts={contracts} plans={plans} currentUser={currentUser} onNavigate={(v, c) => { setView(v); if (c) setSelectedId(c.id); }} />}
+        {view === "list" && <ContractList contracts={contracts} currentUser={currentUser} onSelect={openDetail} onNew={() => { setEditingContract(null); setShowForm(true); }} />}
         {view === "planning" && <PlanningView contracts={contracts} plans={plans} auditLogs={auditLogs} currentUser={currentUser} onSendBO={handleSendBO} onCompleteStep={handleCompleteStep} onOpenBOForm={setBOFormContract} onUpdateStepDate={handleUpdateStepDate} />}
         {view === "team" && currentUser.role === ROLES.MANAGER && <TeamView contracts={contracts} plans={plans} onApplySuggestion={handleApplySuggestion} />}
         {view === "bo" && currentUser.role === ROLES.BO && <BOView contracts={contracts} plans={plans} currentUser={currentUser} onOpenBOForm={setBOFormContract} />}
-        {view === "notifiche" && (() => {
-          const mine = currentUser.role === ROLES.BUYER ? contracts.filter(c => c.owner === currentUser.name) : contracts;
-          const alerts = mine.filter(c => !c.ceased && daysToExpiry(c.end) >= 0 && daysToExpiry(c.end) <= 90).sort((a, b) => daysToExpiry(a.end) - daysToExpiry(b.end));
-          return (
-            <div>
-              <div style={{ background: C.blueBg, border: `1px solid #c0d8f5`, borderRadius: 10, padding: 14, marginBottom: 16 }}>
-                <div style={{ ...sans, fontSize: 12, color: C.blue, fontWeight: 700, marginBottom: 4 }}>ℹ️ Notifiche simulate</div>
-                <div style={{ ...sans, fontSize: 12, color: C.blue }}>In produzione inviate automaticamente con Azure AD.</div>
-              </div>
-              {alerts.map((c, i) => { const days = daysToExpiry(c.end); return (
-                <div key={i} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: 16, marginBottom: 10 }}>
-                  <div style={{ ...sans, fontSize: 11, color: C.subtle, marginBottom: 6 }}>A: <b>{c.owner?.toLowerCase().replace(" ", ".")}@prometeon.com</b></div>
-                  <div style={{ ...sans, fontSize: 13, fontWeight: 600, marginBottom: 8 }}>⚠️ Scadenza: {c.supplier}</div>
-                  <div style={{ ...sans, fontSize: 12, color: C.muted, background: C.bg, borderRadius: 6, padding: 10, lineHeight: 1.6 }}>Scade il <b>{fmtDate(c.end)}</b> — tra <b style={{ color: days <= 30 ? C.red : C.yellow }}>{days} giorni</b>. Stato: <b>{c.renewal}</b>.</div>
-                </div>
-              ); })}
-            </div>
-          );
-        })()}
-        {view === "detail" && selected && <ContractDetail contract={selected} auditLog={auditLogs[selected.id]} currentUser={currentUser} onBack={() => setView("list")} onEdit={() => { setEditingContract(selected); setShowForm(true); }} />}
+        {view === "notifiche" && <AlertsView contracts={contracts} currentUser={currentUser} />}
+        {view === "detail" && selected && <ContractDetail contract={selected} auditLog={auditLogs[selected.id] || []} currentUser={currentUser} onBack={() => setView("list")} onEdit={() => { setEditingContract(selected); setShowForm(true); }} />}
       </div>
 
       {/* Bottom nav */}
@@ -975,11 +1091,7 @@ export default function App() {
       {showForm && <ContractForm initial={editingContract} currentUser={currentUser} onSave={handleSave} onClose={() => { setShowForm(false); setEditingContract(null); }} />}
       {boFormContract && <BOFormModal contract={boFormContract} currentUser={currentUser} onSubmit={handleBOResponse} onClose={() => setBOFormContract(null)} />}
 
-      {toast && (
-        <div style={{ position: "fixed", top: 80, left: "50%", transform: "translateX(-50%)", background: C.navy, color: "#fff", padding: "11px 22px", borderRadius: 24, fontWeight: 600, fontSize: 13, zIndex: 200, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", ...sans, whiteSpace: "nowrap" }}>
-          {toast}
-        </div>
-      )}
+      {toastEl}
     </div>
   );
 }
