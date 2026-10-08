@@ -1,4 +1,4 @@
-# Procurement Hub
+# Procurement Lab
 
 Applicazione React + TypeScript (Vite) per il monitoraggio delle scadenze contrattuali del procurement indiretto
 e la pianificazione delle attività di rinnovo (analisi spend, coinvolgimento del Business Owner, negoziazione, firma).

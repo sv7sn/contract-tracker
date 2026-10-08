@@ -40,7 +40,7 @@ export function LoginScreen({ mode, setupRequired, onLogin, onResetDemo }: Props
       <div className="login-brand">
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 44 }}>
           <BrandMark size={46} />
-          <div style={{ ...font, fontSize: 22, fontWeight: 700 }}>Procurement Hub</div>
+          <div style={{ ...font, fontSize: 22, fontWeight: 700 }}>Procurement Lab</div>
         </div>
         <h1 style={{ ...font, fontSize: 44, lineHeight: 1.1, fontWeight: 750, margin: 0, maxWidth: 540, letterSpacing: "-0.03em" }}>I contratti sotto controllo, <span style={{ color: "#f0997a" }}>prima</span> che scadano.</h1>
         <p style={{ ...sans, fontSize: 17, color: "rgba(255,255,255,.72)", marginTop: 18, maxWidth: 500, lineHeight: 1.6 }}>Scadenze, piani di rinnovo e decisioni dei Business Owner in un unico posto, per tutto il team acquisti.</p>
