@@ -5,6 +5,11 @@ export const NOW = new Date();
 export function daysToExpiry(end: string) { return Math.ceil((new Date(end).getTime() - NOW.getTime()) / 864e5); }
 export function urgency(c: Contract): Urgency { if (c.ceased) return "gray"; const d = daysToExpiry(c.end); return d <= 30 ? "red" : d <= 90 ? "yellow" : "green"; }
 export function fmt(n: number, cur = "EUR") { try { return new Intl.NumberFormat("it-IT", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(n); } catch { return `${n} ${cur}`; } }
+/** Importi grandi in forma breve (8,23 Mio €), sotto il milione per esteso. */
+export function fmtCompact(n: number, cur = "EUR") {
+  if (Math.abs(n) < 1e6) return fmt(n, cur);
+  try { return new Intl.NumberFormat("it-IT", { style: "currency", currency: cur, notation: "compact", maximumFractionDigits: 2 }).format(n); } catch { return `${n} ${cur}`; }
+}
 export function fmtDate(d: string | Date) { return new Date(d).toLocaleDateString("it-IT", { day: "2-digit", month: "short", year: "numeric" }); }
 export function fmtMonth(d: string | Date) { return new Date(d).toLocaleDateString("it-IT", { month: "short", year: "2-digit" }); }
 export function addDays(date: string | Date, days: number) { const d = new Date(date); d.setDate(d.getDate() + days); return d; }

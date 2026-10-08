@@ -17,9 +17,9 @@ export function BOView({ contracts, plans, currentUser, onOpenBOForm }: { contra
         <h2 style={{ ...font, margin: 0, fontSize: 24, fontWeight: 700, color: C.text }}>Ciao, {first}</h2>
         <p style={{ ...sans, margin: "4px 0 0", fontSize: 14, color: C.muted }}>{pending.length > 0 ? <>Ci sono <b style={{ color: C.yellow }}>{pending.length} {pending.length === 1 ? "richiesta" : "richieste"}</b> in attesa della tua decisione.</> : "Non ci sono richieste in attesa: grazie!"}</p>
       </div>
-      <Grid min={220}>
-        <StatCard label="I tuoi contratti" value={myContracts.length} color={C.blue} icon={<FileText size={20} />} />
-        <StatCard label="In attesa di risposta" value={pending.length} color={C.yellow} icon={<Hourglass size={20} />} sub={pending.length ? "serve la tua decisione" : "nessuna richiesta"} />
+      <Grid min={220} fill>
+        <StatCard label="I tuoi contratti" value={myContracts.length} color={C.blue} icon={<FileText size={18} />} sub="a te assegnati" />
+        <StatCard label="In attesa di risposta" value={pending.length} color={C.yellow} icon={<Hourglass size={18} />} sub={pending.length ? "serve la tua decisione" : "nessuna richiesta"} />
       </Grid>
 
       {pending.length > 0 && (
