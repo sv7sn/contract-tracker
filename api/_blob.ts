@@ -1,9 +1,10 @@
-import { del, get } from "@vercel/blob";
-import { handleUpload } from "@vercel/blob/client";
+import { del, get, issueSignedToken } from "@vercel/blob";
+import { handleUploadPresigned } from "@vercel/blob/client";
 
 // I documenti stanno in un archivio Blob PRIVATO: si leggono solo con la chiave del server (BLOB_READ_WRITE_TOKEN),
 // quindi passano sempre da /api/document, che controlla i permessi dell'utente.
-export { handleUpload };
+// L'accesso allo store funziona sia con BLOB_READ_WRITE_TOKEN sia con il nuovo accesso OIDC (BLOB_STORE_ID, impostato da Vercel).
+export { handleUploadPresigned, issueSignedToken };
 
 export const FILE_PATH_RE = /^contracts\/[0-9a-f-]{36}\/[^/\\]{1,150}$/;
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
