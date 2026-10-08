@@ -1,19 +1,21 @@
 import { useState } from "react";
-import type { NewUserInput, User } from "../types.ts";
+import type { NewUserInput, Role, User } from "../types.ts";
 import { C, font, sans } from "../theme.ts";
 import { Avatar, Card, Grid, RoleBadge } from "../components/ui.tsx";
-import { NewUserModal, ResetPasswordModal } from "../components/Modals.tsx";
+import { EditUserModal, NewUserModal, ResetPasswordModal } from "../components/Modals.tsx";
 
 interface Props {
   users: User[]; currentUser: User;
   onCreate: (input: NewUserInput) => Promise<string | null>;
-  onUpdate: (id: number, patch: { active?: boolean; password?: string }) => Promise<string | null>;
+  onUpdate: (id: number, patch: { active?: boolean; password?: string; role?: Role; title?: string }) => Promise<string | null>;
+  onDelete: (user: User) => void;
   onPurge: () => void;
 }
 
-export function UsersView({ users, currentUser, onCreate, onUpdate, onPurge }: Props) {
+export function UsersView({ users, currentUser, onCreate, onUpdate, onDelete, onPurge }: Props) {
   const [creating, setCreating] = useState(false);
   const [resetting, setResetting] = useState<User | null>(null);
+  const [editing, setEditing] = useState<User | null>(null);
   const small = { ...sans, padding: "5px 10px", borderRadius: 6, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, cursor: "pointer", fontSize: 11, fontWeight: 600 } as const;
 
   return (
@@ -45,9 +47,11 @@ export function UsersView({ users, currentUser, onCreate, onUpdate, onPurge }: P
               </div>
               <div style={{ textAlign: "right" }}><RoleBadge role={u.role} /><div style={{ ...sans, fontSize: 10, marginTop: 4, color: u.active ? C.green : C.red, fontWeight: 600 }}>{u.active ? "● Attivo" : "● Disattivato"}</div></div>
             </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setResetting(u)} style={small}>🔑 Reimposta password</button>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button onClick={() => setEditing(u)} style={small}>✏️ Modifica</button>
+              <button onClick={() => setResetting(u)} style={small}>🔑 Password</button>
               {u.id !== currentUser.id && <button onClick={() => { void onUpdate(u.id, { active: !u.active }); }} style={small}>{u.active ? "Disattiva" : "Riattiva"}</button>}
+              {u.id !== currentUser.id && <button onClick={() => onDelete(u)} style={{ ...small, color: C.red, borderColor: C.red }}>🗑 Elimina</button>}
             </div>
           </Card>
         ))}
@@ -60,6 +64,7 @@ export function UsersView({ users, currentUser, onCreate, onUpdate, onPurge }: P
       </div>
 
       {creating && <NewUserModal onSave={async input => { const err = await onCreate(input); if (!err) setCreating(false); return err; }} onClose={() => setCreating(false)} />}
+      {editing && <EditUserModal user={editing} isSelf={editing.id === currentUser.id} onSave={async patch => { const err = await onUpdate(editing.id, patch); if (!err) setEditing(null); return err; }} onClose={() => setEditing(null)} />}
       {resetting && <ResetPasswordModal user={resetting} onSave={async pw => { const err = await onUpdate(resetting.id, { password: pw }); if (!err) setResetting(null); return err; }} onClose={() => setResetting(null)} />}
     </div>
   );

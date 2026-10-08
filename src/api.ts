@@ -27,6 +27,7 @@ export const api = {
   listUsers: () => request<{ users: User[] }>("/api/users").then(r => r.users),
   createUser: (input: NewUserInput) => post<{ user: User }>("/api/users", input).then(r => r.user),
   updateUser: (input: UpdateUserInput) => post<{ user: User }>("/api/users", input).then(r => r.user),
+  deleteUser: (id: number) => request<{ ok: true }>(`/api/users?id=${id}`, { method: "DELETE" }),
   purge: () => post<{ deleted: number }>("/api/purge", { confirm: "ELIMINA" }),
 };
 

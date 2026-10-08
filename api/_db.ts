@@ -186,6 +186,31 @@ export async function createUser(input: unknown): Promise<User> {
   }
 }
 
+/** Contratti in cui l'utente compare come contract owner (per nome). */
+async function countOwnedContracts(u: Pick<User, "name">): Promise<number> {
+  return (await getPool().query("select count(*)::int as n from contracts where lower(owner) = lower($1)", [u.name])).rows[0].n;
+}
+
+/** Elimina un utente. Non si può eliminare se stessi, l'ultimo manager, né chi è ancora collegato a dei contratti. */
+export async function deleteUser(actor: User, id: number): Promise<void> {
+  if (!Number.isInteger(id)) bad("Utente non valido");
+  const target = await findUserById(id);
+  if (!target) throw new HttpError(404, "Utente non trovato");
+  if (target.id === actor.id) bad("Non puoi eliminare il tuo account");
+  if (target.role === "manager" && target.active) {
+    const { rows } = await getPool().query("select count(*)::int as n from users where role = 'manager' and active and id <> $1", [id]);
+    if (rows[0].n === 0) bad("Deve restare almeno un manager attivo");
+  }
+  const owned = await countOwnedContracts(target);
+  const asBo = (await getPool().query("select count(*)::int as n from contracts where lower(bo_email) = lower($1)", [target.email])).rows[0].n;
+  if (owned || asBo) {
+    const parts = [owned && `contract owner di ${owned}`, asBo && `Business Owner di ${asBo}`].filter(Boolean).join(" e ");
+    throw new HttpError(409, `${target.name} è ${parts} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)`);
+  }
+  await getPool().query("delete from users where id = $1", [id]);
+  await getPool().query("delete from login_attempts where lower(email) = lower($1)", [target.email]);
+}
+
 export async function updateUser(actor: User, input: unknown): Promise<User> {
   const r = (input ?? {}) as Partial<UpdateUserInput>;
   if (!Number.isInteger(r.id)) bad("Utente non valido");
@@ -195,6 +220,10 @@ export async function updateUser(actor: User, input: unknown): Promise<User> {
   const role = r.role ?? target.role;
   const active = r.active ?? target.active;
   if (target.id === actor.id && (role !== actor.role || !active)) bad("Non puoi cambiare il tuo ruolo né disattivare il tuo account");
+  if (role !== target.role && role === "bo") {
+    const owned = await countOwnedContracts(target);
+    if (owned > 0) throw new HttpError(409, `${target.name} è contract owner di ${owned} contratti: riassegnali prima di renderlo Business Owner`);
+  }
   if (target.role === "manager" && target.active && (role !== "manager" || !active)) {
     const { rows } = await getPool().query("select count(*)::int as n from users where role = 'manager' and active and id <> $1", [target.id]);
     if (rows[0].n === 0) bad("Deve restare almeno un manager attivo");
