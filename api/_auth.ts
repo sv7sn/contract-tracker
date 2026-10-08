@@ -14,6 +14,13 @@ export async function requireUser(request: Request): Promise<User> {
   return publicUser(row);
 }
 
+/** Come requireUser, ma solo per i ruoli indicati (altrimenti 403). */
+export async function requireRole(request: Request, allowed: User["role"][]): Promise<User> {
+  const user = await requireUser(request);
+  if (!allowed.includes(user.role)) throw new HttpError(403, "Operazione non consentita");
+  return user;
+}
+
 export async function requireManager(request: Request): Promise<User> {
   const user = await requireUser(request);
   if (!canManageUsers(user)) throw new HttpError(403, "Operazione non consentita");

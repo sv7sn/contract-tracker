@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import type { Contract, ContractData, NewUserInput, PlanStep, Role, StepTemplate, User } from "../types.ts";
-import { btnGhost, btnPrimary, C, font, iStyle, ROLE_LABELS, sans } from "../theme.ts";
+import { btnGhost, btnPrimary, C, font, iStyle, ROLE_LABELS, sans, STAFF_ROLES } from "../theme.ts";
 import { fmt, fmtDate } from "../lib/format.ts";
 import { BO_COLORS, BO_DECISIONS } from "../lib/plan.ts";
 import { Avatar, Field, RoleBadge, StepIcon } from "./ui.tsx";
@@ -234,7 +234,7 @@ export function NewUserModal({ onSave, onClose }: { onSave: (input: NewUserInput
         <Field label="Nome e cognome" req htmlFor="u-name"><input id="u-name" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} style={iStyle} /></Field>
         <Field label="Email" req htmlFor="u-email"><input id="u-email" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} style={iStyle} /></Field>
         <Field label="Ruolo" req htmlFor="u-role">
-          <select id="u-role" value={f.role} onChange={e => setF({ ...f, role: e.target.value as Role })} style={iStyle}>{(Object.keys(ROLE_LABELS) as Role[]).map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select>
+          <select id="u-role" value={f.role} onChange={e => setF({ ...f, role: e.target.value as Role })} style={iStyle}>{STAFF_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select>
         </Field>
         <Field label="Funzione" htmlFor="u-title"><input id="u-title" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="Es. Buyer ICT" style={iStyle} /></Field>
         <Field label="Password iniziale (min. 8 caratteri)" req htmlFor="u-pw"><input id="u-pw" type="text" autoComplete="off" required minLength={8} value={f.password} onChange={e => setF({ ...f, password: e.target.value })} style={iStyle} /></Field>
@@ -278,7 +278,7 @@ export function EditUserModal({ user, isSelf, onSave, onClose }: { user: User; i
         <h3 style={{ ...font, margin: "0 0 6px", fontSize: 17, color: C.navy }}><span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}><Pencil size={19} />Modifica utente</span></h3>
         <p style={{ ...sans, fontSize: 13, color: C.muted, margin: "0 0 16px" }}>{user.name} · {user.email}</p>
         <Field label="Ruolo" htmlFor="e-role">
-          <select id="e-role" value={role} disabled={isSelf} onChange={e => setRole(e.target.value as Role)} style={iStyle}>{(Object.keys(ROLE_LABELS) as Role[]).map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select>
+          <select id="e-role" value={role} disabled={isSelf} onChange={e => setRole(e.target.value as Role)} style={iStyle}>{STAFF_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select>
           {isSelf && <div style={{ ...sans, fontSize: 11, color: C.muted, marginTop: 4 }}>Non puoi cambiare il tuo ruolo: chiedilo a un altro manager.</div>}
         </Field>
         <Field label="Funzione" htmlFor="e-title"><input id="e-title" value={title} onChange={e => setTitle(e.target.value)} style={iStyle} /></Field>

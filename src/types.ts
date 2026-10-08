@@ -1,8 +1,8 @@
 // Tipi condivisi tra frontend (src/) e API (api/).
-export type Role = "manager" | "buyer" | "bo";
+export type Role = "manager" | "buyer" | "finance" | "bo" | "supplier";
 export type Urgency = "green" | "yellow" | "red" | "gray";
 export type StepStatus = "upcoming" | "done" | "pending_bo";
-export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail";
+export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier";
 
 /** Utente autenticato, come restituito dall'API (mai con la password). */
 export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean }
@@ -50,3 +50,45 @@ export const DOCUMENT_EXTENSIONS = ["pdf", "doc", "docx"] as const;
 
 export interface NewUserInput { email: string; name: string; role: Role; title: string; password: string }
 export interface UpdateUserInput { id: number; role?: Role; title?: string; active?: boolean; password?: string }
+
+// ─── Onboarding fornitori ────────────────────────────────────
+
+/** Stato di un fornitore nel percorso di registrazione. */
+export type SupplierStatus = "invited" | "draft" | "pending" | "pending_revision" | "approved" | "rejected" | "registered";
+
+export interface SupplierData {
+  company?: { legalName?: string; vatCode?: string; fiscalCode?: string };
+  address?: { street?: string; houseNumber?: string; postalCode?: string; city?: string; country?: string; region?: string };
+  payment?: { iban?: string; swift?: string; accountNumber?: string; bankName?: string; currency?: string; withholdingTax?: boolean | null; withholdingType?: string; withholdingSpec?: string };
+  contacts?: { language?: "IT" | "EN"; ordersEmail?: string; adminEmail?: string; phone?: string };
+  acceptedTerms?: boolean;
+}
+
+export interface SupplierDocument { id: number; type: string; fileName: string; size: number; validUntil: string | null; uploadedAt: string; uploadedBy: string }
+export interface SupplierEvent { at: string; actor: string; action: string; detail: string }
+
+export interface Supplier {
+  id: number; email: string; name: string;
+  companyCodes: string[]; industryCode: string; customerCode: string;
+  referenceBuyerId: number | null; referenceBuyerName: string;
+  status: SupplierStatus; data: SupplierData;
+  paymentTerms: string | null; sapCode: string | null; sapAccountGroup: string | null;
+  rejectionReason: string; isUpdate: boolean;
+  invitedAt: string; expiresAt: string | null; submittedAt: string | null; updatedAt: string;
+  /** Solo per lo staff e solo finché l'invito non è stato usato. */
+  inviteLink?: string;
+  documents: SupplierDocument[]; events: SupplierEvent[];
+}
+export type SupplierSummary = Omit<Supplier, "documents" | "events" | "data"> & { country: string; legalName: string; documentCount: number };
+
+export interface BuyingCompany { code: string; name: string; sapCompanyCode: string; purchOrg: string }
+export interface IndustryCode { code: string; name: string; buyerIds: number[] }
+export interface PaymentTerm { code: string; label: string }
+export interface SapSettings {
+  tradingPartner: string; sortKey: string; cashManagementGroup: string; releaseGroup: string;
+  reconciliationAccounts: Record<string, string>;
+}
+export interface PortalConfig { companies: BuyingCompany[]; industryCodes: IndustryCode[]; paymentTerms: PaymentTerm[]; sap: SapSettings; buyers: { id: number; name: string; active: boolean }[] }
+
+export interface InviteInput { email: string; name: string; companyCodes: string[]; industryCode: string; customerCode?: string; referenceBuyerId: number }
+export type VendorAction = "approve" | "reject" | "request_revision" | "set_payment_terms" | "change_status";

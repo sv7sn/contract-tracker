@@ -23,6 +23,14 @@ o Business Owner di qualche contratto: riassegna prima i contratti, oppure disat
 Altre protezioni: password con hash `scrypt`, blocco dopo 5 tentativi falliti in 15 minuti, utenti disattivabili con effetto immediato,
 storico delle modifiche con autore stabilito dal server, impossibile disattivare o declassare l'ultimo manager.
 
+## Onboarding fornitori
+
+Il Buyer invita un fornitore (Fornitori → Invita fornitore): il fornitore riceve un link personale monouso, crea la password ed entra nella **sua area** dove compila anagrafica, indirizzo, coordinate bancarie, contatti e carica i documenti di qualifica (con scadenza). Flusso: *Buyer verifica e sceglie le condizioni di pagamento → Finance registra in SAP → il fornitore riceve il codice*. Buyer e Finance possono rifiutare o chiedere modifiche con motivo; un fornitore già registrato può aggiornare dati e documenti da solo, e la modifica torna in verifica.
+
+- **SAP**: con `SAP_MODE=simulated` (default) il codice fornitore è fittizio, per provare il flusso. Per la creazione reale impostare `SAP_MODE=http`, `SAP_ENDPOINT` (e `SAP_TOKEN`); conti di riconciliazione e società vanno inseriti in *Configurazione* (solo Manager).
+- **Email**: senza `RESEND_API_KEY` e `MAIL_FROM` i messaggi sono solo registrati; il link d'invito si può copiare e inviare a mano.
+- Non ancora coperti: dati fiscali brasiliani, fornitore già esistente in SAP (estensione società), promemoria automatici di scadenza dei documenti.
+
 ## Architettura
 
 ```
