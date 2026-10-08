@@ -7,7 +7,8 @@ import { clearLocal, DEMO_PASSWORD, DEMO_USERS, demoState, loadLocal, saveLocal 
 import { makePlan, RENEWAL_BY_DECISION, reschedulePlan, stepTemplate } from "./lib/plan.ts";
 import { canCreateContract, canManageUsers, canViewTeam } from "./permissions.ts";
 import { Avatar, BrandMark } from "./components/ui.tsx";
-import { AlertTriangle, Bell, CalendarRange, CheckCircle2, ChevronLeft, ClipboardCheck, FileText, LayoutDashboard, Loader2, Plus, Search, Settings, ShieldCheck, Users } from "./components/icons.tsx";
+import { AlertTriangle, Bell, Building2, CalendarRange, CheckCircle2, ChevronLeft, ClipboardCheck, FileText, LayoutDashboard, Loader2, Plus, Search, Settings, ShieldCheck, SlidersHorizontal, Users } from "./components/icons.tsx";
+import { InviteLanding } from "./components/InviteLanding.tsx";
 import { LoginScreen } from "./components/LoginScreen.tsx";
 import { AccountModal, BOFormModal, ContractForm } from "./components/Modals.tsx";
 import { Dashboard } from "./views/Dashboard.tsx";
@@ -18,9 +19,14 @@ import { TeamView } from "./views/TeamView.tsx";
 import { BOView } from "./views/BOView.tsx";
 import { AlertsView } from "./views/AlertsView.tsx";
 import { UsersView } from "./views/UsersView.tsx";
+import { SupplierPortal } from "./views/SupplierPortal.tsx";
+import { VendorsView } from "./views/VendorsView.tsx";
+import { ConfigView } from "./views/ConfigView.tsx";
 
 type Mode = "loading" | "api" | "local";
-const homeFor = (u: User): View => (u.role === "bo" ? "bo" : "dashboard");
+const homeFor = (u: User): View => (u.role === "bo" ? "bo" : u.role === "supplier" ? "supplier" : u.role === "finance" ? "vendors" : "dashboard");
+/** Ruoli che non lavorano sui contratti: non serve caricarli. */
+const hasContracts = (u: User) => u.role !== "supplier" && u.role !== "finance";
 const EMPTY: AppState = { contracts: [], plans: {}, auditLogs: {} };
 
 export default function App() {
@@ -39,6 +45,7 @@ export default function App() {
   const [boFormContract, setBOFormContract] = useState<Contract | null>(null);
   const [showAccount, setShowAccount] = useState(false);
   const [listSearch, setListSearch] = useState("");
+  const [inviteToken, setInviteToken] = useState<string | null>(() => new URLSearchParams(window.location.search).get("invite"));
 
   // Il dettaglio legge sempre la versione aggiornata del contratto (es. dopo una risposta BO).
   const selected = selectedId !== null ? contracts.find(c => c.id === selectedId) ?? null : null;
@@ -57,7 +64,7 @@ export default function App() {
 
   const loadAll = async (user: User) => {
     try {
-      setData(await api.loadState());
+      if (hasContracts(user)) setData(await api.loadState());
       if (canManageUsers(user)) setUsers(await api.listUsers());
     } catch (err) { if (!handleApiError(err)) showToast("⚠️ Impossibile caricare i dati"); }
   };
@@ -84,7 +91,7 @@ export default function App() {
 
   // Con più utenti sul database, ricarica i dati quando si torna sulla scheda.
   useEffect(() => {
-    if (mode !== "api" || !currentUser) return;
+    if (mode !== "api" || !currentUser || !hasContracts(currentUser)) return;
     const refresh = () => { if (document.visibilityState === "visible") api.loadState().then(setData).catch(handleApiError); };
     document.addEventListener("visibilitychange", refresh);
     return () => document.removeEventListener("visibilitychange", refresh);
@@ -252,9 +259,31 @@ export default function App() {
     </div>
   );
 
+  const leaveInvite = () => { setInviteToken(null); window.history.replaceState(null, "", window.location.pathname); };
+  if (!currentUser && inviteToken && mode === "api") return (
+    <><InviteLanding token={inviteToken} onCancel={leaveInvite} onActivated={user => { leaveInvite(); setCurrentUser(user); setView("supplier"); showToast("Account creato: completa la registrazione"); }} />{toastEl}</>
+  );
+
   if (!currentUser) return <><LoginScreen mode={mode} setupRequired={setupRequired} onLogin={handleLogin} onResetDemo={mode === "local" ? handleResetDemo : undefined} />{toastEl}</>;
 
+  // I fornitori hanno un'area dedicata, senza menu né dati interni.
+  if (currentUser.role === "supplier") return (
+    <div className="app-shell" style={{ ...sans, color: C.text }}>
+      <header className="topbar">
+        <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", maxWidth: 920, margin: "0 auto" }}>
+          <BrandMark size={32} />
+          <div style={{ flex: 1, minWidth: 0 }}><div className="topbar-eyebrow">Portale fornitori</div><div className="topbar-title">{currentUser.name}</div></div>
+          <button onClick={() => setShowAccount(true)} aria-label="Account" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}><Avatar name={currentUser.name} size={34} /></button>
+        </div>
+      </header>
+      <main className="page"><SupplierPortal onSessionExpired={sessionExpired} notify={showToast} /></main>
+      {showAccount && <AccountModal user={currentUser} canChangePassword onLogout={handleLogout} onClose={() => setShowAccount(false)} />}
+      {toastEl}
+    </div>
+  );
+
   // ─── Navigazione per ruolo ─────────────────────────────────
+  const vendorNav = mode === "api" ? [{ key: "vendors" as const, icon: <Building2 size={19} />, label: "Fornitori" }] : [];
   const navByRole: Record<Role, { key: View; icon: ReactNode; label: string }[]> = {
     manager: [
       { key: "dashboard", icon: <LayoutDashboard size={19} />, label: "Panoramica" },
@@ -262,6 +291,8 @@ export default function App() {
       { key: "planning",  icon: <CalendarRange size={19} />,   label: "Piano" },
       { key: "team",      icon: <Users size={19} />,           label: "Team" },
       { key: "notifiche", icon: <Bell size={19} />,            label: "Avvisi" },
+      ...vendorNav,
+      ...(mode === "api" ? [{ key: "config" as const, icon: <SlidersHorizontal size={19} />, label: "Configurazione" }] : []),
       ...(mode === "api" && canManageUsers(currentUser) ? [{ key: "users" as const, icon: <ShieldCheck size={19} />, label: "Utenti" }] : []),
     ],
     buyer: [
@@ -269,14 +300,17 @@ export default function App() {
       { key: "list",      icon: <FileText size={19} />,        label: "Contratti" },
       { key: "planning",  icon: <CalendarRange size={19} />,   label: "Piano" },
       { key: "notifiche", icon: <Bell size={19} />,            label: "Avvisi" },
+      ...vendorNav,
     ],
+    finance: [{ key: "vendors", icon: <Building2 size={19} />, label: "Fornitori" }],
+    supplier: [],
     bo: [
       { key: "bo",   icon: <ClipboardCheck size={19} />, label: "Richieste" },
       { key: "list", icon: <FileText size={19} />,       label: "Contratti" },
     ],
   };
   const navItems = navByRole[currentUser.role];
-  const titles: Record<View, string> = { dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", detail: selected?.supplier ?? "" };
+  const titles: Record<View, string> = { dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", vendors: "Fornitori", config: "Configurazione", supplier: "Area fornitore", detail: selected?.supplier ?? "" };
   const activeNav = view === "detail" ? "list" : view;
   const navBtn = (n: typeof navItems[number], sidebar: boolean) => {
     const on = activeNav === n.key;
@@ -319,7 +353,7 @@ export default function App() {
               <div className="topbar-eyebrow">{ROLE_LABELS[currentUser.role]}</div>
               <div className="topbar-title">{titles[view]}</div>
             </div>
-            {currentUser.role !== "bo" && (
+            {hasContracts(currentUser) && currentUser.role !== "bo" && (
               <div className="topbar-search" style={{ position: "relative", width: 300 }}>
                 <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
                 <input value={listSearch} onChange={e => { setListSearch(e.target.value); if (view !== "list") setView("list"); }} placeholder="Cerca fornitore, oggetto, owner…" aria-label="Cerca contratti" style={{ ...iStyle, padding: "9px 12px 9px 36px", borderRadius: 10, background: "#fff" }} />
@@ -350,6 +384,8 @@ export default function App() {
           {view === "bo" && currentUser.role === "bo" && <BOView contracts={contracts} plans={plans} currentUser={currentUser} onOpenBOForm={setBOFormContract} />}
           {view === "notifiche" && currentUser.role !== "bo" && <AlertsView contracts={contracts} users={users} />}
           {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} onPurge={handlePurge} />}
+          {view === "vendors" && mode === "api" && <VendorsView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
+          {view === "config" && mode === "api" && currentUser.role === "manager" && <ConfigView notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "detail" && selected && <ContractDetail contract={selected} auditLog={auditLogs[selected.id] || []} currentUser={currentUser} canOpenDocuments={mode === "api"} onBack={() => setView("list")} onEdit={() => { setEditingContract(selected); setShowForm(true); }} onDelete={handleDelete} />}
         </main>
       </div>
