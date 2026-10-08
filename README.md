@@ -31,6 +31,7 @@ api/            Vercel Functions (Node.js) su PostgreSQL
   _db.ts           schema (creato in automatico), query, validazione, controlli sui permessi
   _crypto.ts       hash password e token di sessione
   state | commit | login | logout | me | password | users | purge
+  upload | document  caricamento e consegna dei documenti dei contratti (archivio Blob privato)
 ```
 
 Se le API non sono raggiungibili (es. `npm run dev`) l'app parte in **modalità demo locale**: dati fittizi salvati nel browser
@@ -46,7 +47,11 @@ e account di prova (password `demo1234`, indicata nella schermata di accesso).
 3. Rifai il deploy. Al primo avvio vengono create le tabelle e, **solo se non esiste nessun utente**, l'amministratore.
    Poi entra e crea gli altri utenti da **Utenti → Nuovo utente**. Le variabili `ADMIN_*` non vengono più usate dopo il primo avvio:
    puoi rimuoverle.
-4. Opzionale: `SESSION_SECRET` (stringa casuale lunga) per firmare le sessioni. Se manca, la chiave deriva da `DATABASE_URL`.
+4. **Documenti dei contratti**: nel progetto Vercel crea un archivio **Blob** e collegalo al progetto (imposta `BLOB_READ_WRITE_TOKEN`).
+   **Deve essere PRIVATO** (la scelta Public/Private si fa alla creazione e non si può cambiare): i contratti non devono avere link pubblici.
+   I file (PDF, DOC, DOCX, max 25 MB) vengono caricati direttamente dal browser nell'archivio e riletti solo tramite `/api/document`,
+   che controlla i permessi dell'utente. Senza archivio l'app funziona ma non salva i documenti.
+5. Opzionale: `SESSION_SECRET` (stringa casuale lunga) per firmare le sessioni. Se manca, la chiave deriva da `DATABASE_URL`.
 
 Non esistono account predefiniti con password note: senza `ADMIN_*` il sito mostra "Nessun utente configurato".
 

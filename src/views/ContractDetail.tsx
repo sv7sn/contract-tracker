@@ -3,8 +3,9 @@ import { C, font, sans, URGENCY_COLORS } from "../theme.ts";
 import { daysToExpiry, fmt, fmtDate, NOW, urgency } from "../lib/format.ts";
 import { canDeleteContract, canEditContract } from "../permissions.ts";
 import { AuditTrail, Card, Grid } from "../components/ui.tsx";
+import { documentUrl } from "../api.ts";
 
-export function ContractDetail({ contract, auditLog, currentUser, onBack, onEdit, onDelete }: { contract: Contract; auditLog: AuditEntry[]; currentUser: User; onBack: () => void; onEdit: () => void; onDelete: () => void }) {
+export function ContractDetail({ contract, auditLog, currentUser, canOpenDocuments, onBack, onEdit, onDelete }: { contract: Contract; auditLog: AuditEntry[]; currentUser: User; canOpenDocuments: boolean; onBack: () => void; onEdit: () => void; onDelete: () => void }) {
   const u = urgency(contract); const days = daysToExpiry(contract.end);
   const startMs = new Date(contract.start).getTime(), endMs = new Date(contract.end).getTime();
   const prog = contract.start && endMs > startMs ? Math.min(100, Math.max(0, ((NOW.getTime() - startMs) / (endMs - startMs)) * 100)) : 0;
@@ -48,7 +49,21 @@ export function ContractDetail({ contract, auditLog, currentUser, onBack, onEdit
               </div>
             ))}
           </Card>
-          {contract.fileName && <div style={{ background: C.greenBg, border: `1px solid ${C.green}`, borderRadius: 10, padding: 14, display: "flex", alignItems: "center", gap: 10 }}>📄<div style={{ ...sans, fontSize: 13, fontWeight: 600, color: C.green, overflowWrap: "anywhere" }}>{contract.fileName}</div></div>}
+          {contract.fileName && (contract.filePath && canOpenDocuments ? (
+            <div style={{ background: C.greenBg, border: `1px solid ${C.green}`, borderRadius: 10, padding: 14, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span aria-hidden>📄</span>
+              <div style={{ ...sans, fontSize: 13, fontWeight: 600, color: C.green, overflowWrap: "anywhere", flex: "1 1 160px" }}>{contract.fileName}</div>
+              <a href={documentUrl(contract.id)} target="_blank" rel="noopener noreferrer" style={{ ...sans, padding: "6px 14px", background: C.green, borderRadius: 6, color: "#fff", fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Apri</a>
+              <a href={documentUrl(contract.id, true)} style={{ ...sans, padding: "6px 14px", border: `1px solid ${C.green}`, borderRadius: 6, color: C.green, fontSize: 12, fontWeight: 700, textDecoration: "none" }}>Scarica</a>
+            </div>
+          ) : (
+            <div style={{ background: C.yellowBg, border: "1px solid #f0d080", borderRadius: 10, padding: 14 }}>
+              <div style={{ ...sans, fontSize: 13, fontWeight: 600, color: C.yellow, overflowWrap: "anywhere" }}>📄 {contract.fileName}</div>
+              <div style={{ ...sans, fontSize: 12, color: C.muted, marginTop: 4, lineHeight: 1.5 }}>
+                {canOpenDocuments ? <>Il documento non è stato salvato (risulta solo il nome del file).{canEditContract(currentUser, contract) && " Usa Modifica per ricaricarlo."}</> : "In modalità demo i documenti non vengono salvati."}
+              </div>
+            </div>
+          ))}
           {contract.notes && <div style={{ background: C.yellowBg, border: `1px solid #f0d080`, borderRadius: 10, padding: 14 }}><div style={{ ...sans, fontSize: 11, color: C.yellow, fontWeight: 700, marginBottom: 4 }}>📝 NOTE</div><div style={{ ...sans, fontSize: 13, whiteSpace: "pre-wrap" }}>{contract.notes}</div></div>}
         </div>
         <AuditTrail entries={auditLog} />
