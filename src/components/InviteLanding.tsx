@@ -39,7 +39,7 @@ export function InviteLanding({ token, onActivated, onCancel }: { token: string;
   return (
     <div className="login-shell">
       <div className="login-brand">
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 44 }}><BrandMark size={46} /><div style={{ ...font, fontSize: 22, fontWeight: 700 }}>Contract Tracker</div></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 44 }}><BrandMark size={46} /><div style={{ ...font, fontSize: 22, fontWeight: 700 }}>Procurement Hub</div></div>
         <h1 style={{ ...font, fontSize: 40, lineHeight: 1.12, fontWeight: 750, margin: 0, maxWidth: 520, letterSpacing: "-0.03em" }}>Benvenuto nel portale <span style={{ color: "#f0997a" }}>fornitori</span>.</h1>
         <p style={{ ...sans, fontSize: 17, color: "rgba(255,255,255,.72)", marginTop: 18, maxWidth: 480, lineHeight: 1.6 }}>Registrarti richiede pochi minuti. Tieni a portata di mano visura camerale, DURC e coordinate bancarie.</p>
         <div style={{ display: "grid", gap: 20, marginTop: 40, maxWidth: 480 }}>
