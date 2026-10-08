@@ -4,7 +4,7 @@ import { ApiError, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, sans } from "../theme.ts";
 import { Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
 import { AlertTriangle, Building2, Loader2, Pencil, Plus, Save, Settings, Trash2, Wallet, FileText } from "../components/icons.tsx";
-import { Notice } from "../components/vendorUi.tsx";
+import { Notice, Portal } from "../components/vendorUi.tsx";
 
 type Entity = "company" | "industry" | "payment_term";
 type Draft = { entity: Entity; item: Record<string, unknown>; isNew: boolean };
@@ -88,7 +88,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
         <button onClick={saveSap} disabled={busy} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}Salva parametri SAP</button>
       </Card>
 
-      {draft && <ItemDialog draft={draft} cfg={cfg} fail={fail} onClose={() => setDraft(null)} onSaved={c => { adopt(c); setDraft(null); notify("Salvato"); }} />}
+      {draft && <Portal><ItemDialog draft={draft} cfg={cfg} fail={fail} onClose={() => setDraft(null)} onSaved={c => { adopt(c); setDraft(null); notify("Salvato"); }} /></Portal>}
     </div>
   );
 }
