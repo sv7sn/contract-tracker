@@ -16,6 +16,10 @@ ma sono le API a rifiutare comunque le richieste non autorizzate.
 | **Buyer** | solo i contratti di cui è *contract owner* | crea contratti (assegnati a lui), modifica contratti e piani propri |
 | **Business Owner** | solo i contratti con la sua email come BO | registra la propria decisione di rinnovo (nient'altro) |
 
+Gli utenti si gestiscono da **Utenti** (solo manager): crea, modifica ruolo e funzione, reimposta la password, disattiva/riattiva, elimina.
+Per non lasciare contratti senza responsabile, un utente **non si può eliminare** (né rendere Business Owner) finché è contract owner
+o Business Owner di qualche contratto: riassegna prima i contratti, oppure disattivalo (perde l'accesso ma lo storico resta).
+
 Altre protezioni: password con hash `scrypt`, blocco dopo 5 tentativi falliti in 15 minuti, utenti disattivabili con effetto immediato,
 storico delle modifiche con autore stabilito dal server, impossibile disattivare o declassare l'ultimo manager.
 

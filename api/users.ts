@@ -1,5 +1,5 @@
 import { requireManager } from "./_auth.js";
-import { createUser, listUsers, updateUser } from "./_db.js";
+import { createUser, deleteUser, listUsers, updateUser } from "./_db.js";
 import { errorResponse, readJson } from "./_http.js";
 
 export async function GET(request: Request) {
@@ -17,6 +17,16 @@ export async function POST(request: Request) {
     const actor = await requireManager(request);
     const body = (await readJson(request)) as { id?: unknown };
     return Response.json({ user: body.id === undefined ? await createUser(body) : await updateUser(actor, body) });
+  } catch (err) {
+    return errorResponse(err);
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const actor = await requireManager(request);
+    await deleteUser(actor, Number(new URL(request.url).searchParams.get("id")));
+    return Response.json({ ok: true });
   } catch (err) {
     return errorResponse(err);
   }

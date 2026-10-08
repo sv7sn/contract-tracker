@@ -213,8 +213,18 @@ export default function App() {
   const handleCreateUser = async (input: NewUserInput): Promise<string | null> => {
     try { const u = await api.createUser(input); setUsers(list => [...list, u]); showToast(`✅ Utente ${u.name} creato`); return null; } catch (err) { return userError(err); }
   };
-  const handleUpdateUser = async (id: number, patch: { active?: boolean; password?: string }): Promise<string | null> => {
-    try { const u = await api.updateUser({ id, ...patch }); setUsers(list => list.map(x => x.id === id ? u : x)); showToast(patch.password ? "🔑 Password reimpostata" : u.active ? "Utente riattivato" : "Utente disattivato"); return null; } catch (err) { const m = userError(err); showToast(`⚠️ ${m}`); return m; }
+  const handleUpdateUser = async (id: number, patch: { active?: boolean; password?: string; role?: Role; title?: string }): Promise<string | null> => {
+    try {
+      const u = await api.updateUser({ id, ...patch });
+      setUsers(list => list.map(x => x.id === id ? u : x));
+      showToast(patch.password ? "🔑 Password reimpostata" : patch.active !== undefined ? (u.active ? "Utente riattivato" : "Utente disattivato") : "✅ Utente aggiornato");
+      return null;
+    } catch (err) { const m = userError(err); showToast(`⚠️ ${m}`); return m; }
+  };
+  const handleDeleteUser = async (u: User) => {
+    if (!window.confirm(`Eliminare definitivamente ${u.name} (${u.email})? L'operazione non si può annullare. In alternativa puoi disattivarlo.`)) return;
+    try { await api.deleteUser(u.id); setUsers(list => list.filter(x => x.id !== u.id)); showToast(`🗑 Utente ${u.name} eliminato`); }
+    catch (err) { showToast(`⚠️ ${userError(err)}`); }
   };
   const handlePurge = async () => {
     if (window.prompt("Verranno eliminati TUTTI i contratti, con piani e storico. Scrivi ELIMINA per confermare.") !== "ELIMINA") return;
@@ -321,7 +331,7 @@ export default function App() {
           {view === "team" && canViewTeam(currentUser) && <TeamView contracts={contracts} plans={plans} onApplySuggestion={handleApplySuggestion} />}
           {view === "bo" && currentUser.role === "bo" && <BOView contracts={contracts} plans={plans} currentUser={currentUser} onOpenBOForm={setBOFormContract} />}
           {view === "notifiche" && currentUser.role !== "bo" && <AlertsView contracts={contracts} users={users} />}
-          {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onPurge={handlePurge} />}
+          {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} onPurge={handlePurge} />}
           {view === "detail" && selected && <ContractDetail contract={selected} auditLog={auditLogs[selected.id] || []} currentUser={currentUser} canOpenDocuments={mode === "api"} onBack={() => setView("list")} onEdit={() => { setEditingContract(selected); setShowForm(true); }} onDelete={handleDelete} />}
         </main>
       </div>

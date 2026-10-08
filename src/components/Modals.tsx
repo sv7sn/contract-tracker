@@ -266,3 +266,28 @@ export function ResetPasswordModal({ user, onSave, onClose }: { user: User; onSa
     </div>
   );
 }
+
+export function EditUserModal({ user, isSelf, onSave, onClose }: { user: User; isSelf: boolean; onSave: (patch: { role: Role; title: string }) => Promise<string | null>; onClose: () => void }) {
+  const [role, setRole] = useState<Role>(user.role); const [title, setTitle] = useState(user.title);
+  const [error, setError] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const submit = async (e: React.FormEvent) => { e.preventDefault(); setBusy(true); setError(null); const err = await onSave({ role, title }); if (err) { setError(err); setBusy(false); } };
+  return (
+    <div className="dialog-overlay" role="dialog" aria-modal="true">
+      <form className="dialog" onSubmit={submit}>
+        <h3 style={{ ...font, margin: "0 0 6px", fontSize: 17, color: C.navy }}>✏️ Modifica utente</h3>
+        <p style={{ ...sans, fontSize: 13, color: C.muted, margin: "0 0 16px" }}>{user.name} · {user.email}</p>
+        <Field label="Ruolo" htmlFor="e-role">
+          <select id="e-role" value={role} disabled={isSelf} onChange={e => setRole(e.target.value as Role)} style={iStyle}>{(Object.keys(ROLE_LABELS) as Role[]).map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select>
+          {isSelf && <div style={{ ...sans, fontSize: 11, color: C.muted, marginTop: 4 }}>Non puoi cambiare il tuo ruolo: chiedilo a un altro manager.</div>}
+        </Field>
+        <Field label="Funzione" htmlFor="e-title"><input id="e-title" value={title} onChange={e => setTitle(e.target.value)} style={iStyle} /></Field>
+        {role !== user.role && <div style={{ ...sans, background: C.yellowBg, color: C.yellow, borderRadius: 8, padding: "10px 12px", fontSize: 12, lineHeight: 1.5, marginBottom: 14 }}>Cambiando ruolo cambiano subito i contratti visibili e le azioni consentite a questo utente.</div>}
+        {error && <div role="alert" style={{ ...sans, background: C.redBg, color: C.red, borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 14 }}>{error}</div>}
+        <div style={{ display: "flex", gap: 10 }}>
+          <button type="button" onClick={onClose} style={{ ...btnGhost, flex: 1 }}>Annulla</button>
+          <button type="submit" disabled={busy} style={{ ...btnPrimary, flex: 2, opacity: busy ? 0.7 : 1 }}>Salva</button>
+        </div>
+      </form>
+    </div>
+  );
+}
