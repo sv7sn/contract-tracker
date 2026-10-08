@@ -41,15 +41,16 @@ export function checkDocument(file: File): string | null {
 
 /** Carica il documento direttamente nell'archivio privato (autorizzato da /api/upload) e restituisce il percorso salvato. */
 export async function uploadDocument(file: File): Promise<string> {
-  const { upload } = await import("@vercel/blob/client");
+  const { uploadPresigned } = await import("@vercel/blob/client");
   const safeName = file.name.replace(/[^\p{L}\p{N}._ ()-]+/gu, "_").slice(-120);
   try {
-    const result = await upload(`contracts/${crypto.randomUUID()}/${safeName}`, file, { access: "private", handleUploadUrl: "/api/upload" });
+    const result = await uploadPresigned(`contracts/${crypto.randomUUID()}/${safeName}`, file, { access: "private", handleUploadUrl: "/api/upload" });
     return result.pathname;
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
     if (/private/i.test(message)) throw new Error("L'archivio Blob su Vercel deve essere creato in modalità PRIVATA");
-    if (/token|store|not.?found|suspended/i.test(message)) throw new Error("Archivio documenti non configurato su Vercel (Blob)");
+    // Il dettaglio tecnico resta visibile per capire subito cosa manca nella configurazione.
+    if (/token|store|credential|oidc|presigned|not.?found|suspended|configur/i.test(message)) throw new Error(`Archivio documenti non configurato su Vercel (${message.replace(/^Vercel Blob: /, "").slice(0, 180)})`);
     throw new Error(message || "Caricamento del documento non riuscito");
   }
 }

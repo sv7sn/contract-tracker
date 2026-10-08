@@ -47,7 +47,8 @@ e account di prova (password `demo1234`, indicata nella schermata di accesso).
 3. Rifai il deploy. Al primo avvio vengono create le tabelle e, **solo se non esiste nessun utente**, l'amministratore.
    Poi entra e crea gli altri utenti da **Utenti → Nuovo utente**. Le variabili `ADMIN_*` non vengono più usate dopo il primo avvio:
    puoi rimuoverle.
-4. **Documenti dei contratti**: nel progetto Vercel crea un archivio **Blob** e collegalo al progetto (imposta `BLOB_READ_WRITE_TOKEN`).
+4. **Documenti dei contratti**: nel progetto Vercel crea un archivio **Blob** e collegalo al progetto (Vercel imposta `BLOB_STORE_ID`
+   e usa l'accesso OIDC; con archivi più vecchi funziona anche `BLOB_READ_WRITE_TOKEN`).
    **Deve essere PRIVATO** (la scelta Public/Private si fa alla creazione e non si può cambiare): i contratti non devono avere link pubblici.
    I file (PDF, DOC, DOCX, max 25 MB) vengono caricati direttamente dal browser nell'archivio e riletti solo tramite `/api/document`,
    che controlla i permessi dell'utente. Senza archivio l'app funziona ma non salva i documenti.
