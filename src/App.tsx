@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { AppState, AuditEntry, CommitPayload, Contract, ContractData, NewUserInput, PlanStep, Role, User, View } from "./types.ts";
 import { api, ApiError } from "./api.ts";
-import { C, font, ROLE_LABELS, sans } from "./theme.ts";
+import { C, font, iStyle, ROLE_LABELS, sans, shadow } from "./theme.ts";
 import { fmtDate, tsNow } from "./lib/format.ts";
 import { clearLocal, DEMO_PASSWORD, DEMO_USERS, demoState, loadLocal, saveLocal } from "./lib/demo.ts";
 import { makePlan, RENEWAL_BY_DECISION, reschedulePlan, stepTemplate } from "./lib/plan.ts";
 import { canCreateContract, canManageUsers, canViewTeam } from "./permissions.ts";
-import { Avatar } from "./components/ui.tsx";
+import { Avatar, BrandMark } from "./components/ui.tsx";
+import { AlertTriangle, Bell, CalendarRange, CheckCircle2, ChevronLeft, ClipboardCheck, FileText, LayoutDashboard, Loader2, Plus, Search, Settings, ShieldCheck, Users } from "./components/icons.tsx";
 import { LoginScreen } from "./components/LoginScreen.tsx";
 import { AccountModal, BOFormModal, ContractForm } from "./components/Modals.tsx";
 import { Dashboard } from "./views/Dashboard.tsx";
@@ -37,6 +38,7 @@ export default function App() {
   const [editingContract, setEditingContract] = useState<Contract | null>(null);
   const [boFormContract, setBOFormContract] = useState<Contract | null>(null);
   const [showAccount, setShowAccount] = useState(false);
+  const [listSearch, setListSearch] = useState("");
 
   // Il dettaglio legge sempre la versione aggiornata del contratto (es. dopo una risposta BO).
   const selected = selectedId !== null ? contracts.find(c => c.id === selectedId) ?? null : null;
@@ -234,99 +236,115 @@ export default function App() {
   const openDetail = (c: Contract) => { setSelectedId(c.id); setView("detail"); };
   const openNew = () => { setEditingContract(null); setShowForm(true); };
 
+  // I messaggi iniziano con un'emoji decorativa (⚠️ ⛔ ✅ …): la si sostituisce con un'icona coerente.
+  const isWarn = !!toast && /^(⚠|⛔)/u.test(toast);
+  const toastText = toast ? toast.replace(/^[^\p{L}\p{N}"'«]+/u, "") : "";
   const toastEl = toast && (
-    <div role="status" style={{ position: "fixed", top: 80, left: "50%", transform: "translateX(-50%)", maxWidth: "90vw", background: C.navy, color: "#fff", padding: "11px 22px", borderRadius: 24, fontWeight: 600, fontSize: 13, zIndex: 400, boxShadow: "0 4px 20px rgba(0,0,0,0.2)", ...sans, textAlign: "center" }}>
-      {toast}
+    <div role="status" className="toast" style={{ position: "fixed", top: 76, left: "50%", transform: "translateX(-50%)", maxWidth: "92vw", background: C.navy, color: "#fff", padding: "11px 18px 11px 14px", borderRadius: 14, fontWeight: 550, fontSize: 13.5, zIndex: 400, boxShadow: shadow.lg, ...sans, display: "flex", alignItems: "center", gap: 10 }}>
+      {isWarn ? <AlertTriangle size={18} color="#f5c55a" /> : <CheckCircle2 size={18} color="#5fd0a0" />}
+      <span>{toastText}</span>
     </div>
   );
 
-  if (mode === "loading") return <div style={{ ...sans, minHeight: "100vh", background: C.navy, color: "rgba(255,255,255,0.6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>Caricamento…</div>;
+  if (mode === "loading") return (
+    <div style={{ ...sans, minHeight: "100vh", background: C.navy, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, color: "rgba(255,255,255,.7)", fontSize: 13.5 }}>
+      <BrandMark size={52} /><Loader2 className="spin" size={22} /><span>Caricamento…</span>
+    </div>
+  );
 
   if (!currentUser) return <><LoginScreen mode={mode} setupRequired={setupRequired} onLogin={handleLogin} onResetDemo={mode === "local" ? handleResetDemo : undefined} />{toastEl}</>;
 
   // ─── Navigazione per ruolo ─────────────────────────────────
-  const navByRole: Record<Role, { key: View; icon: string; label: string }[]> = {
+  const navByRole: Record<Role, { key: View; icon: ReactNode; label: string }[]> = {
     manager: [
-      { key: "dashboard", icon: "◈", label: "Overview" },
-      { key: "list",      icon: "≡",  label: "Contratti" },
-      { key: "planning",  icon: "▦",  label: "Piano" },
-      { key: "team",      icon: "👥", label: "Team" },
-      { key: "notifiche", icon: "✉",  label: "Alert" },
-      ...(mode === "api" && canManageUsers(currentUser) ? [{ key: "users" as const, icon: "🔐", label: "Utenti" }] : []),
+      { key: "dashboard", icon: <LayoutDashboard size={19} />, label: "Panoramica" },
+      { key: "list",      icon: <FileText size={19} />,        label: "Contratti" },
+      { key: "planning",  icon: <CalendarRange size={19} />,   label: "Piano" },
+      { key: "team",      icon: <Users size={19} />,           label: "Team" },
+      { key: "notifiche", icon: <Bell size={19} />,            label: "Avvisi" },
+      ...(mode === "api" && canManageUsers(currentUser) ? [{ key: "users" as const, icon: <ShieldCheck size={19} />, label: "Utenti" }] : []),
     ],
     buyer: [
-      { key: "dashboard", icon: "◈", label: "Overview" },
-      { key: "list",      icon: "≡",  label: "Contratti" },
-      { key: "planning",  icon: "▦",  label: "Piano" },
-      { key: "notifiche", icon: "✉",  label: "Alert" },
+      { key: "dashboard", icon: <LayoutDashboard size={19} />, label: "Panoramica" },
+      { key: "list",      icon: <FileText size={19} />,        label: "Contratti" },
+      { key: "planning",  icon: <CalendarRange size={19} />,   label: "Piano" },
+      { key: "notifiche", icon: <Bell size={19} />,            label: "Avvisi" },
     ],
     bo: [
-      { key: "bo",   icon: "📋", label: "Richieste" },
-      { key: "list", icon: "≡",  label: "Contratti" },
+      { key: "bo",   icon: <ClipboardCheck size={19} />, label: "Richieste" },
+      { key: "list", icon: <FileText size={19} />,       label: "Contratti" },
     ],
   };
   const navItems = navByRole[currentUser.role];
-  const titles: Record<View, string> = { dashboard: "Overview", list: "Contratti", planning: currentUser.role === "manager" ? "Piano — Team" : "Il mio piano", team: "Vista Team", notifiche: "Alert Email", bo: "Le mie richieste", users: "Utenti e permessi", detail: selected?.supplier ?? "" };
+  const titles: Record<View, string> = { dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", detail: selected?.supplier ?? "" };
   const activeNav = view === "detail" ? "list" : view;
   const navBtn = (n: typeof navItems[number], sidebar: boolean) => {
     const on = activeNav === n.key;
     return sidebar ? (
-      <button key={n.key} onClick={() => setView(n.key)} aria-current={on ? "page" : undefined} style={{ ...sans, display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 12px", marginBottom: 2, border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: on ? 700 : 500, background: on ? "rgba(255,255,255,0.12)" : "transparent", color: on ? "#fff" : "rgba(255,255,255,0.65)", textAlign: "left" }}>
-        <span style={{ width: 20, textAlign: "center", color: on ? C.accent : undefined }}>{n.icon}</span>{n.label}
+      <button key={n.key} onClick={() => setView(n.key)} aria-current={on ? "page" : undefined} style={{ ...sans, position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 12px", marginBottom: 3, border: "none", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: on ? 650 : 500, background: on ? "rgba(255,255,255,.1)" : "transparent", color: on ? "#fff" : "rgba(255,255,255,.66)", textAlign: "left" }}>
+        {on && <span aria-hidden style={{ position: "absolute", left: -14, top: 8, bottom: 8, width: 4, borderRadius: "0 4px 4px 0", background: C.accent }} />}
+        <span style={{ display: "flex", color: on ? "#fff" : "rgba(255,255,255,.55)" }}>{n.icon}</span>{n.label}
       </button>
     ) : (
-      <button key={n.key} onClick={() => setView(n.key)} aria-current={on ? "page" : undefined} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
-        <span style={{ fontSize: 16, color: on ? C.accent : C.subtle }}>{n.icon}</span>
-        <span style={{ ...sans, fontSize: 9, color: on ? C.accent : C.muted, fontWeight: on ? 700 : 400 }}>{n.label}</span>
-        {on && <div style={{ width: 16, height: 2, background: C.accent, borderRadius: 2 }} />}
+      <button key={n.key} onClick={() => setView(n.key)} aria-current={on ? "page" : undefined} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: on ? C.accent : C.subtle, padding: "2px 0" }}>
+        {n.icon}
+        <span style={{ ...sans, fontSize: 10, color: on ? C.accent : C.muted, fontWeight: on ? 650 : 500 }}>{n.label}</span>
       </button>
     );
   };
 
   return (
-    <div className="app-shell" style={{ ...sans, background: C.bg, color: C.text }}>
+    <div className="app-shell" style={{ ...sans, color: C.text }}>
       {/* Menu laterale (desktop) */}
       <aside className="sidebar" aria-label="Menu principale">
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px 22px" }}>
-          <div style={{ width: 36, height: 36, background: C.accent, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>📋</div>
-          <div><div style={{ ...font, fontSize: 15, fontWeight: 700, color: "#fff" }}>Contract Tracker</div><div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)" }}>Prometeon</div></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "2px 8px 26px" }}>
+          <BrandMark size={38} />
+          <div><div style={{ ...font, fontSize: 16, fontWeight: 700, color: "#fff" }}>Contract Tracker</div><div style={{ fontSize: 11, color: "rgba(255,255,255,.45)" }}>Procurement indiretto</div></div>
         </div>
+        <div style={{ fontSize: 10.5, fontWeight: 650, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.35)", padding: "0 12px 8px" }}>Menu</div>
         <nav>{navItems.map(n => navBtn(n, true))}</nav>
         <div style={{ flex: 1 }} />
-        <button onClick={() => setShowAccount(true)} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, border: "none", borderRadius: 10, background: "rgba(255,255,255,0.07)", cursor: "pointer", textAlign: "left", width: "100%" }}>
-          <Avatar name={currentUser.name} size={34} />
-          <div style={{ minWidth: 0 }}><div style={{ ...sans, fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.name}</div><div style={{ ...sans, fontSize: 11, color: "rgba(255,255,255,0.5)" }}>{ROLE_LABELS[currentUser.role]} · Account</div></div>
+        <button onClick={() => setShowAccount(true)} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, background: "rgba(255,255,255,.06)", cursor: "pointer", textAlign: "left", width: "100%" }}>
+          <Avatar name={currentUser.name} size={36} />
+          <div style={{ minWidth: 0, flex: 1 }}><div style={{ ...sans, fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.name}</div><div style={{ ...sans, fontSize: 11, color: "rgba(255,255,255,.5)" }}>{ROLE_LABELS[currentUser.role]}</div></div>
+          <Settings size={16} color="rgba(255,255,255,.5)" />
         </button>
       </aside>
 
       <div className="main-col">
         <header className="topbar">
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {view === "detail" && <button className="topbar-back" onClick={() => setView("list")} aria-label="Torna alla lista" style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, padding: 0, flexShrink: 0 }}>←</button>}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {view === "detail" && <button className="topbar-back" onClick={() => setView("list")} aria-label="Torna alla lista" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}><ChevronLeft size={22} /></button>}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="topbar-eyebrow" style={font}>Prometeon · {ROLE_LABELS[currentUser.role]}</div>
-              <div className="topbar-title" style={font}>{titles[view]}</div>
+              <div className="topbar-eyebrow">{ROLE_LABELS[currentUser.role]}</div>
+              <div className="topbar-title">{titles[view]}</div>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {currentUser.role !== "bo" && (
+              <div className="topbar-search" style={{ position: "relative", width: 300 }}>
+                <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+                <input value={listSearch} onChange={e => { setListSearch(e.target.value); if (view !== "list") setView("list"); }} placeholder="Cerca fornitore, oggetto, owner…" aria-label="Cerca contratti" style={{ ...iStyle, padding: "9px 12px 9px 36px", borderRadius: 10, background: "#fff" }} />
+              </div>
+            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {canCreateContract(currentUser) && (
-                <button onClick={openNew} style={{ ...sans, background: C.green, border: "none", borderRadius: 6, color: "#fff", cursor: "pointer", fontSize: 12, padding: "6px 12px", fontWeight: 600, flexShrink: 0 }}>➕<span style={{ marginLeft: 6 }} className="desktop-label">Nuovo contratto</span></button>
+                <button onClick={openNew} aria-label="Nuovo contratto" style={{ ...sans, display: "flex", alignItems: "center", gap: 6, background: C.accent, border: "none", borderRadius: 10, color: "#fff", cursor: "pointer", fontSize: 13, padding: "8px 12px", fontWeight: 650, flexShrink: 0, boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={17} /><span className="desktop-label">Nuovo contratto</span></button>
               )}
               <button className="mobile-only" onClick={() => setShowAccount(true)} aria-label="Account" style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 0 }}>
-                <Avatar name={currentUser.name} size={30} />
+                <Avatar name={currentUser.name} size={32} />
               </button>
             </div>
           </div>
         </header>
 
         {mode === "local" && (
-          <div style={{ ...sans, background: C.yellowBg, color: C.yellow, fontSize: 11, fontWeight: 600, textAlign: "center", padding: "6px 12px" }}>
-            ⚠️ Modalità demo: database non raggiungibile, i dati sono salvati solo in questo browser
+          <div style={{ ...sans, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: C.yellowBg, color: C.yellow, fontSize: 12, fontWeight: 600, textAlign: "center", padding: "7px 12px", borderBottom: "1px solid #f3dca0" }}>
+            <AlertTriangle size={14} />Modalità demo: database non raggiungibile, i dati sono salvati solo in questo browser
           </div>
         )}
 
         <main className="page">
-          {view === "dashboard" && <Dashboard contracts={contracts} plans={plans} currentUser={currentUser} onNavigate={(v, c) => { setView(v); if (c) setSelectedId(c.id); }} />}
-          {view === "list" && <ContractList contracts={contracts} currentUser={currentUser} onSelect={openDetail} />}
+          {view === "dashboard" && <Dashboard contracts={contracts} plans={plans} currentUser={currentUser} onNew={openNew} onNavigate={(v, c) => { setView(v); if (c) setSelectedId(c.id); }} />}
+          {view === "list" && <ContractList contracts={contracts} currentUser={currentUser} search={listSearch} onSearch={setListSearch} onSelect={openDetail} onNew={openNew} />}
           {view === "planning" && <PlanningView contracts={contracts} plans={plans} auditLogs={auditLogs} currentUser={currentUser} onSendBO={handleSendBO} onCompleteStep={handleCompleteStep} onOpenBOForm={setBOFormContract} onUpdateStepDate={handleUpdateStepDate} />}
           {view === "team" && canViewTeam(currentUser) && <TeamView contracts={contracts} plans={plans} onApplySuggestion={handleApplySuggestion} />}
           {view === "bo" && currentUser.role === "bo" && <BOView contracts={contracts} plans={plans} currentUser={currentUser} onOpenBOForm={setBOFormContract} />}
@@ -336,7 +354,7 @@ export default function App() {
         </main>
       </div>
 
-      {view === "list" && canCreateContract(currentUser) && <button className="fab" onClick={openNew} aria-label="Nuovo contratto">+</button>}
+      {view === "list" && canCreateContract(currentUser) && <button className="fab" onClick={openNew} aria-label="Nuovo contratto"><Plus size={26} /></button>}
 
       {view !== "detail" && <nav className="bottom-nav" aria-label="Navigazione">{navItems.map(n => navBtn(n, false))}</nav>}
 

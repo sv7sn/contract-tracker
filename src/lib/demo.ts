@@ -35,6 +35,12 @@ export const MOCK_CONTRACTS: Contract[] = [
   c(8,  "Lavoro Temporaneo Spa",   "Somministrazione lavoro",    "HR",       "Italia",   410000,  "EUR", -630,  100, "Buyer Generale", "bo.hr@example.com",         "In negoziazione",      "Servizi",  null),
   c(9,  "Selezione Personale Srl", "Ricerca e selezione",        "HR",       "Italia",   85000,   "EUR", -620,  110, "Buyer Generale", "bo.hr@example.com",         "In negoziazione",      "Servizi",  null),
   c(10, "Assistenza Sistemi Srl",  "Manutenzione server legacy", "ICT",      "Italia",   120000,  "EUR", -1000, 85,  "Buyer ICT",      "bo.it@example.com",         "Da rescindere",        "AMS",      null),
+  c(11, "Servizi Energia Spa",      "Fornitura energia elettrica", "Utilities","Italia",   1250000, "EUR", -300,  150, "Buyer Facility", "bo.facility@example.com",   "In negoziazione",      "Fornitura","contratto-energia.pdf"),
+  c(12, "Studio Legale Associato",  "Consulenza legale",           "Legal",    "Italia",   64000,   "EUR", -200,  190, "Manager Demo",   "bo.hr@example.com",         "Rinnovo automatico",   "Servizi",  null),
+  c(13, "Agenzia Creativa Srl",     "Servizi di comunicazione",    "Marketing","Italia",   150000,  "EUR", -150,  230, "Buyer Generale", "bo.hr@example.com",         "Da rilanciare a gara", "Servizi",  null),
+  c(14, "Trasporti Marittimi Co.",  "Trasporto container Asia",    "Logistica","Singapore",780000,  "EUR", -400,  280, "Buyer Asia",     "bo.supply@example.com",     "In negoziazione",      "Servizi",  "contratto-trasporti.pdf"),
+  c(15, "Pulizie Industriali Srl",  "Pulizia stabilimenti",        "Facility", "Italia",   210000,  "EUR", -520,  330, "Buyer Facility", "bo.facility@example.com",   "Non definito",         "Servizi",  null),
+  c(16, "Sicurezza Informatica Srl","Servizi di sicurezza IT",     "ICT",      "Italia",   175000,  "EUR", -90,   365, "Buyer ICT",      "bo.it@example.com",         "Non definito",         "SaaS",     null),
 ];
 
 export function demoState(): AppState {
