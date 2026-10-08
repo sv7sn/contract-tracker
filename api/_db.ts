@@ -41,17 +41,72 @@ create index if not exists audit_log_contract_idx on audit_log(contract_id);
 create table if not exists users (
   id serial primary key,
   email text not null, name text not null,
-  role text not null check (role in ('manager','buyer','bo')),
+  role text not null,
   title text not null default '', password_hash text not null,
   active boolean not null default true, created_at timestamptz not null default now()
 );
 create unique index if not exists users_email_key on users (lower(email));
-create unique index if not exists users_name_key on users (lower(name));
+create table if not exists settings (key text primary key, value jsonb not null);
+create table if not exists buying_companies (
+  code text primary key, name text not null, sap_company_code text not null default '', purch_org text not null default ''
+);
+create table if not exists industry_codes (code text primary key, name text not null);
+create table if not exists industry_buyers (
+  industry_code text not null references industry_codes(code) on delete cascade,
+  user_id integer not null references users(id) on delete cascade, primary key (industry_code, user_id)
+);
+create table if not exists payment_terms (code text primary key, label text not null);
+create table if not exists suppliers (
+  id serial primary key, email text not null, name text not null,
+  company_codes text[] not null default '{}', industry_code text not null, customer_code text not null default '',
+  reference_buyer_id integer references users(id) on delete set null,
+  status text not null, data jsonb not null default '{}'::jsonb,
+  payment_terms text, sap_code text, sap_account_group text,
+  rejection_reason text not null default '', is_update boolean not null default false,
+  token_hash text, token_expires timestamptz, sap_lock timestamptz,
+  user_id integer references users(id) on delete set null, invited_by integer references users(id) on delete set null,
+  created_at timestamptz not null default now(), submitted_at timestamptz, updated_at timestamptz not null default now()
+);
+create unique index if not exists suppliers_email_key on suppliers (lower(email));
+create index if not exists suppliers_status_idx on suppliers (status);
+create table if not exists supplier_documents (
+  id serial primary key, supplier_id integer not null references suppliers(id) on delete cascade,
+  type text not null, file_name text not null, file_path text not null, size integer not null default 0,
+  valid_until date, uploaded_at timestamptz not null default now(), uploaded_by text not null default ''
+);
+create index if not exists supplier_documents_supplier_idx on supplier_documents (supplier_id);
+create table if not exists supplier_events (
+  id serial primary key, supplier_id integer not null references suppliers(id) on delete cascade,
+  at timestamptz not null default now(), actor text not null, action text not null, detail text not null default '',
+  public boolean not null default false
+);
+create index if not exists supplier_events_supplier_idx on supplier_events (supplier_id);
+create table if not exists notifications (
+  id serial primary key, supplier_id integer references suppliers(id) on delete set null,
+  to_email text not null, template text not null, subject text not null, body text not null,
+  status text not null, error text, created_at timestamptz not null default now()
+);
+create table if not exists sap_requests (
+  id serial primary key, supplier_id integer references suppliers(id) on delete set null, mode text not null,
+  payload jsonb not null, response jsonb, ok boolean not null, created_at timestamptz not null default now()
+);
+
+-- Ruoli ammessi: aggiunti "finance" e "supplier" (si aggiorna il vincolo solo se non li include ancora).
+alter table users drop constraint if exists users_role_check;
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'users_role_check_v2') then
+    alter table users add constraint users_role_check_v2 check (role in ('manager','buyer','finance','bo','supplier'));
+  end if;
+end $$;
+-- Il nome è unico solo tra il personale interno (i fornitori possono avere nomi uguali o simili).
+drop index if exists users_name_key;
+create unique index if not exists users_name_staff_key on users (lower(name)) where role <> 'supplier';
 create table if not exists login_attempts (email text not null, at timestamptz not null default now());
 create index if not exists login_attempts_idx on login_attempts (email, at);
 `;
 
-export const ROLES: Role[] = ["manager", "buyer", "bo"];
+/** Ruoli assegnabili dalla pagina Utenti: i fornitori si creano solo tramite invito. */
+export const ROLES: Role[] = ["manager", "buyer", "finance", "bo"];
 
 let ready: Promise<unknown> | undefined;
 /** Crea le tabelle e, se non esiste ancora nessun utente, il primo amministratore da ADMIN_EMAIL / ADMIN_PASSWORD. */
@@ -59,6 +114,9 @@ export function ensureSchema() {
   ready ??= (async () => {
     const db = getPool();
     await db.query(SCHEMA);
+    await db.query(`insert into settings (key, value) values ('sap', $1) on conflict do nothing`, [JSON.stringify({ tradingPartner: "999999", sortKey: "002", cashManagementGroup: "0_VEND_001", releaseGroup: "MFL1", reconciliationAccounts: {} })]);
+    await db.query(`insert into industry_codes (code, name) values ('CT00', 'Partner / Clienti') on conflict do nothing`);
+    await db.query(`insert into payment_terms (code, label) values ('0030','30 giorni data fattura'),('0060','60 giorni data fattura'),('0090','90 giorni data fattura') on conflict do nothing`);
     const { rows } = await db.query("select count(*)::int as n from users");
     const email = process.env.ADMIN_EMAIL?.trim(), password = process.env.ADMIN_PASSWORD;
     if (rows[0].n === 0 && email && password) {
@@ -148,7 +206,7 @@ export async function findUserById(id: number): Promise<(User & { passwordHash: 
   return r ? { ...toUser(r), passwordHash: r.password_hash } : undefined;
 }
 export async function listUsers(): Promise<User[]> {
-  return (await getPool().query("select * from users order by role, name")).rows.map(toUser);
+  return (await getPool().query("select * from users where role <> 'supplier' order by role, name")).rows.map(toUser);
 }
 
 const FAILED_LIMIT = 5;
@@ -272,7 +330,7 @@ export async function loadState(user: User): Promise<AppState> {
 }
 
 // ─── Scrittura (tutto in una transazione, con controllo dei permessi) ─
-type Queryable = Pick<pg.PoolClient, "query">;
+export type Queryable = Pick<pg.PoolClient, "query">;
 
 export async function getContract(id: number): Promise<Contract | undefined> { return fetchContract(getPool(), id); }
 
@@ -317,7 +375,7 @@ async function addAudit(db: Queryable, contractId: number, user: User, entries: 
   }
 }
 
-async function inTransaction<T>(fn: (db: Queryable) => Promise<T>): Promise<T> {
+export async function inTransaction<T>(fn: (db: Queryable) => Promise<T>): Promise<T> {
   const client = await getPool().connect();
   try {
     await client.query("begin");

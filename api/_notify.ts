@@ -1,0 +1,62 @@
+import type { Queryable } from "./_db.js";
+
+// Email del portale. Ogni messaggio viene salvato nella tabella `notifications`; l'invio reale avviene se sono
+// configurati RESEND_API_KEY e MAIL_FROM (servizio Resend), altrimenti lo stato resta "logged" (non inviato).
+
+export type Template = "invitation" | "new_registration" | "supplier_modified" | "revision_requested" | "rejection" | "buyer_approved" | "vendor_created" | "sap_code";
+export type Lang = "IT" | "EN";
+
+interface Vars { name?: string; link?: string; reason?: string; sapCode?: string; expires?: string; companies?: string }
+
+const T: Record<Template, Record<Lang, (v: Vars) => { subject: string; body: string }>> = {
+  invitation: {
+    IT: v => ({ subject: "Invito alla registrazione come fornitore", body: `Gentile ${v.name},\n\nsei stato invitato a registrare la tua azienda come fornitore${v.companies ? ` per ${v.companies}` : ""}.\n\nCompleta la registrazione da questo link personale (valido fino al ${v.expires}):\n${v.link}\n\nTi serviranno: dati societari e fiscali, coordinate bancarie e i documenti di qualifica (visura camerale, lettera della banca, certificazioni).\n\nPer qualsiasi domanda rispondi a questa email.` }),
+    EN: v => ({ subject: "Invitation to register as a supplier", body: `Dear ${v.name},\n\nyou have been invited to register your company as a supplier${v.companies ? ` for ${v.companies}` : ""}.\n\nComplete the registration with this personal link (valid until ${v.expires}):\n${v.link}\n\nYou will need: company and tax data, bank details and qualification documents (chamber certificate, bank letter, certifications).\n\nIf you have questions, just reply to this email.` }),
+  },
+  new_registration: {
+    IT: v => ({ subject: `Nuova registrazione fornitore: ${v.name}`, body: `Il fornitore ${v.name} ha completato la registrazione ed è in attesa della tua verifica.\n\nApri la scheda: ${v.link}` }),
+    EN: v => ({ subject: `New supplier registration: ${v.name}`, body: `Supplier ${v.name} completed the registration and is waiting for your review.\n\nOpen it: ${v.link}` }),
+  },
+  supplier_modified: {
+    IT: v => ({ subject: `Dati fornitore modificati: ${v.name}`, body: `Il fornitore ${v.name} ha modificato i propri dati: serve una nuova approvazione.\n\nApri la scheda: ${v.link}` }),
+    EN: v => ({ subject: `Supplier data changed: ${v.name}`, body: `Supplier ${v.name} changed their data: a new approval is required.\n\nOpen it: ${v.link}` }),
+  },
+  revision_requested: {
+    IT: v => ({ subject: "Registrazione fornitore: servono modifiche", body: `Gentile ${v.name},\n\nla tua registrazione richiede alcune modifiche prima di poter proseguire:\n\n${v.reason}\n\nAccedi per aggiornare i dati: ${v.link}` }),
+    EN: v => ({ subject: "Supplier registration: changes needed", body: `Dear ${v.name},\n\nyour registration needs some changes before we can proceed:\n\n${v.reason}\n\nSign in to update your data: ${v.link}` }),
+  },
+  rejection: {
+    IT: v => ({ subject: "Registrazione fornitore non approvata", body: `Gentile ${v.name},\n\npurtroppo la tua registrazione non è stata approvata.\n\nMotivo: ${v.reason}\n\nPuoi correggere i dati e inviare di nuovo la richiesta: ${v.link}` }),
+    EN: v => ({ subject: "Supplier registration not approved", body: `Dear ${v.name},\n\nunfortunately your registration was not approved.\n\nReason: ${v.reason}\n\nYou can fix your data and submit again: ${v.link}` }),
+  },
+  buyer_approved: {
+    IT: v => ({ subject: `Fornitore da verificare (Finance): ${v.name}`, body: `Il Buyer ha approvato la registrazione di ${v.name}. Servono la tua verifica delle coordinate bancarie e dei requisiti fiscali.\n\nApri la scheda: ${v.link}` }),
+    EN: v => ({ subject: `Supplier to review (Finance): ${v.name}`, body: `The Buyer approved the registration of ${v.name}. Your review of bank details and tax requirements is needed.\n\nOpen it: ${v.link}` }),
+  },
+  vendor_created: {
+    IT: v => ({ subject: `Fornitore creato in SAP: ${v.name}`, body: `Il fornitore ${v.name} è stato creato in SAP con il codice ${v.sapCode}.\n\nScheda: ${v.link}` }),
+    EN: v => ({ subject: `Supplier created in SAP: ${v.name}`, body: `Supplier ${v.name} was created in SAP with code ${v.sapCode}.\n\nRecord: ${v.link}` }),
+  },
+  sap_code: {
+    IT: v => ({ subject: "Registrazione completata: il tuo codice fornitore", body: `Gentile ${v.name},\n\nla registrazione è completata. Il tuo codice fornitore è ${v.sapCode}.\n\nPuoi consultare e aggiornare i tuoi dati nella tua area personale: ${v.link}` }),
+    EN: v => ({ subject: "Registration completed: your supplier code", body: `Dear ${v.name},\n\nyour registration is complete. Your supplier code is ${v.sapCode}.\n\nYou can view and update your data in your personal area: ${v.link}` }),
+  },
+};
+
+export interface Mail { to: string; template: Template; lang?: Lang; supplierId?: number; vars: Vars }
+
+/** Salva e (se configurato) invia un'email. Un errore di invio non interrompe mai l'operazione che l'ha generata. */
+export async function sendMail(db: Queryable, mail: Mail): Promise<"sent" | "logged" | "failed"> {
+  const { subject, body } = T[mail.template][mail.lang ?? "IT"](mail.vars);
+  const key = process.env.RESEND_API_KEY, from = process.env.MAIL_FROM;
+  let status: "sent" | "logged" | "failed" = "logged", error: string | null = null;
+  if (key && from) {
+    try {
+      const res = await fetch("https://api.resend.com/emails", { method: "POST", signal: AbortSignal.timeout(8000), headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }, body: JSON.stringify({ from, to: [mail.to], subject, text: body }) });
+      status = res.ok ? "sent" : "failed";
+      if (!res.ok) error = `HTTP ${res.status}`;
+    } catch (err) { status = "failed"; error = err instanceof Error ? err.message : "errore di rete"; }
+  }
+  await db.query("insert into notifications (supplier_id, to_email, template, subject, body, status, error) values ($1,$2,$3,$4,$5,$6,$7)", [mail.supplierId ?? null, mail.to, mail.template, subject, body, status, error]);
+  return status;
+}

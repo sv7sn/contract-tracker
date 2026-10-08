@@ -23,3 +23,11 @@ export const canRespondBO = (u: Subject, c: Pick<Contract, "boEmail">) =>
 
 export const canManageUsers = (u: Subject) => u.role === "manager";
 export const canViewTeam = (u: Subject) => u.role === "manager";
+
+// ─── Fornitori ───────────────────────────────────────────────
+/** Utenti interni che gestiscono l'anagrafica fornitori. */
+export const isVendorStaff = (u: Subject) => u.role === "manager" || u.role === "buyer" || u.role === "finance";
+export const isSupplierUser = (u: Subject) => u.role === "supplier";
+/** Invitare fornitori (preregistrazione): solo manager e buyer. */
+export const canInviteSuppliers = (u: Subject) => u.role === "manager" || u.role === "buyer";
+export const canConfigurePortal = (u: Subject) => u.role === "manager";
