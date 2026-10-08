@@ -2,41 +2,64 @@
 
 Applicazione React + TypeScript (Vite) per il monitoraggio delle scadenze contrattuali del procurement indiretto
 e la pianificazione delle attività di rinnovo (analisi spend, coinvolgimento del Business Owner, negoziazione, firma).
+Funziona da telefono e da computer (menu laterale e griglie a più colonne su schermi larghi).
 
-## Funzionalità
+## Accesso e permessi
 
-- **Ruoli demo**: Manager, Buyer e Business Owner, ognuno con viste e permessi dedicati.
-- **Lista contratti** con ricerca, filtri per urgenza, ordinamento e archivio dei contratti cessati.
-- **Piano attività** generato automaticamente a ritroso dalla data di scadenza (-90 → 0 giorni),
-  con date modificabili, motivazione obbligatoria e audit trail.
-- **Vista Team** (Manager): carico di lavoro mensile per buyer e suggerimenti di anticipo.
-- **Richieste BO**: il Business Owner registra la decisione di rinnovo, che aggiorna lo stato del contratto.
-- **Database condiviso**: contratti, piani e storico delle modifiche sono salvati su PostgreSQL tramite le API in `api/`
-  (Vercel Functions). Se il database non è raggiungibile l'app passa in modalità locale (dati nel `localStorage`
-  del browser, con avviso in alto).
+L'accesso avviene con **email e password**. La sessione è un cookie `HttpOnly` firmato, valido 7 giorni.
+I permessi sono **controllati dal server** (`api/_permissions.ts`, `api/_db.ts`): l'interfaccia nasconde i comandi non consentiti,
+ma sono le API a rifiutare comunque le richieste non autorizzate.
+
+| Ruolo | Cosa vede | Cosa può fare |
+|---|---|---|
+| **Manager** | tutti i contratti, vista Team, utenti | crea/modifica/elimina contratti, assegna gli owner, gestisce piani e utenti |
+| **Buyer** | solo i contratti di cui è *contract owner* | crea contratti (assegnati a lui), modifica contratti e piani propri |
+| **Business Owner** | solo i contratti con la sua email come BO | registra la propria decisione di rinnovo (nient'altro) |
+
+Altre protezioni: password con hash `scrypt`, blocco dopo 5 tentativi falliti in 15 minuti, utenti disattivabili con effetto immediato,
+storico delle modifiche con autore stabilito dal server, impossibile disattivare o declassare l'ultimo manager.
 
 ## Architettura
 
-- `src/` – frontend React. `src/api.ts` chiama le API; `src/types.ts` contiene i tipi condivisi.
-- `api/state.ts` (GET) legge tutto lo stato, `api/commit.ts` (POST) salva una modifica in una transazione,
-  `api/seed.ts` (POST) carica i dati demo **solo se il database è vuoto**.
-- `api/_db.ts` – connessione, creazione automatica delle tabelle (`contracts`, `plan_steps`, `audit_log`) e validazione.
+```
+src/            frontend React
+  views/        una vista per schermata (Dashboard, Contratti, Piano, Team, Utenti, ...)
+  components/   login, finestre di dialogo, elementi grafici condivisi
+  lib/          formattazione, logica di pianificazione, dati demo (fittizi)
+api/            Vercel Functions (Node.js) su PostgreSQL
+  _permissions.ts  regole di accesso (usate anche dal frontend)
+  _db.ts           schema (creato in automatico), query, validazione, controlli sui permessi
+  _crypto.ts       hash password e token di sessione
+  state | commit | login | logout | me | password | users | purge
+```
 
-## Configurare il database su Vercel
+Se le API non sono raggiungibili (es. `npm run dev`) l'app parte in **modalità demo locale**: dati fittizi salvati nel browser
+e account di prova (password `demo1234`, indicata nella schermata di accesso).
 
-1. Nel progetto Vercel: **Storage → Create Database → Neon (Postgres)** e collegalo al progetto.
-2. Vercel imposta da solo la variabile `DATABASE_URL` (in alternativa `POSTGRES_URL`).
-3. Rifai il deploy. Al primo avvio le tabelle vengono create e, se vuote, popolate con i dati demo.
+## Configurazione su Vercel
 
-> Attenzione: il login è ancora una demo (si sceglie un profilo senza password) e le API non sono protette.
-> Prima di inserire dati reali serve un'autenticazione vera (es. Azure AD).
+1. **Database**: nel progetto Vercel aggiungi un database Postgres (Neon dal Marketplace) e collegalo al progetto: imposta `DATABASE_URL`.
+2. **Primo amministratore**: aggiungi in *Settings → Environment Variables*:
+   - `ADMIN_EMAIL` – email del primo manager
+   - `ADMIN_PASSWORD` – password iniziale (minimo 8 caratteri)
+   - `ADMIN_NAME` – opzionale, nome mostrato (default "Amministratore")
+3. Rifai il deploy. Al primo avvio vengono create le tabelle e, **solo se non esiste nessun utente**, l'amministratore.
+   Poi entra e crea gli altri utenti da **Utenti → Nuovo utente**. Le variabili `ADMIN_*` non vengono più usate dopo il primo avvio:
+   puoi rimuoverle.
+4. Opzionale: `SESSION_SECRET` (stringa casuale lunga) per firmare le sessioni. Se manca, la chiave deriva da `DATABASE_URL`.
+
+Non esistono account predefiniti con password note: senza `ADMIN_*` il sito mostra "Nessun utente configurato".
 
 ## Sviluppo
 
 ```bash
 npm install
-npm run dev      # frontend in modalità locale (senza API)
-npx vercel dev   # frontend + API (richiede DATABASE_URL, es. con `vercel env pull`)
-npm run build    # typecheck + build di produzione
+npm run dev      # frontend in modalità demo locale (senza API)
+npm run build    # typecheck (app + api) e build di produzione
 npm run lint     # ESLint
 ```
+
+Per provare anche le API in locale serve un PostgreSQL e `vercel dev` con `DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` impostate.
+
+> Nota tecnica: i file in `api/` importano gli altri con estensione `.js` (`./_db.js`): Vercel compila i `.ts` in `.js`
+> senza riscrivere gli import, quindi con `.ts` la funzione fallirebbe all'avvio.

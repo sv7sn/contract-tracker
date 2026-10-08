@@ -2,9 +2,10 @@
 export type Role = "manager" | "buyer" | "bo";
 export type Urgency = "green" | "yellow" | "red" | "gray";
 export type StepStatus = "upcoming" | "done" | "pending_bo";
-export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "detail";
+export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail";
 
-export interface User { id: string; name: string; email: string; role: Role; avatar: string; color: string; title: string }
+/** Utente autenticato, come restituito dall'API (mai con la password). */
+export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean }
 export interface Contract {
   id: number; supplier: string; object: string; category: string; country: string;
   value: number; currency: string; start: string; end: string; owner: string; boEmail: string;
@@ -29,6 +30,8 @@ export interface AppState { contracts: Contract[]; plans: Plans; auditLogs: Audi
 
 /** Una modifica atomica: contratto, piano e voci di audit vengono salvati insieme. */
 export interface CommitPayload {
+  /** Elimina un contratto (solo manager). Ignora gli altri campi. */
+  deleteContractId?: number;
   /** Contratto esistente a cui si riferiscono piano e audit, se `contract` non è incluso. */
   contractId?: number;
   contract?: Omit<Contract, "id"> & { id?: number };
@@ -36,3 +39,6 @@ export interface CommitPayload {
   audit?: (AuditEntry & { contractId?: number })[];
 }
 export interface CommitResult { contractId: number }
+
+export interface NewUserInput { email: string; name: string; role: Role; title: string; password: string }
+export interface UpdateUserInput { id: number; role?: Role; title?: string; active?: boolean; password?: string }
