@@ -1,4 +1,5 @@
 import { requireManager } from "./_auth.js";
+import { deleteDocuments } from "./_blob.js";
 import { purgeContracts } from "./_db.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
 
@@ -8,7 +9,9 @@ export async function POST(request: Request) {
     await requireManager(request);
     const body = (await readJson(request)) as { confirm?: unknown };
     if (body.confirm !== "ELIMINA") throw new HttpError(400, "Conferma mancante");
-    return Response.json({ deleted: await purgeContracts() });
+    const { deleted, staleFiles } = await purgeContracts();
+    await deleteDocuments(staleFiles);
+    return Response.json({ deleted });
   } catch (err) {
     return errorResponse(err);
   }

@@ -9,7 +9,11 @@ export interface User { id: number; email: string; name: string; role: Role; tit
 export interface Contract {
   id: number; supplier: string; object: string; category: string; country: string;
   value: number; currency: string; start: string; end: string; owner: string; boEmail: string;
-  renewal: string; type: string; notes: string; ceased: boolean; fileName: string | null;
+  renewal: string; type: string; notes: string; ceased: boolean;
+  /** Nome del file mostrato all'utente. */
+  fileName: string | null;
+  /** Percorso del documento nell'archivio privato; null se il file non è stato salvato. */
+  filePath: string | null;
 }
 export type ContractData = Omit<Contract, "id">;
 export interface PlanStep {
@@ -39,6 +43,10 @@ export interface CommitPayload {
   audit?: (AuditEntry & { contractId?: number })[];
 }
 export interface CommitResult { contractId: number }
+
+/** Limiti e formati dei documenti allegati ai contratti. */
+export const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024;
+export const DOCUMENT_EXTENSIONS = ["pdf", "doc", "docx"] as const;
 
 export interface NewUserInput { email: string; name: string; role: Role; title: string; password: string }
 export interface UpdateUserInput { id: number; role?: Role; title?: string; active?: boolean; password?: string }

@@ -3,6 +3,7 @@ import type { AppState, AuditEntry, CommitPayload, Contract, NewUserInput, PlanS
 import { HttpError } from "./_http.js";
 import { hashPassword, MIN_PASSWORD } from "./_crypto.js";
 import { canCreateContract, canDeleteContract, canEditContract, canRespondBO, canViewContract } from "./_permissions.js";
+import { FILE_PATH_RE } from "./_blob.js";
 
 const connectionString = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
 
@@ -21,8 +22,9 @@ create table if not exists contracts (
   value double precision not null default 0, currency text not null default 'EUR',
   start_date text not null default '', end_date text not null,
   owner text not null default '', bo_email text not null default '', renewal text not null default 'Non definito',
-  type text not null default '', notes text not null default '', ceased boolean not null default false, file_name text
+  type text not null default '', notes text not null default '', ceased boolean not null default false, file_name text, file_path text
 );
+alter table contracts add column if not exists file_path text;
 create table if not exists plan_steps (
   contract_id integer not null references contracts(id) on delete cascade, step_id text not null,
   scheduled_date text not null, original_date text not null, status text not null,
@@ -93,6 +95,7 @@ function cleanContract(c: unknown): ContractInput {
     start: str(r.start, 10), end: r.end as string, owner: str(r.owner, 100), boEmail: str(r.boEmail, 200).toLowerCase(),
     renewal: str(r.renewal, 100) || "Non definito", type: str(r.type, 100), notes: str(r.notes, 4000),
     ceased: r.ceased === true, fileName: nstr(r.fileName),
+    filePath: r.filePath == null ? null : typeof r.filePath === "string" && FILE_PATH_RE.test(r.filePath) ? r.filePath : bad("Documento non valido"),
   };
 }
 
@@ -208,7 +211,7 @@ function rowToContract(r: Record<string, unknown>): Contract {
     id: r.id as number, supplier: r.supplier as string, object: r.object as string, category: r.category as string, country: r.country as string,
     value: r.value as number, currency: r.currency as string, start: r.start_date as string, end: r.end_date as string, owner: r.owner as string,
     boEmail: r.bo_email as string, renewal: r.renewal as string, type: r.type as string, notes: r.notes as string, ceased: r.ceased as boolean,
-    fileName: r.file_name as string | null,
+    fileName: r.file_name as string | null, filePath: r.file_path as string | null,
   };
 }
 function rowToStep(r: Record<string, unknown>): PlanStep {
@@ -242,6 +245,8 @@ export async function loadState(user: User): Promise<AppState> {
 // ─── Scrittura (tutto in una transazione, con controllo dei permessi) ─
 type Queryable = Pick<pg.PoolClient, "query">;
 
+export async function getContract(id: number): Promise<Contract | undefined> { return fetchContract(getPool(), id); }
+
 async function fetchContract(db: Queryable, id: number): Promise<Contract | undefined> {
   const r = (await db.query("select * from contracts where id = $1", [id])).rows[0];
   return r ? rowToContract(r) : undefined;
@@ -251,16 +256,16 @@ async function fetchPlan(db: Queryable, id: number): Promise<PlanStep[]> {
 }
 
 async function upsertContract(db: Queryable, c: ContractInput): Promise<number> {
-  const cols = [c.supplier, c.object, c.category, c.country, c.value, c.currency, c.start, c.end, c.owner, c.boEmail, c.renewal, c.type, c.notes, c.ceased, c.fileName];
+  const cols = [c.supplier, c.object, c.category, c.country, c.value, c.currency, c.start, c.end, c.owner, c.boEmail, c.renewal, c.type, c.notes, c.ceased, c.fileName, c.filePath];
   if (c.id === undefined) {
     const r = await db.query(
-      `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning id`, cols);
+      `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) returning id`, cols);
     return r.rows[0].id;
   }
   const r = await db.query(
     `update contracts set supplier=$1, object=$2, category=$3, country=$4, value=$5, currency=$6, start_date=$7, end_date=$8,
-       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15 where id=$16`, [...cols, c.id]);
+       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15, file_path=$16 where id=$17`, [...cols, c.id]);
   if (!r.rowCount) throw new HttpError(404, "Contratto non trovato");
   return c.id;
 }
@@ -324,14 +329,16 @@ function assertBoOnlyChanges(existing: Contract, existingPlan: PlanStep[], contr
   }
 }
 
-/** Salva una modifica verificando i permessi dell'utente. Restituisce l'id del contratto (assegnato dal database se nuovo). */
-export async function commit(user: User, payload: CommitPayload): Promise<number> {
+/** Salva una modifica verificando i permessi dell'utente. Restituisce l'id del contratto (assegnato dal database se nuovo) e i documenti rimasti senza contratto. */
+export async function commit(user: User, payload: CommitPayload): Promise<{ contractId: number; staleFiles: string[] }> {
   return inTransaction(async db => {
+    const staleFiles: string[] = [];
     if (payload.deleteContractId !== undefined) {
       if (!canDeleteContract(user)) throw forbidden();
-      const r = await db.query("delete from contracts where id = $1", [payload.deleteContractId]);
+      const r = await db.query("delete from contracts where id = $1 returning file_path", [payload.deleteContractId]);
       if (!r.rowCount) throw new HttpError(404, "Contratto non trovato");
-      return payload.deleteContractId;
+      if (r.rows[0].file_path) staleFiles.push(r.rows[0].file_path);
+      return { contractId: payload.deleteContractId, staleFiles };
     }
 
     const targetId = payload.contract?.id ?? payload.contractId;
@@ -352,6 +359,7 @@ export async function commit(user: User, payload: CommitPayload): Promise<number
         if (user.role === "buyer") contract = { ...contract, owner: existing.owner };
         else if (contract.owner !== existing.owner) await assertValidOwner(db, contract.owner);
         await upsertContract(db, contract);
+        if (existing.filePath && contract.filePath !== existing.filePath) staleFiles.push(existing.filePath);
       }
       contractId = existing.id;
     } else if (canRespondBO(user, existing)) {
@@ -364,11 +372,12 @@ export async function commit(user: User, payload: CommitPayload): Promise<number
 
     if (payload.plan) await replacePlan(db, contractId, payload.plan);
     if (payload.audit?.length) await addAudit(db, contractId, user, payload.audit);
-    return contractId;
+    return { contractId, staleFiles };
   });
 }
 
-/** Elimina tutti i contratti (piani e storico inclusi). Solo manager, chiamato con conferma esplicita. */
-export async function purgeContracts(): Promise<number> {
-  return (await getPool().query("delete from contracts")).rowCount ?? 0;
+/** Elimina tutti i contratti (piani e storico inclusi). Solo manager, chiamato con conferma esplicita. Restituisce anche i documenti da eliminare. */
+export async function purgeContracts(): Promise<{ deleted: number; staleFiles: string[] }> {
+  const r = await getPool().query("delete from contracts returning file_path");
+  return { deleted: r.rowCount ?? 0, staleFiles: r.rows.map(x => x.file_path).filter(Boolean) };
 }

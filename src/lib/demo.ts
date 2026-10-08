@@ -22,7 +22,7 @@ export const DEMO_USERS: User[] = [
 // Le date sono relative a oggi, così la demo mostra sempre un mix realistico di scadenze.
 const rel = (days: number) => isoDate(addDays(NOW, days));
 const c = (id: number, supplier: string, object: string, category: string, country: string, value: number, currency: string, start: number, end: number, owner: string, boEmail: string, renewal: string, type: string, fileName: string | null): Contract =>
-  ({ id, supplier, object, category, country, value, currency, start: rel(start), end: rel(end), owner, boEmail, renewal, type, notes: "", ceased: false, fileName });
+  ({ id, supplier, object, category, country, value, currency, start: rel(start), end: rel(end), owner, boEmail, renewal, type, notes: "", ceased: false, fileName, filePath: null });
 
 export const MOCK_CONTRACTS: Contract[] = [
   c(1,  "Macchinari Orient Ltd",   "Macchinari - Linea estero",  "Capex",    "Cina",     2400000, "EUR", -480,  -15, "Buyer Senior",   "bo.operations@example.com", "Da rilanciare a gara", "Fornitura", "contratto-macchinari.pdf"),

@@ -1,4 +1,4 @@
-import type { AppState, CommitPayload, CommitResult, NewUserInput, UpdateUserInput, User } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type CommitResult, type NewUserInput, type UpdateUserInput, type User } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -29,3 +29,29 @@ export const api = {
   updateUser: (input: UpdateUserInput) => post<{ user: User }>("/api/users", input).then(r => r.user),
   purge: () => post<{ deleted: number }>("/api/purge", { confirm: "ELIMINA" }),
 };
+
+/** Controllo preventivo del file scelto; restituisce un messaggio di errore o null. */
+export function checkDocument(file: File): string | null {
+  const ext = file.name.toLowerCase().split(".").pop() ?? "";
+  if (!(DOCUMENT_EXTENSIONS as readonly string[]).includes(ext)) return "Formato non supportato: usa PDF, DOC o DOCX";
+  if (file.size > MAX_DOCUMENT_BYTES) return `Il file supera il limite di ${MAX_DOCUMENT_BYTES / 1024 / 1024} MB`;
+  if (file.size === 0) return "Il file è vuoto";
+  return null;
+}
+
+/** Carica il documento direttamente nell'archivio privato (autorizzato da /api/upload) e restituisce il percorso salvato. */
+export async function uploadDocument(file: File): Promise<string> {
+  const { upload } = await import("@vercel/blob/client");
+  const safeName = file.name.replace(/[^\p{L}\p{N}._ ()-]+/gu, "_").slice(-120);
+  try {
+    const result = await upload(`contracts/${crypto.randomUUID()}/${safeName}`, file, { access: "private", handleUploadUrl: "/api/upload" });
+    return result.pathname;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "";
+    if (/private/i.test(message)) throw new Error("L'archivio Blob su Vercel deve essere creato in modalità PRIVATA");
+    if (/token|store|not.?found|suspended/i.test(message)) throw new Error("Archivio documenti non configurato su Vercel (Blob)");
+    throw new Error(message || "Caricamento del documento non riuscito");
+  }
+}
+
+export const documentUrl = (contractId: number, download = false) => `/api/document?id=${contractId}${download ? "&download=1" : ""}`;

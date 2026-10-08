@@ -322,7 +322,7 @@ export default function App() {
           {view === "bo" && currentUser.role === "bo" && <BOView contracts={contracts} plans={plans} currentUser={currentUser} onOpenBOForm={setBOFormContract} />}
           {view === "notifiche" && currentUser.role !== "bo" && <AlertsView contracts={contracts} users={users} />}
           {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onPurge={handlePurge} />}
-          {view === "detail" && selected && <ContractDetail contract={selected} auditLog={auditLogs[selected.id] || []} currentUser={currentUser} onBack={() => setView("list")} onEdit={() => { setEditingContract(selected); setShowForm(true); }} onDelete={handleDelete} />}
+          {view === "detail" && selected && <ContractDetail contract={selected} auditLog={auditLogs[selected.id] || []} currentUser={currentUser} canOpenDocuments={mode === "api"} onBack={() => setView("list")} onEdit={() => { setEditingContract(selected); setShowForm(true); }} onDelete={handleDelete} />}
         </main>
       </div>
 
@@ -330,7 +330,7 @@ export default function App() {
 
       {view !== "detail" && <nav className="bottom-nav" aria-label="Navigazione">{navItems.map(n => navBtn(n, false))}</nav>}
 
-      {showForm && <ContractForm initial={editingContract} currentUser={currentUser} users={users} onSave={handleSave} onClose={() => { setShowForm(false); setEditingContract(null); }} />}
+      {showForm && <ContractForm initial={editingContract} currentUser={currentUser} users={users} canUpload={mode === "api"} onSave={handleSave} onClose={() => { setShowForm(false); setEditingContract(null); }} />}
       {boFormContract && <BOFormModal contract={boFormContract} currentUser={currentUser} onSubmit={handleBOResponse} onClose={() => setBOFormContract(null)} />}
       {showAccount && <AccountModal user={currentUser} canChangePassword={mode === "api"} onLogout={handleLogout} onClose={() => setShowAccount(false)} />}
       {toastEl}

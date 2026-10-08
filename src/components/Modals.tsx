@@ -4,7 +4,7 @@ import { btnGhost, btnPrimary, C, font, iStyle, ROLE_LABELS, sans } from "../the
 import { fmt, fmtDate } from "../lib/format.ts";
 import { BO_COLORS, BO_DECISIONS } from "../lib/plan.ts";
 import { Avatar, Field, RoleBadge } from "./ui.tsx";
-import { api, ApiError } from "../api.ts";
+import { api, ApiError, checkDocument, uploadDocument } from "../api.ts";
 
 // ─── Risposta del Business Owner ─────────────────────────────
 export function BOFormModal({ contract, currentUser, onSubmit, onClose }: { contract: Contract; currentUser: User; onSubmit: (id: number, r: { decision: string; notes: string }) => void; onClose: () => void }) {
@@ -83,13 +83,15 @@ type FormState = Omit<ContractData, "value"> & { value: string | number };
 type FormErrors = Partial<Record<"supplier" | "object" | "end" | "boEmail" | "file", string>>;
 type TextField = "supplier" | "object" | "country" | "boEmail" | "category" | "type" | "currency" | "renewal";
 
-export function ContractForm({ initial, currentUser, users, onSave, onClose }: { initial: Contract | null; currentUser: User; users: User[]; onSave: (data: ContractData) => void; onClose: () => void }) {
+export function ContractForm({ initial, currentUser, users, canUpload, onSave, onClose }: { initial: Contract | null; currentUser: User; users: User[]; canUpload: boolean; onSave: (data: ContractData) => void; onClose: () => void }) {
   const isBuyer = currentUser.role === "buyer";
   const owners = users.filter(u => u.active && (u.role === "buyer" || u.role === "manager")).map(u => u.name);
   if (!owners.includes(currentUser.name) && !isBuyer) owners.unshift(currentUser.name);
-  const [form, setForm] = useState<FormState>(initial || { supplier: "", object: "", category: "", country: "Italia", value: "", currency: "EUR", start: "", end: "", owner: isBuyer ? currentUser.name : "", boEmail: "", renewal: "Non definito", type: "Servizi", notes: "", ceased: false, fileName: null });
+  const [form, setForm] = useState<FormState>(initial || { supplier: "", object: "", category: "", country: "Italia", value: "", currency: "EUR", start: "", end: "", owner: isBuyer ? currentUser.name : "", boEmail: "", renewal: "Non definito", type: "Servizi", notes: "", ceased: false, fileName: null, filePath: null });
+  const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
-  const [attachedFile, setAttachedFile] = useState<{ name: string } | null>(initial?.fileName ? { name: initial.fileName } : null);
+  // `file` è presente solo per un documento scelto ora (da caricare); `path` per uno già salvato.
+  const [attachedFile, setAttachedFile] = useState<{ name: string; file?: File; path?: string | null } | null>(initial?.fileName ? { name: initial.fileName, path: initial.filePath } : null);
   const fileRef = useRef<HTMLInputElement>(null);
   const up = <K extends keyof FormState>(k: K) => (v: FormState[K]) => setForm(f => ({ ...f, [k]: v }));
   const isNew = !initial;
@@ -104,7 +106,20 @@ export function ContractForm({ initial, currentUser, users, onSave, onClose }: {
     setErrors(e);
     return !Object.keys(e).length;
   };
-  const handleSave = () => { if (validate()) onSave({ ...form, owner: form.owner || currentUser.name, value: parseFloat(String(form.value).replace(",", ".")) || 0, fileName: attachedFile?.name || form.fileName || null }); };
+  const handleSave = async () => {
+    if (busy || !validate()) return;
+    let filePath = attachedFile?.path ?? null;
+    if (attachedFile?.file) {
+      filePath = null;
+      if (canUpload) {
+        setBusy(true);
+        try { filePath = await uploadDocument(attachedFile.file); }
+        catch (err) { setErrors(e => ({ ...e, file: err instanceof Error ? err.message : "Caricamento non riuscito" })); setBusy(false); return; }
+        setBusy(false);
+      }
+    }
+    onSave({ ...form, owner: form.owner || currentUser.name, value: parseFloat(String(form.value).replace(",", ".")) || 0, fileName: attachedFile?.name ?? null, filePath });
+  };
   const fi = (key: TextField, ph: string, type = "text") => <input id={`f-${key}`} value={form[key]} onChange={e => up(key)(e.target.value)} placeholder={ph} type={type} style={{ ...iStyle, borderColor: (errors as Record<string, string | undefined>)[key] ? C.red : C.border }} />;
   const sel = (key: TextField, opts: string[]) => <select id={`f-${key}`} value={form[key]} onChange={e => up(key)(e.target.value)} style={iStyle}><option value="">— Seleziona —</option>{opts.map(o => <option key={o}>{o}</option>)}</select>;
   const two = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 } as const;
@@ -139,10 +154,10 @@ export function ContractForm({ initial, currentUser, users, onSave, onClose }: {
         </div>
         <Field label="Note" htmlFor="f-notes"><textarea id="f-notes" value={form.notes} onChange={e => up("notes")(e.target.value)} style={{ ...iStyle, height: 60, resize: "vertical" }} /></Field>
         <Field label="Documento" req={isNew}>
-          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx" onChange={e => { const f = e.target.files?.[0]; if (f) setAttachedFile(f); }} style={{ display: "none" }} />
+          <input ref={fileRef} type="file" accept=".pdf,.doc,.docx" onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (!f) return; const err = checkDocument(f); if (err) { setErrors(x => ({ ...x, file: err })); return; } setErrors(x => ({ ...x, file: undefined })); setAttachedFile({ name: f.name, file: f }); }} style={{ display: "none" }} />
           {!attachedFile
             ? <button type="button" onClick={() => fileRef.current?.click()} style={{ ...sans, width: "100%", padding: "12px", background: errors.file ? C.redBg : C.bg, border: `2px dashed ${errors.file ? C.red : C.border}`, borderRadius: 8, color: errors.file ? C.red : C.muted, cursor: "pointer", fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>📎 Allega PDF o Word{isNew && <span style={{ color: C.red }}>*</span>}</button>
-            : <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.greenBg, border: `1px solid ${C.green}`, borderRadius: 8 }}>📄<div style={{ flex: 1, ...sans, fontSize: 13, fontWeight: 600, color: C.green, overflow: "hidden", textOverflow: "ellipsis" }}>{attachedFile.name}</div><button type="button" onClick={() => setAttachedFile(null)} aria-label="Rimuovi documento" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}>×</button></div>}
+            : <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", background: C.greenBg, border: `1px solid ${C.green}`, borderRadius: 8 }}>📄<div style={{ flex: 1, minWidth: 0, ...sans, fontSize: 13, fontWeight: 600, color: C.green, overflow: "hidden", textOverflow: "ellipsis" }}>{attachedFile.name}{attachedFile.file && canUpload && <span style={{ fontWeight: 400, color: C.muted }}> · verrà caricato al salvataggio</span>}{!attachedFile.file && !attachedFile.path && canUpload && <span style={{ fontWeight: 400, color: C.yellow }}> · non salvato: ricarica il file</span>}</div><button type="button" onClick={() => fileRef.current?.click()} style={{ ...sans, background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Sostituisci</button><button type="button" onClick={() => setAttachedFile(null)} aria-label="Rimuovi documento" style={{ background: "none", border: "none", color: C.muted, cursor: "pointer" }}>×</button></div>}
           {errors.file && <div role="alert" style={{ ...sans, fontSize: 11, color: C.red, marginTop: 6 }}>⚠️ {errors.file}</div>}
         </Field>
         {initial && (
@@ -153,7 +168,7 @@ export function ContractForm({ initial, currentUser, users, onSave, onClose }: {
         )}
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={onClose} style={{ ...btnGhost, flex: 1, padding: 12 }}>Annulla</button>
-          <button onClick={handleSave} style={{ ...btnPrimary, flex: 2, padding: 12 }}>{isNew ? "➕ Aggiungi" : "💾 Salva"}</button>
+          <button onClick={handleSave} disabled={busy} style={{ ...btnPrimary, flex: 2, padding: 12, opacity: busy ? 0.7 : 1 }}>{busy ? "Caricamento documento…" : isNew ? "➕ Aggiungi" : "💾 Salva"}</button>
         </div>
       </div>
     </div>
