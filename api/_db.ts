@@ -1,5 +1,8 @@
 import pg from "pg";
-import type { AppState, AuditEntry, CommitPayload, Contract, PlanStep, StepStatus } from "../src/types.ts";
+import type { AppState, AuditEntry, CommitPayload, Contract, NewUserInput, PlanStep, Role, StepStatus, UpdateUserInput, User } from "../src/types.ts";
+import { HttpError } from "./_http.js";
+import { hashPassword, MIN_PASSWORD } from "./_crypto.js";
+import { canCreateContract, canDeleteContract, canEditContract, canRespondBO, canViewContract } from "./_permissions.js";
 
 const connectionString = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
 
@@ -9,11 +12,6 @@ export function getPool() {
   if (!connectionString) throw new HttpError(503, "Database non configurato (manca DATABASE_URL)");
   pool ??= new pg.Pool({ connectionString, max: 1 });
   return pool;
-}
-
-export class HttpError extends Error {
-  status: number;
-  constructor(status: number, message: string) { super(message); this.status = status; }
 }
 
 const SCHEMA = `
@@ -38,33 +36,61 @@ create table if not exists audit_log (
   ts text not null, user_name text not null, action text not null, detail text not null default ''
 );
 create index if not exists audit_log_contract_idx on audit_log(contract_id);
+create table if not exists users (
+  id serial primary key,
+  email text not null, name text not null,
+  role text not null check (role in ('manager','buyer','bo')),
+  title text not null default '', password_hash text not null,
+  active boolean not null default true, created_at timestamptz not null default now()
+);
+create unique index if not exists users_email_key on users (lower(email));
+create unique index if not exists users_name_key on users (lower(name));
+create table if not exists login_attempts (email text not null, at timestamptz not null default now());
+create index if not exists login_attempts_idx on login_attempts (email, at);
 `;
 
-let schemaReady: Promise<unknown> | undefined;
+export const ROLES: Role[] = ["manager", "buyer", "bo"];
+
+let ready: Promise<unknown> | undefined;
+/** Crea le tabelle e, se non esiste ancora nessun utente, il primo amministratore da ADMIN_EMAIL / ADMIN_PASSWORD. */
 export function ensureSchema() {
-  schemaReady ??= getPool().query(SCHEMA).catch(err => { schemaReady = undefined; throw err; });
-  return schemaReady;
+  ready ??= (async () => {
+    const db = getPool();
+    await db.query(SCHEMA);
+    const { rows } = await db.query("select count(*)::int as n from users");
+    const email = process.env.ADMIN_EMAIL?.trim(), password = process.env.ADMIN_PASSWORD;
+    if (rows[0].n === 0 && email && password) {
+      if (password.length < MIN_PASSWORD) { console.error(`ADMIN_PASSWORD troppo corta (minimo ${MIN_PASSWORD} caratteri)`); return; }
+      await db.query("insert into users (email, name, role, title, password_hash) values ($1,$2,'manager',$3,$4) on conflict do nothing",
+        [email.toLowerCase(), process.env.ADMIN_NAME?.trim() || "Amministratore", "Amministratore", await hashPassword(password)]);
+    }
+  })().catch(err => { ready = undefined; throw err; });
+  return ready;
 }
 
 // ─── Validazione ─────────────────────────────────────────────
 const STATUSES: StepStatus[] = ["upcoming", "done", "pending_bo"];
 const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+const isEmail = (v: unknown): v is string => typeof v === "string" && v.length <= 200 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 const str = (v: unknown, max = 2000) => typeof v === "string" ? v.slice(0, max) : "";
 const nstr = (v: unknown) => typeof v === "string" ? v.slice(0, 2000) : null;
 const bad = (msg: string): never => { throw new HttpError(400, msg); };
 
-function cleanContract(c: unknown): Omit<Contract, "id"> & { id?: number } {
+type ContractInput = Omit<Contract, "id"> & { id?: number };
+
+function cleanContract(c: unknown): ContractInput {
   const r = (c ?? {}) as Record<string, unknown>;
   if (!str(r.supplier).trim()) bad("Fornitore obbligatorio");
   if (!str(r.object).trim()) bad("Oggetto obbligatorio");
   if (!isDate(r.end)) bad("Data di scadenza non valida");
   if (r.start !== "" && r.start !== undefined && !isDate(r.start)) bad("Data di inizio non valida");
+  if (r.boEmail && !isEmail(r.boEmail)) bad("Email Business Owner non valida");
   const value = Number(r.value);
   return {
     id: Number.isInteger(r.id) ? (r.id as number) : undefined,
     supplier: str(r.supplier, 200), object: str(r.object, 300), category: str(r.category, 100), country: str(r.country, 100),
     value: Number.isFinite(value) ? value : 0, currency: str(r.currency, 3) || "EUR",
-    start: str(r.start, 10), end: r.end as string, owner: str(r.owner, 100), boEmail: str(r.boEmail, 200),
+    start: str(r.start, 10), end: r.end as string, owner: str(r.owner, 100), boEmail: str(r.boEmail, 200).toLowerCase(),
     renewal: str(r.renewal, 100) || "Non definito", type: str(r.type, 100), notes: str(r.notes, 4000),
     ceased: r.ceased === true, fileName: nstr(r.fileName),
   };
@@ -83,17 +109,17 @@ function cleanPlan(plan: unknown): PlanStep[] {
   });
 }
 
-function cleanAudit(audit: unknown): (AuditEntry & { contractId?: number })[] {
+function cleanAudit(audit: unknown): AuditEntry[] {
   if (audit === undefined) return [];
   if (!Array.isArray(audit) || audit.length > 50) return bad("Audit non valido");
-  return audit.map((a: Record<string, unknown>) => ({
-    contractId: Number.isInteger(a.contractId) ? (a.contractId as number) : undefined,
-    ts: str(a.ts, 50), user: str(a.user, 100) || "Sistema", action: str(a.action, 300), detail: str(a.detail, 1000),
-  }));
+  return audit.map((a: Record<string, unknown>) => ({ ts: str(a.ts, 50), user: str(a.user, 100), action: str(a.action, 300), detail: str(a.detail, 1000) }));
 }
 
 export function cleanPayload(body: unknown): CommitPayload {
   const b = (body ?? {}) as Record<string, unknown>;
+  if (b.deleteContractId !== undefined) {
+    return Number.isInteger(b.deleteContractId) ? { deleteContractId: b.deleteContractId as number } : bad("Contratto non valido");
+  }
   return {
     contractId: Number.isInteger(b.contractId) ? (b.contractId as number) : undefined,
     contract: b.contract === undefined ? undefined : cleanContract(b.contract),
@@ -102,43 +128,129 @@ export function cleanPayload(body: unknown): CommitPayload {
   };
 }
 
-export function errorResponse(err: unknown) {
-  if (err instanceof HttpError) return Response.json({ error: err.message }, { status: err.status });
-  console.error(err);
-  return Response.json({ error: "Errore del server" }, { status: 500 });
+// ─── Utenti ──────────────────────────────────────────────────
+/** Solo i campi pubblici: mai l'hash della password. */
+export const publicUser = (u: User): User => ({ id: u.id, email: u.email, name: u.name, role: u.role, title: u.title, active: u.active });
+const toUser = (r: Record<string, unknown>): User => ({ id: r.id as number, email: r.email as string, name: r.name as string, role: r.role as Role, title: r.title as string, active: r.active as boolean });
+
+export async function countUsers(): Promise<number> {
+  return (await getPool().query("select count(*)::int as n from users")).rows[0].n;
+}
+export async function findUserByEmail(email: string): Promise<(User & { passwordHash: string }) | undefined> {
+  const r = (await getPool().query("select * from users where lower(email) = lower($1)", [email.trim()])).rows[0];
+  return r ? { ...toUser(r), passwordHash: r.password_hash } : undefined;
+}
+export async function findUserById(id: number): Promise<(User & { passwordHash: string }) | undefined> {
+  const r = (await getPool().query("select * from users where id = $1", [id])).rows[0];
+  return r ? { ...toUser(r), passwordHash: r.password_hash } : undefined;
+}
+export async function listUsers(): Promise<User[]> {
+  return (await getPool().query("select * from users order by role, name")).rows.map(toUser);
+}
+
+const FAILED_LIMIT = 5;
+const WINDOW = "15 minutes";
+export async function tooManyAttempts(email: string): Promise<boolean> {
+  const db = getPool();
+  await db.query("delete from login_attempts where at < now() - interval '1 day'");
+  const { rows } = await db.query(`select count(*)::int as n from login_attempts where lower(email) = lower($1) and at > now() - interval '${WINDOW}'`, [email]);
+  return rows[0].n >= FAILED_LIMIT;
+}
+export const recordFailedAttempt = (email: string) => getPool().query("insert into login_attempts (email) values ($1)", [email.toLowerCase()]);
+export const clearAttempts = (email: string) => getPool().query("delete from login_attempts where lower(email) = lower($1)", [email]);
+
+export async function setPassword(userId: number, password: string) {
+  if (password.length < MIN_PASSWORD) throw new HttpError(400, `La password deve avere almeno ${MIN_PASSWORD} caratteri`);
+  await getPool().query("update users set password_hash = $1 where id = $2", [await hashPassword(password), userId]);
+}
+
+const uniqueViolation = (err: unknown) => (err as { code?: string })?.code === "23505";
+
+export async function createUser(input: unknown): Promise<User> {
+  const r = (input ?? {}) as Partial<NewUserInput>;
+  if (!isEmail(r.email)) bad("Email non valida");
+  const name = str(r.name, 80).trim();
+  if (name.length < 2) bad("Nome obbligatorio");
+  if (!ROLES.includes(r.role as Role)) bad("Ruolo non valido");
+  if (typeof r.password !== "string" || r.password.length < MIN_PASSWORD) bad(`La password deve avere almeno ${MIN_PASSWORD} caratteri`);
+  try {
+    const { rows } = await getPool().query("insert into users (email, name, role, title, password_hash) values ($1,$2,$3,$4,$5) returning *",
+      [(r.email as string).trim().toLowerCase(), name, r.role, str(r.title, 100), await hashPassword(r.password as string)]);
+    return toUser(rows[0]);
+  } catch (err) {
+    if (uniqueViolation(err)) throw new HttpError(409, "Esiste già un utente con questa email o questo nome");
+    throw err;
+  }
+}
+
+export async function updateUser(actor: User, input: unknown): Promise<User> {
+  const r = (input ?? {}) as Partial<UpdateUserInput>;
+  if (!Number.isInteger(r.id)) bad("Utente non valido");
+  const target = await findUserById(r.id as number);
+  if (!target) throw new HttpError(404, "Utente non trovato");
+  if (r.role !== undefined && !ROLES.includes(r.role)) bad("Ruolo non valido");
+  const role = r.role ?? target.role;
+  const active = r.active ?? target.active;
+  if (target.id === actor.id && (role !== actor.role || !active)) bad("Non puoi cambiare il tuo ruolo né disattivare il tuo account");
+  if (target.role === "manager" && target.active && (role !== "manager" || !active)) {
+    const { rows } = await getPool().query("select count(*)::int as n from users where role = 'manager' and active and id <> $1", [target.id]);
+    if (rows[0].n === 0) bad("Deve restare almeno un manager attivo");
+  }
+  const { rows } = await getPool().query("update users set role = $1, title = $2, active = $3 where id = $4 returning *",
+    [role, r.title === undefined ? target.title : str(r.title, 100), active, target.id]);
+  if (r.password !== undefined) await setPassword(target.id, r.password);
+  return toUser(rows[0]);
+}
+
+// ─── Lettura (filtrata per ruolo) ────────────────────────────
+function rowToContract(r: Record<string, unknown>): Contract {
+  return {
+    id: r.id as number, supplier: r.supplier as string, object: r.object as string, category: r.category as string, country: r.country as string,
+    value: r.value as number, currency: r.currency as string, start: r.start_date as string, end: r.end_date as string, owner: r.owner as string,
+    boEmail: r.bo_email as string, renewal: r.renewal as string, type: r.type as string, notes: r.notes as string, ceased: r.ceased as boolean,
+    fileName: r.file_name as string | null,
+  };
+}
+function rowToStep(r: Record<string, unknown>): PlanStep {
+  return {
+    contractId: r.contract_id as number, stepId: r.step_id as string, scheduledDate: r.scheduled_date as string, originalDate: r.original_date as string,
+    status: r.status as StepStatus, completedAt: r.completed_at as string | null, completedBy: r.completed_by as string | null,
+    boDecision: r.bo_decision as string | null, boNotes: r.bo_notes as string, boRespondedAt: r.bo_responded_at as string | null,
+    modified: r.modified as boolean, modifiedReason: r.modified_reason as string,
+  };
 }
 
 const STEP_ORDER = ["analysis", "bo_notify", "bo_response", "action", "negotiation", "signature", "expiry"];
+const STEP_ORDER_SQL = `case step_id ${STEP_ORDER.map((id, i) => `when '${id}' then ${i}`).join(" ")} else 99 end`;
 
-// ─── Lettura ─────────────────────────────────────────────────
-export async function loadState(): Promise<AppState> {
+/** Restituisce solo i contratti che l'utente può vedere, con i relativi piani e storico. */
+export async function loadState(user: User): Promise<AppState> {
   const db = getPool();
-  const [c, p, a] = await Promise.all([
-    db.query("select * from contracts order by id"),
-    db.query(`select * from plan_steps order by contract_id, case step_id ${STEP_ORDER.map((id, i) => `when '${id}' then ${i}`).join(" ")} else 99 end`),
-    db.query("select * from audit_log order by id"),
+  const contracts = (await db.query("select * from contracts order by id")).rows.map(rowToContract).filter(c => canViewContract(user, c));
+  const state: AppState = { contracts, plans: {}, auditLogs: {} };
+  if (!contracts.length) return state;
+  const ids = contracts.map(c => c.id);
+  const [p, a] = await Promise.all([
+    db.query(`select * from plan_steps where contract_id = any($1) order by contract_id, ${STEP_ORDER_SQL}`, [ids]),
+    db.query("select * from audit_log where contract_id = any($1) order by id", [ids]),
   ]);
-  const state: AppState = { contracts: [], plans: {}, auditLogs: {} };
-  state.contracts = c.rows.map(r => ({
-    id: r.id, supplier: r.supplier, object: r.object, category: r.category, country: r.country, value: r.value, currency: r.currency,
-    start: r.start_date, end: r.end_date, owner: r.owner, boEmail: r.bo_email, renewal: r.renewal, type: r.type, notes: r.notes,
-    ceased: r.ceased, fileName: r.file_name,
-  }));
-  for (const r of p.rows) {
-    (state.plans[r.contract_id] ??= []).push({
-      contractId: r.contract_id, stepId: r.step_id, scheduledDate: r.scheduled_date, originalDate: r.original_date, status: r.status,
-      completedAt: r.completed_at, completedBy: r.completed_by, boDecision: r.bo_decision, boNotes: r.bo_notes,
-      boRespondedAt: r.bo_responded_at, modified: r.modified, modifiedReason: r.modified_reason,
-    });
-  }
+  for (const r of p.rows) (state.plans[r.contract_id] ??= []).push(rowToStep(r));
   for (const r of a.rows) (state.auditLogs[r.contract_id] ??= []).push({ ts: r.ts, user: r.user_name, action: r.action, detail: r.detail });
   return state;
 }
 
-// ─── Scrittura (tutto in una transazione) ────────────────────
+// ─── Scrittura (tutto in una transazione, con controllo dei permessi) ─
 type Queryable = Pick<pg.PoolClient, "query">;
 
-async function upsertContract(db: Queryable, c: Omit<Contract, "id"> & { id?: number }): Promise<number> {
+async function fetchContract(db: Queryable, id: number): Promise<Contract | undefined> {
+  const r = (await db.query("select * from contracts where id = $1", [id])).rows[0];
+  return r ? rowToContract(r) : undefined;
+}
+async function fetchPlan(db: Queryable, id: number): Promise<PlanStep[]> {
+  return (await db.query(`select * from plan_steps where contract_id = $1 order by ${STEP_ORDER_SQL}`, [id])).rows.map(rowToStep);
+}
+
+async function upsertContract(db: Queryable, c: ContractInput): Promise<number> {
   const cols = [c.supplier, c.object, c.category, c.country, c.value, c.currency, c.start, c.end, c.owner, c.boEmail, c.renewal, c.type, c.notes, c.ceased, c.fileName];
   if (c.id === undefined) {
     const r = await db.query(
@@ -163,9 +275,11 @@ async function replacePlan(db: Queryable, contractId: number, plan: PlanStep[]) 
   }
 }
 
-async function addAudit(db: Queryable, contractId: number, entries: (AuditEntry & { contractId?: number })[]) {
+async function addAudit(db: Queryable, contractId: number, user: User, entries: AuditEntry[]) {
   for (const e of entries) {
-    await db.query("insert into audit_log (contract_id, ts, user_name, action, detail) values ($1,$2,$3,$4,$5)", [e.contractId ?? contractId, e.ts, e.user, e.action, e.detail]);
+    // L'autore è sempre l'utente della sessione: il client non può attribuire azioni ad altri ("Sistema" indica le azioni automatiche).
+    await db.query("insert into audit_log (contract_id, ts, user_name, action, detail) values ($1,$2,$3,$4,$5)",
+      [contractId, e.ts, e.user === "Sistema" ? "Sistema" : user.name, e.action, e.detail]);
   }
 }
 
@@ -184,29 +298,77 @@ async function inTransaction<T>(fn: (db: Queryable) => Promise<T>): Promise<T> {
   }
 }
 
-/** Salva una modifica. Se il contratto è nuovo (senza id) restituisce l'id assegnato dal database. */
-export async function commit(payload: CommitPayload): Promise<number> {
+const forbidden = () => new HttpError(403, "Operazione non consentita");
+
+async function assertValidOwner(db: Queryable, owner: string) {
+  const { rows } = await db.query("select 1 from users where lower(name) = lower($1) and active and role in ('manager','buyer')", [owner]);
+  if (!rows.length) bad("Il contract owner deve essere un buyer o un manager attivo");
+}
+
+const STEP_FIELDS = ["scheduledDate", "originalDate", "status", "completedAt", "completedBy", "boDecision", "boNotes", "boRespondedAt", "modified", "modifiedReason"] as const;
+
+/** Un Business Owner può solo registrare la propria decisione: cambia lo stato di rinnovo e la sola attività "bo_response". */
+function assertBoOnlyChanges(existing: Contract, existingPlan: PlanStep[], contract?: ContractInput, plan?: PlanStep[]) {
+  if (contract) {
+    for (const k of Object.keys(existing) as (keyof Contract)[]) {
+      if (k !== "renewal" && contract[k] !== existing[k]) throw forbidden();
+    }
+  }
+  if (plan) {
+    if (plan.length !== existingPlan.length) throw forbidden();
+    for (const s of plan) {
+      const old = existingPlan.find(o => o.stepId === s.stepId);
+      if (!old) throw forbidden();
+      if (s.stepId !== "bo_response" && STEP_FIELDS.some(f => s[f] !== old[f])) throw forbidden();
+    }
+  }
+}
+
+/** Salva una modifica verificando i permessi dell'utente. Restituisce l'id del contratto (assegnato dal database se nuovo). */
+export async function commit(user: User, payload: CommitPayload): Promise<number> {
   return inTransaction(async db => {
-    const contractId = payload.contract ? await upsertContract(db, payload.contract) : payload.contractId;
-    if (contractId === undefined) throw new HttpError(400, "Contratto mancante");
+    if (payload.deleteContractId !== undefined) {
+      if (!canDeleteContract(user)) throw forbidden();
+      const r = await db.query("delete from contracts where id = $1", [payload.deleteContractId]);
+      if (!r.rowCount) throw new HttpError(404, "Contratto non trovato");
+      return payload.deleteContractId;
+    }
+
+    const targetId = payload.contract?.id ?? payload.contractId;
+    const existing = targetId === undefined ? undefined : await fetchContract(db, targetId);
+    if (targetId !== undefined && (!existing || !canViewContract(user, existing))) throw new HttpError(404, "Contratto non trovato");
+
+    let contract = payload.contract;
+    let contractId: number;
+    if (!existing) {
+      if (!contract) throw new HttpError(400, "Contratto mancante");
+      if (!canCreateContract(user)) throw forbidden();
+      if (user.role === "buyer") contract = { ...contract, owner: user.name };
+      else if (contract.owner) await assertValidOwner(db, contract.owner);
+      else contract = { ...contract, owner: user.name };
+      contractId = await upsertContract(db, contract);
+    } else if (canEditContract(user, existing)) {
+      if (contract) {
+        if (user.role === "buyer") contract = { ...contract, owner: existing.owner };
+        else if (contract.owner !== existing.owner) await assertValidOwner(db, contract.owner);
+        await upsertContract(db, contract);
+      }
+      contractId = existing.id;
+    } else if (canRespondBO(user, existing)) {
+      assertBoOnlyChanges(existing, await fetchPlan(db, existing.id), contract, payload.plan);
+      if (contract) await upsertContract(db, contract);
+      contractId = existing.id;
+    } else {
+      throw forbidden();
+    }
+
     if (payload.plan) await replacePlan(db, contractId, payload.plan);
-    if (payload.audit?.length) await addAudit(db, contractId, payload.audit);
+    if (payload.audit?.length) await addAudit(db, contractId, user, payload.audit);
     return contractId;
   });
 }
 
-/** Inserisce i dati demo solo se il database è ancora vuoto. Restituisce true se ha inserito qualcosa. */
-export async function seedIfEmpty(state: AppState): Promise<boolean> {
-  return inTransaction(async db => {
-    await db.query("lock table contracts in exclusive mode");
-    const { rows } = await db.query("select count(*)::int as n from contracts");
-    if (rows[0].n > 0) return false;
-    for (const c of state.contracts) {
-      const clean = cleanContract({ ...c, id: undefined });
-      const id = await upsertContract(db, clean);
-      await replacePlan(db, id, cleanPlan(state.plans[c.id] ?? []));
-      await addAudit(db, id, cleanAudit(state.auditLogs[c.id] ?? []));
-    }
-    return true;
-  });
+/** Elimina tutti i contratti (piani e storico inclusi). Solo manager, chiamato con conferma esplicita. */
+export async function purgeContracts(): Promise<number> {
+  return (await getPool().query("delete from contracts")).rowCount ?? 0;
 }

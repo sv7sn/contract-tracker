@@ -1,12 +1,12 @@
-import { cleanPayload, commit, ensureSchema, errorResponse, HttpError } from "./_db.js";
+import { requireUser } from "./_auth.js";
+import { cleanPayload, commit } from "./_db.js";
+import { errorResponse, readJson } from "./_http.js";
 import type { CommitResult } from "../src/types.ts";
 
 export async function POST(request: Request) {
   try {
-    let body: unknown;
-    try { body = await request.json(); } catch { throw new HttpError(400, "JSON non valido"); }
-    await ensureSchema();
-    const contractId = await commit(cleanPayload(body));
+    const user = await requireUser(request);
+    const contractId = await commit(user, cleanPayload(await readJson(request)));
     return Response.json({ contractId } satisfies CommitResult);
   } catch (err) {
     return errorResponse(err);

@@ -1,19 +1,48 @@
 *,
 *::before,
-*::after {
-  box-sizing: border-box;
-}
+*::after { box-sizing: border-box; }
 
-body {
-  margin: 0;
-  background: #f8f7f4;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
+body { margin: 0; background: #f8f7f4; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+button, input, select, textarea { font: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #1a5c9e; outline-offset: 2px; }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
+/* ── Struttura: telefono = barra in basso, desktop = menu laterale ── */
+.app-shell { min-height: 100vh; }
+.sidebar { display: none; }
+.main-col { min-width: 0; }
+.topbar { background: #1a2640; padding: 12px 16px; position: sticky; top: 0; z-index: 10; }
+.topbar-eyebrow { font-size: 9px; color: rgba(255,255,255,.4); letter-spacing: .1em; text-transform: uppercase; }
+.topbar-title { font-size: 15px; color: #fff; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.topbar-back { color: rgba(255,255,255,.6); }
+.desktop-label { display: none; }
+.page { padding: 18px 16px 90px; max-width: 1280px; margin: 0 auto; }
+.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #e8e4dc; display: flex; padding: 8px 0 18px; box-shadow: 0 -4px 20px rgba(0,0,0,.06); z-index: 20; }
+.fab { position: fixed; bottom: 90px; right: 20px; width: 52px; height: 52px; border-radius: 50%; background: #c8522a; border: none; color: #fff; font-size: 24px; cursor: pointer; box-shadow: 0 4px 16px rgba(200,82,42,.4); z-index: 50; }
+
+/* ── Finestre: dal basso su telefono, centrate su desktop ── */
+.sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100; display: flex; align-items: flex-end; }
+.sheet { background: #fff; border-radius: 16px 16px 0 0; padding: 20px; width: 100%; max-height: 90vh; overflow-y: auto; }
+.dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.55); z-index: 200; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.dialog { background: #fff; border-radius: 16px; padding: 24px; width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; }
+
+/* ── Accesso ── */
+.login-shell { min-height: 100vh; display: flex; background: #1a2640; }
+.login-brand { display: none; }
+.login-panel { flex: 1; display: flex; align-items: center; justify-content: center; padding: 24px; }
+
+@media (min-width: 960px) {
+  .app-shell { display: grid; grid-template-columns: 252px minmax(0, 1fr); }
+  .sidebar { display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; background: #1a2640; padding: 22px 14px 16px; overflow-y: auto; }
+  .bottom-nav, .fab, .mobile-only { display: none !important; }
+  .topbar { background: #fff; border-bottom: 1px solid #e8e4dc; padding: 16px 40px; }
+  .topbar-eyebrow { color: #9e9890; }
+  .topbar-title { color: #1a2640; font-size: 20px; }
+  .topbar-back { color: #6b6560; }
+  .desktop-label { display: inline; }
+  .page { padding: 28px 40px 56px; }
+  .sheet-overlay { align-items: center; justify-content: center; padding: 24px; }
+  .sheet { border-radius: 16px; max-width: 700px; max-height: 90vh; padding: 26px; }
+  .login-brand { display: flex; flex: 1.1; flex-direction: column; justify-content: center; padding: 64px; color: #fff; background: linear-gradient(160deg, #1a2640 0%, #223158 100%); }
+  .login-panel { background: #f8f7f4; max-width: 560px; }
 }
+@media (min-width: 960px) and (max-width: 1100px) { .page { padding: 24px 24px 48px; } .topbar { padding: 14px 24px; } }
