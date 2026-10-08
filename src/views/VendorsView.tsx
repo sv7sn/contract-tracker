@@ -6,7 +6,7 @@ import { fmtDate } from "../lib/format.ts";
 import { countryName, docType } from "../supplierRules.ts";
 import { Avatar, AuditTrail, Card, CardTitle, EmptyState, Field, Grid, StatCard } from "../components/ui.tsx";
 import { CheckCircle2, Clock, Copy, FileCheck2, Hourglass, Loader2, Mail, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Users, Ban, AlertTriangle } from "../components/icons.tsx";
-import {CloseButton, DocLink, KV, Notice, ReasonDialog, StatusBadge, ValidityChip } from "../components/vendorUi.tsx";
+import {CloseButton, DocLink, KV, Notice, ReasonDialog, StatusBadge, ValidityChip , Portal } from "../components/vendorUi.tsx";
 import { fmtSize, STATUS_STYLE, supplierTimeline } from "../lib/vendors.ts";
 import { Summary } from "./SupplierPortal.tsx";
 
@@ -128,8 +128,8 @@ export function VendorsView({ currentUser, notify, onSessionExpired }: Props) {
         </div>
       </>)}
 
-      {inviting && <InviteModal config={config} currentUser={currentUser} onClose={() => setInviting(false)} onDone={() => { reload(); }} fail={fail} />}
-      {openId !== null && <VendorSheet id={openId} config={config} currentUser={currentUser} onClose={() => setOpenId(null)} onChanged={reload} notify={notify} fail={fail} />}
+      {inviting && <Portal><InviteModal config={config} currentUser={currentUser} onClose={() => setInviting(false)} onDone={() => { reload(); }} fail={fail} /></Portal>}
+      {openId !== null && <Portal><VendorSheet id={openId} config={config} currentUser={currentUser} onClose={() => setOpenId(null)} onChanged={reload} notify={notify} fail={fail} /></Portal>}
     </div>
   );
 }

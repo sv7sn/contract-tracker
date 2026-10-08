@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { SupplierStatus } from "../types.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, sans } from "../theme.ts";
 import { docValidity } from "../supplierRules.ts";
@@ -73,3 +74,8 @@ export function CloseButton({ onClick }: { onClick: () => void }) {
 }
 
 export { Hourglass, Clock };
+
+/** Le finestre vanno montate su <body>: dentro la pagina (che ha le animazioni) la barra in alto finirebbe sopra e ne coprirebbe la parte superiore. */
+export function Portal({ children }: { children: ReactNode }) {
+  return createPortal(children, document.body);
+}
