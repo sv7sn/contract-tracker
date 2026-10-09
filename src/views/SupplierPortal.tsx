@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import type { Supplier, SupplierData, SupplierDocument } from "../types.ts";
+import type { ResolvedDocType, Supplier, SupplierData, SupplierDocument } from "../types.ts";
 import { ApiError, portalApi, uploadSupplierDocument } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmtDate } from "../lib/format.ts";
-import { COUNTRIES, countryName, CURRENCIES, DOC_EXTENSIONS, docTypesFor, MAX_DOC_BYTES, missingDocuments, REGION_REQUIRED, validateSupplierData, WITHHOLDING_TYPES, docType, type DocType } from "../supplierRules.ts";
+import { COUNTRIES, countryName, CURRENCIES, DOC_EXTENSIONS, MAX_DOC_BYTES, missingRequired, REGION_REQUIRED, validateSupplierData, WITHHOLDING_TYPES } from "../supplierRules.ts";
 import { Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
 import { ArrowLeft, ArrowRight, CheckCircle2, Clock, FileCheck2, Loader2, Paperclip, Pencil, Save, Send, Trash2, Building2, Wallet, History } from "../components/icons.tsx";
-import {DocLink, KV, Notice, StatusBadge, ValidityChip } from "../components/vendorUi.tsx";
+import { AiResult, DocLink, KV, Notice, StatusBadge, ValidityChip } from "../components/vendorUi.tsx";
 import { fmtSize, supplierTimeline } from "../lib/vendors.ts";
 import { docValidity } from "../supplierRules.ts";
 
@@ -45,7 +45,7 @@ function SelectField({ id, label, value, onChange, options, error, req, disabled
 const Cols = ({ children }: { children: React.ReactNode }) => <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 230px), 1fr))", columnGap: 14 }}>{children}</div>;
 
 // ─── Slot di un tipo di documento ────────────────────────────
-function DocSlot({ type, docs, editable, onUpload, onRemove }: { type: DocType; docs: SupplierDocument[]; editable: boolean; onUpload: (t: DocType, f: File, validUntil: string | null) => Promise<string | null>; onRemove: (d: SupplierDocument) => Promise<void> }) {
+function DocSlot({ type, docs, editable, checking, onUpload, onRemove }: { type: ResolvedDocType; docs: SupplierDocument[]; editable: boolean; checking: number[]; onUpload: (t: ResolvedDocType, f: File, validUntil: string | null) => Promise<string | null>; onRemove: (d: SupplierDocument) => Promise<void> }) {
   const [date, setDate] = useState(""); const [busy, setBusy] = useState(false); const [error, setError] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const pick = () => { setError(null); if (type.expires && !date) { setError("Indica prima la data di scadenza del documento"); return; } input.current?.click(); };
@@ -72,6 +72,7 @@ function DocSlot({ type, docs, editable, onUpload, onRemove }: { type: DocType; 
           <ValidityChip validUntil={d.validUntil} />
           <DocLink id={d.id} name={d.fileName} />
           {editable && <button onClick={() => onRemove(d)} aria-label={`Rimuovi ${d.fileName}`} style={{ background: "none", border: "none", cursor: "pointer", color: C.subtle, padding: 4, display: "flex" }}><Trash2 size={16} /></button>}
+          {checking.includes(d.id) ? <div style={{ ...sans, flexBasis: "100%", display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: C.muted }}><Loader2 className="spin" size={14} />Controllo del documento in corso…</div> : <AiResult check={d.ai} audience="supplier" />}
         </div>
       ))}
       {editable && (
@@ -105,6 +106,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
   const [showErrors, setShowErrors] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState<number[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
 
   const fail = (err: unknown): string => {
@@ -129,13 +131,16 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
   if (loadError) return <EmptyState title="Impossibile caricare la tua scheda" text={loadError} />;
   if (!s) return <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Loader2 className="spin" size={26} color={C.subtle} /></div>;
 
-  const wizard = s.status === "draft" || s.status === "pending_revision" || s.status === "rejected" || (s.status === "registered" && editing);
+  // Un fornitore registrato (anche con un aggiornamento già in verifica) può modificare dati e documenti in autonomia.
+  const amending = s.status === "registered" || (s.status === "pending" && s.isUpdate);
+  const wizard = s.status === "draft" || s.status === "pending_revision" || s.status === "rejected" || (amending && editing);
   const country = data.address?.country;
   const dirty = JSON.stringify(data) !== JSON.stringify(s.data);
   const localErrors = validateSupplierData(data);
   const errors = { ...serverErrors, ...(showErrors ? localErrors : {}) };
   const docs = s.documents.map(d => ({ type: d.type, validUntil: d.validUntil }));
-  const missing = missingDocuments(docs, country);
+  const missing = missingRequired(s.docTypes, docs);
+  const labelOf = (k: string) => s.docTypes.find(t => t.key === k)?.label ?? k;
   const set = <K extends keyof SupplierData>(group: K, patch: Partial<NonNullable<SupplierData[K]>>) => { setData(d => ({ ...d, [group]: { ...(d[group] as object | undefined), ...patch } })); setServerErrors({}); };
 
   const saveNow = async (): Promise<boolean> => {
@@ -145,7 +150,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
 
   const goTo = async (n: number) => {
     setFormError(null);
-    if (s.status !== "registered" && !(await saveNow())) return;
+    if (!amending && !(await saveNow())) return;
     setStep(n); window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const next = async () => {
@@ -160,7 +165,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
   const submit = async () => {
     setBusy(true); setFormError(null);
     try {
-      if (s.status === "registered") {
+      if (amending) {
         if (!dirty) { setFormError("Non hai modificato nessun dato."); setBusy(false); return; }
         adopt(await portalApi.save(data)); setEditing(false); notify("Modifiche inviate: ora sono in verifica");
       } else {
@@ -178,13 +183,17 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
     setBusy(false);
   };
 
-  const uploadDoc = async (t: DocType, f: File, validUntil: string | null): Promise<string | null> => {
+  const uploadDoc = async (t: ResolvedDocType, f: File, validUntil: string | null): Promise<string | null> => {
     const bad = checkFile(f); if (bad) return bad;
     try {
       if (!(await saveNow())) return "Salva prima i dati: correggi gli errori indicati";
       const path = await uploadSupplierDocument(f);
-      adopt(await portalApi.addDocument({ type: t.key, fileName: f.name, filePath: path, size: f.size, validUntil }));
-      notify(`${t.label} caricato`); return null;
+      const added = await portalApi.addDocument({ type: t.key, fileName: f.name, filePath: path, size: f.size, validUntil });
+      adopt(added.supplier); notify(`${t.label} caricato`);
+      // Primo controllo automatico del documento, in una richiesta a parte: il caricamento è già completato.
+      setChecking(c => [...c, added.docId]);
+      portalApi.checkDocument(added.docId).then(adopt).catch(() => undefined).finally(() => setChecking(c => c.filter(x => x !== added.docId)));
+      return null;
     } catch (err) { return fail(err); }
   };
   const removeDoc = async (d: SupplierDocument) => {
@@ -228,8 +237,9 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
   })();
 
   const expiring = s.documents.filter(d => ["expired", "expiring"].includes(docValidity(d.validUntil)));
-  const expiryNotice = s.status === "registered" && expiring.length > 0 && (
-    <Notice kind="warn"><b>Documenti da rinnovare:</b> {expiring.map(d => `${docType(d.type)?.label ?? d.type} (${docValidity(d.validUntil) === "expired" ? "scaduto" : "in scadenza"} il ${fmtDate(d.validUntil!)})`).join("; ")}. Carica la versione aggiornata nella sezione Documenti.</Notice>
+  const missingNow = missing.filter(k => !expiring.some(d => d.type === k));
+  const expiryNotice = amending && (expiring.length > 0 || missingNow.length > 0) && (
+    <Notice kind="warn"><b>Documenti da caricare o rinnovare:</b> {[...missingNow.map(k => `${labelOf(k)} (mancante)`), ...expiring.map(d => `${d.typeLabel} (${docValidity(d.validUntil) === "expired" ? "scaduto" : "in scadenza"} il ${fmtDate(d.validUntil!)})`)].join("; ")}. Carica la versione aggiornata nella sezione Documenti qui sotto.</Notice>
   );
 
   const err = (k: string) => errors[k];
@@ -305,9 +315,9 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
           <CardTitle icon={<FileCheck2 size={16} />}>Documentazione di qualifica</CardTitle>
           <p style={{ ...sans, fontSize: 13, color: C.muted, margin: "0 0 14px", lineHeight: 1.55 }}>Carica un file per ogni documento richiesto (PDF, Word, PowerPoint o immagine, massimo {MAX_DOC_BYTES / 1024 / 1024} MB). Per i documenti con scadenza indica la data: ti ricorderemo di rinnovarli.</p>
           {!country && <Notice kind="warn">Seleziona prima il paese nel passaggio “Società e indirizzo”: i documenti richiesti dipendono dal paese.</Notice>}
-          {showErrors && missing.length > 0 && <Notice kind="error">Documenti obbligatori mancanti o scaduti: {missing.map(k => docType(k)?.label ?? k).join(", ")}.</Notice>}
+          {showErrors && missing.length > 0 && <Notice kind="error">Documenti obbligatori mancanti o scaduti: {missing.map(labelOf).join(", ")}.</Notice>}
           <div style={{ display: "grid", gap: 12 }}>
-            {docTypesFor(country).map(t => <DocSlot key={t.key} type={t} docs={s.documents.filter(d => d.type === t.key)} editable onUpload={uploadDoc} onRemove={removeDoc} />)}
+            {s.docTypes.map(t => <DocSlot key={t.key} type={t} docs={s.documents.filter(d => d.type === t.key)} editable checking={checking} onUpload={uploadDoc} onRemove={removeDoc} />)}
           </div>
         </>)}
 
@@ -319,12 +329,12 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
               <Notice kind="warn">Prima di inviare completa ancora:
                 <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
                   {[...new Set(Object.keys(localErrors).map(k => stepOf(k)).filter(n => n < 3))].map(n => <li key={n}>{STEPS[n]} — <button onClick={() => goTo(n)} style={{ background: "none", border: "none", padding: 0, color: "inherit", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>vai al passaggio</button></li>)}
-                  {missing.length > 0 && <li>Documenti: {missing.map(k => docType(k)?.label ?? k).join(", ")} — <button onClick={() => goTo(2)} style={{ background: "none", border: "none", padding: 0, color: "inherit", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>carica</button></li>}
+                  {missing.length > 0 && <li>Documenti: {missing.map(labelOf).join(", ")} — <button onClick={() => goTo(2)} style={{ background: "none", border: "none", padding: 0, color: "inherit", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>carica</button></li>}
                 </ul>
               </Notice>
             </div>
           ) : null}
-          {s.status !== "registered" && (
+          {!amending && (
             <label style={{ ...sans, display: "flex", gap: 10, alignItems: "flex-start", margin: "18px 0 4px", fontSize: 13, color: C.text, lineHeight: 1.5, cursor: "pointer" }}>
               <input type="checkbox" checked={!!data.acceptedTerms} onChange={e => setData(d => ({ ...d, acceptedTerms: e.target.checked }))} style={{ marginTop: 3, width: 17, height: 17, accentColor: C.accent }} />
               <span>Dichiaro che i dati e i documenti forniti sono veritieri e completi e accetto i termini e le condizioni del portale fornitori.</span>
@@ -337,14 +347,14 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
       </div>
       <div style={{ display: "flex", gap: 10, padding: "14px 20px", borderTop: `1px solid ${C.border}`, background: C.bg, flexWrap: "wrap", alignItems: "center" }}>
         {step > 0 && <button onClick={() => goTo(step - 1)} disabled={busy} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px" }}><ArrowLeft size={16} />Indietro</button>}
-        {s.status === "registered" && <button onClick={() => { setEditing(false); setData(s.data); setShowErrors(false); setFormError(null); }} style={{ ...btnGhost, padding: "10px 16px" }}>Annulla modifiche</button>}
+        {amending && <button onClick={() => { setEditing(false); setData(s.data); setShowErrors(false); setFormError(null); }} style={{ ...btnGhost, padding: "10px 16px" }}>Annulla modifiche</button>}
         <div style={{ flex: 1 }} />
-        {s.status !== "registered" && step < 3 && <button onClick={saveDraft} disabled={busy || !dirty} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px", opacity: dirty ? 1 : 0.55 }}><Save size={16} />Salva bozza</button>}
+        {!amending && step < 3 && <button onClick={saveDraft} disabled={busy || !dirty} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 7, padding: "10px 16px", opacity: dirty ? 1 : 0.55 }}><Save size={16} />Salva bozza</button>}
         {step < 3 ? (
           <button onClick={next} disabled={busy} style={{ ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px" }}>Avanti<ArrowRight size={16} /></button>
         ) : (
-          <button onClick={submit} disabled={busy || Object.keys(localErrors).length > 0 || missing.length > 0 || (s.status !== "registered" && !data.acceptedTerms)} style={{ ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px", opacity: busy || Object.keys(localErrors).length > 0 || missing.length > 0 || (s.status !== "registered" && !data.acceptedTerms) ? 0.55 : 1 }}>
-            {busy ? <Loader2 className="spin" size={16} /> : <Send size={16} />}{s.status === "registered" ? "Invia le modifiche per verifica" : "Invia la registrazione"}
+          <button onClick={submit} disabled={busy || Object.keys(localErrors).length > 0 || missing.length > 0 || (!amending && !data.acceptedTerms)} style={{ ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px", opacity: busy || Object.keys(localErrors).length > 0 || missing.length > 0 || (!amending && !data.acceptedTerms) ? 0.55 : 1 }}>
+            {busy ? <Loader2 className="spin" size={16} /> : <Send size={16} />}{amending ? "Invia le modifiche per verifica" : "Invia la registrazione"}
           </button>
         )}
       </div>
@@ -354,14 +364,14 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
   const overview = (
     <>
       <Card>
-        <CardTitle icon={<Building2 size={16} />} action={s.status === "registered" && <button onClick={() => { setEditing(true); setStep(0); }} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5 }}><Pencil size={14} />Modifica i dati</button>}>I tuoi dati</CardTitle>
+        <CardTitle icon={<Building2 size={16} />} action={amending && <button onClick={() => { setEditing(true); setStep(0); }} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5 }}><Pencil size={14} />Modifica i dati</button>}>I tuoi dati</CardTitle>
         <Summary s={s} data={s.data} />
       </Card>
       <Card style={{ marginTop: 14 }}>
         <CardTitle icon={<FileCheck2 size={16} />}>Documenti di qualifica</CardTitle>
-        {s.status === "registered" && <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "0 0 12px", lineHeight: 1.5 }}>Quando un documento sta per scadere caricane uno nuovo qui: la tua scheda tornerà in verifica fino all'approvazione.</p>}
+        {amending && <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "0 0 12px", lineHeight: 1.5 }}>Quando un documento sta per scadere caricane uno nuovo qui: la tua scheda tornerà in verifica fino all'approvazione.</p>}
         <div style={{ display: "grid", gap: 12 }}>
-          {docTypesFor(s.data.address?.country).filter(t => t.required || s.documents.some(d => d.type === t.key) || s.status === "registered").map(t => <DocSlot key={t.key} type={t} docs={s.documents.filter(d => d.type === t.key)} editable={s.status === "registered"} onUpload={uploadDoc} onRemove={removeDoc} />)}
+          {s.docTypes.map(t => <DocSlot key={t.key} type={t} docs={s.documents.filter(d => d.type === t.key)} editable={amending} checking={checking} onUpload={uploadDoc} onRemove={removeDoc} />)}
         </div>
       </Card>
     </>

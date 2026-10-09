@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import type { SupplierStatus } from "../types.ts";
+import type { AiCheck, SupplierStatus } from "../types.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, sans } from "../theme.ts";
 import { docValidity } from "../supplierRules.ts";
 import { fmtDate } from "../lib/format.ts";
@@ -23,6 +23,19 @@ export function ValidityChip({ validUntil }: { validUntil: string | null }) {
 export function Notice({ kind = "info", children }: { kind?: "info" | "warn" | "error" | "ok"; children: ReactNode }) {
   const m = { info: [C.blueBg, C.blue, <Mail size={17} key="i" />], warn: [C.yellowBg, C.yellow, <AlertTriangle size={17} key="w" />], error: [C.redBg, C.red, <AlertCircle size={17} key="e" />], ok: [C.greenBg, C.green, <CheckCircle2 size={17} key="o" />] }[kind];
   return <div role={kind === "error" ? "alert" : undefined} style={{ ...sans, display: "flex", gap: 10, background: m[0] as string, color: m[1] as string, borderRadius: 12, padding: "12px 14px", fontSize: 13, lineHeight: 1.55, marginBottom: 14 }}><span style={{ flexShrink: 0, marginTop: 1 }}>{m[2]}</span><div style={{ minWidth: 0, overflowWrap: "anywhere" }}>{children}</div></div>;
+}
+
+/** Esito del controllo automatico di un documento. Per il fornitore il tono è di aiuto, per il Buyer è informativo: è solo un primo filtro. */
+export function AiResult({ check, audience }: { check: AiCheck | null; audience: "supplier" | "staff" }) {
+  if (!check || check.status === "skipped") return null;
+  const m = { ok: { c: C.green, bg: C.greenBg, t: "Controllo automatico: nessun problema" }, warning: { c: C.yellow, bg: C.yellowBg, t: audience === "supplier" ? "Da controllare" : "Controllo automatico: da verificare" }, problem: { c: C.red, bg: C.redBg, t: audience === "supplier" ? "Il documento potrebbe non essere corretto" : "Controllo automatico: documento sospetto" } }[check.status];
+  return (
+    <div style={{ ...sans, flexBasis: "100%", background: m.bg, color: m.c, borderRadius: 10, padding: "8px 11px", fontSize: 12.5, lineHeight: 1.5 }}>
+      <b>{m.t}.</b> {check.summary}
+      {check.issues.length > 0 && <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>{check.issues.map((i, k) => <li key={k}>{i}</li>)}</ul>}
+      {check.status !== "ok" && <div style={{ marginTop: 4, opacity: 0.85 }}>{audience === "supplier" ? "Se il documento è corretto puoi lasciarlo così: sarà comunque controllato dal Buyer. Altrimenti sostituiscilo." : "È un primo filtro automatico: la decisione resta tua."}</div>}
+    </div>
+  );
 }
 
 export function DocLink({ id, name }: { id: number; name: string }) {

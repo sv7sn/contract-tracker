@@ -1,0 +1,3 @@
+{
+  "crons": [{ "path": "/api/portal?op=cron-reminders", "schedule": "0 6 * * *" }]
+}

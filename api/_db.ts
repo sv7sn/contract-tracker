@@ -2,6 +2,7 @@ import pg from "pg";
 import type { AppState, AuditEntry, CommitPayload, Contract, NewUserInput, PlanStep, Role, StepStatus, UpdateUserInput, User } from "../src/types.ts";
 import { HttpError } from "./_http.js";
 import { hashPassword, MIN_PASSWORD } from "./_crypto.js";
+import { DEFAULT_DOC_RULES, DEFAULT_DOC_TYPES } from "./_supplier-rules.js";
 import { canCreateContract, canDeleteContract, canEditContract, canRespondBO, canViewContract } from "./_permissions.js";
 import { FILE_PATH_RE } from "./_blob.js";
 
@@ -101,6 +102,25 @@ end $$;
 -- Il nome è unico solo tra il personale interno (i fornitori possono avere nomi uguali o simili).
 drop index if exists users_name_key;
 create unique index if not exists users_name_staff_key on users (lower(name)) where role <> 'supplier';
+create table if not exists doc_types (
+  key text primary key, label text not null, help text not null default '',
+  expires boolean not null default false, multiple boolean not null default false, position integer not null default 0
+);
+create table if not exists doc_rules (
+  id serial primary key, doc_type text not null references doc_types(key) on delete cascade,
+  scope text not null check (scope in ('all','country','industry')), value text not null default '',
+  level text not null check (level in ('required','optional')), unique (doc_type, scope, value)
+);
+alter table supplier_documents add column if not exists ai_status text;
+alter table supplier_documents add column if not exists ai_result jsonb;
+alter table supplier_documents add column if not exists ai_checked_at timestamptz;
+create table if not exists doc_reminders (
+  id serial primary key, supplier_id integer not null references suppliers(id) on delete cascade,
+  doc_type text not null, doc_id integer, stage text not null, channel text not null default 'email',
+  kind text not null default 'auto', sent_by text not null default 'Sistema', status text not null default 'logged',
+  note text not null default '', sent_at timestamptz not null default now()
+);
+create index if not exists doc_reminders_supplier_idx on doc_reminders (supplier_id, doc_type);
 create table if not exists login_attempts (email text not null, at timestamptz not null default now());
 create index if not exists login_attempts_idx on login_attempts (email, at);
 `;
@@ -117,6 +137,11 @@ export function ensureSchema() {
     await db.query(`insert into settings (key, value) values ('sap', $1) on conflict do nothing`, [JSON.stringify({ tradingPartner: "999999", sortKey: "002", cashManagementGroup: "0_VEND_001", releaseGroup: "MFL1", reconciliationAccounts: {} })]);
     await db.query(`insert into industry_codes (code, name) values ('CT00', 'Partner / Clienti') on conflict do nothing`);
     await db.query(`insert into payment_terms (code, label) values ('0030','30 giorni data fattura'),('0060','60 giorni data fattura'),('0090','90 giorni data fattura') on conflict do nothing`);
+    await db.query(`insert into settings (key, value) values ('reminders', $1) on conflict do nothing`, [JSON.stringify({ enabled: true, days: [60, 30, 15], repeatDays: 7, escalateAfter: 2 })]);
+    if (!(await db.query("select 1 from doc_types limit 1")).rows.length) {
+      for (const [i, t] of DEFAULT_DOC_TYPES.entries()) await db.query("insert into doc_types (key, label, help, expires, multiple, position) values ($1,$2,$3,$4,$5,$6) on conflict do nothing", [t.key, t.label, t.help, t.expires, t.multiple, i]);
+      for (const r of DEFAULT_DOC_RULES) await db.query("insert into doc_rules (doc_type, scope, value, level) values ($1,$2,$3,$4) on conflict do nothing", [r.docType, r.scope, r.value, r.level]);
+    }
     const { rows } = await db.query("select count(*)::int as n from users");
     const email = process.env.ADMIN_EMAIL?.trim(), password = process.env.ADMIN_PASSWORD;
     if (rows[0].n === 0 && email && password) {

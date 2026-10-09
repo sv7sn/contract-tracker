@@ -3,10 +3,10 @@ import type { InviteInput, PortalConfig, Supplier, SupplierStatus, SupplierSumma
 import { ApiError, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmtDate } from "../lib/format.ts";
-import { countryName, docType } from "../supplierRules.ts";
+import { countryName } from "../supplierRules.ts";
 import { Avatar, AuditTrail, Card, CardTitle, EmptyState, Field, Grid, StatCard } from "../components/ui.tsx";
 import { CheckCircle2, Clock, Copy, FileCheck2, Hourglass, Loader2, Mail, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Users, Ban, AlertTriangle } from "../components/icons.tsx";
-import {CloseButton, DocLink, KV, Notice, ReasonDialog, StatusBadge, ValidityChip , Portal } from "../components/vendorUi.tsx";
+import { AiResult, CloseButton, DocLink, KV, Notice, ReasonDialog, StatusBadge, ValidityChip , Portal } from "../components/vendorUi.tsx";
 import { fmtSize, STATUS_STYLE, supplierTimeline } from "../lib/vendors.ts";
 import { Summary } from "./SupplierPortal.tsx";
 
@@ -191,7 +191,7 @@ function InviteModal({ config, currentUser, onClose, onDone, fail }: { config: P
 }
 
 // ─── Scheda del fornitore ────────────────────────────────────
-function VendorSheet({ id, config, currentUser, onClose, onChanged, notify, fail }: { id: number; config: PortalConfig; currentUser: User; onClose: () => void; onChanged: () => void; notify: (m: string) => void; fail: (e: unknown) => string }) {
+export function VendorSheet({ id, config, currentUser, onClose, onChanged, notify, fail }: { id: number; config: PortalConfig; currentUser: User; onClose: () => void; onChanged: () => void; notify: (m: string) => void; fail: (e: unknown) => string }) {
   const [s, setS] = useState<Supplier | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [terms, setTerms] = useState("");
@@ -214,6 +214,11 @@ function VendorSheet({ id, config, currentUser, onClose, onChanged, notify, fail
     setBusy(label); setError(null);
     try { const v = await portalApi.action(id, action, extra); setS(v); setTerms(v.paymentTerms ?? ""); onChanged(); setBusy(null); return null; }
     catch (err) { const m = fail(err); setError(m); setBusy(null); return m; }
+  };
+  const recheck = async (docId: number) => {
+    setBusy(`ai${docId}`); setError(null);
+    try { setS(await portalApi.recheckDocument(docId)); } catch (err) { setError(fail(err)); }
+    setBusy(null);
   };
   const invite = async (what: "resend" | "delete") => {
     setBusy(what); setError(null);
@@ -314,10 +319,12 @@ function VendorSheet({ id, config, currentUser, onClose, onChanged, notify, fail
                 {s.documents.length === 0 ? <div style={{ ...sans, fontSize: 13, color: C.muted }}>Nessun documento caricato.</div> : s.documents.map((d, i) => (
                   <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: i ? `1px solid ${C.borderLight}` : "none" }}>
                     <div style={{ minWidth: 0, flex: "1 1 220px" }}>
-                      <div style={{ ...sans, fontSize: 13, fontWeight: 650, color: C.text }}>{docType(d.type)?.label ?? d.type}</div>
+                      <div style={{ ...sans, fontSize: 13, fontWeight: 650, color: C.text }}>{d.typeLabel}</div>
                       <div style={{ ...sans, fontSize: 12, color: C.muted, overflowWrap: "anywhere" }}>{d.fileName} · {fmtSize(d.size)}</div>
                     </div>
                     <ValidityChip validUntil={d.validUntil} /><DocLink id={d.id} name={d.fileName} />
+                    {isBuyerStep && config.ai.configured && <button onClick={() => recheck(d.id)} disabled={!!busy} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5 }}>{busy === `ai${d.id}` ? <Loader2 className="spin" size={13} /> : <RotateCcw size={13} />}{d.ai ? "Ripeti controllo" : "Controlla"}</button>}
+                    <AiResult check={d.ai} audience="staff" />
                   </div>
                 ))}
               </Card>

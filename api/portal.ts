@@ -1,11 +1,13 @@
 import { requireRole, requireUser } from "./_auth.js";
 import { deleteDocuments, handleUploadPresigned, issueSignedToken, openDocument } from "./_blob.js";
 import { createSessionToken, sessionCookie } from "./_crypto.js";
+import { checkStoredDocument } from "./_docai.js";
+import { monitorData, remindSupplier, runReminders } from "./_docs.js";
 import { ensureSchema } from "./_db.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
 import {
-  activateInvite, addMyDocument, deleteInvite, deleteMyDocument, documentForDownload, getMySupplier, getVendor, inviteInfo,
+  documentOwner, activateInvite, addMyDocument, deleteInvite, deleteMyDocument, documentForDownload, getMySupplier, getVendor, inviteInfo,
   inviteSupplier, listVendors, loadConfig, reinviteSupplier, saveConfig, saveMyData, submitMyRegistration, vendorAction,
 } from "./_portal.js";
 import { DOC_EXTENSIONS, DOC_MIME, MAX_DOC_BYTES, SUPPLIER_FILE_PATH_RE } from "./_supplier-rules.js";
@@ -42,6 +44,14 @@ async function handle(request: Request): Promise<Response> {
       return json({ user }, { headers: { "Set-Cookie": sessionCookie(request, createSessionToken(user.id)) } });
     }
 
+    // ── Cron giornaliero dei reminder (Vercel Cron invia "Authorization: Bearer <CRON_SECRET>") ──
+    if (op === "cron-reminders" && (method === "GET" || method === "POST")) {
+      const secret = process.env.CRON_SECRET;
+      if (!secret) throw new HttpError(503, "CRON_SECRET non configurato");
+      if (request.headers.get("authorization") !== `Bearer ${secret}`) throw new HttpError(401, "Non autorizzato");
+      return json(await runReminders(originOf(request)));
+    }
+
     // ── Area del fornitore ──
     if (op.startsWith("supplier-")) {
       const user = await requireRole(request, ["supplier"]);
@@ -63,9 +73,16 @@ async function handle(request: Request): Promise<Response> {
         return json(result);
       }
       if (op === "supplier-doc-add" && method === "POST") {
-        const { supplier, staleFiles } = await addMyDocument(user, await readJson(request), origin);
+        const { supplier, staleFiles, docId } = await addMyDocument(user, await readJson(request), origin);
         await deleteDocuments(staleFiles);
-        return json({ supplier });
+        return json({ supplier, docId });
+      }
+      if (op === "supplier-doc-check" && method === "POST") {
+        // Controllo automatico in una richiesta a parte: così il caricamento è immediato e l'analisi non rischia i tempi massimi.
+        const id = idOf(url);
+        if (!(await getMySupplier(user)).documents.some(d => d.id === id)) throw new HttpError(404, "Documento non trovato");
+        await checkStoredDocument(id);
+        return json({ supplier: await getMySupplier(user) });
       }
       if (op === "supplier-doc" && method === "DELETE") {
         const { supplier, staleFiles } = await deleteMyDocument(user, idOf(url), origin);
@@ -98,6 +115,23 @@ async function handle(request: Request): Promise<Response> {
     // ── Staff ──
     const user = await requireRole(request, [...STAFF]);
     const origin = originOf(request);
+    if (op === "doc-monitor" && method === "GET") return json(await monitorData(user));
+    if (op === "doc-remind" && method === "POST") {
+      const body = (await readJson(request)) as { supplierId?: unknown; channel?: unknown; note?: unknown };
+      return json(await remindSupplier(user, Number(body.supplierId), body.channel === "phone" ? "phone" : "email", typeof body.note === "string" ? body.note : "", origin));
+    }
+    if (op === "reminders-run" && method === "POST") {
+      if (!canConfigurePortal(user)) throw new HttpError(403, "Operazione non consentita");
+      return json(await runReminders(origin));
+    }
+    if (op === "doc-check" && method === "POST") {
+      if (user.role !== "manager" && user.role !== "buyer") throw new HttpError(403, "Operazione non consentita");
+      const id = idOf(url);
+      const owner = await documentOwner(id);
+      await getVendor(user, owner);
+      await checkStoredDocument(id, true);
+      return json({ supplier: await getVendor(user, owner) });
+    }
     if (op === "vendors" && method === "GET") return json({ vendors: await listVendors(user) });
     if (op === "vendor" && method === "GET") return json({ supplier: await getVendor(user, idOf(url)) });
     if (op === "config" && method === "GET") return json({ config: await loadConfig() });

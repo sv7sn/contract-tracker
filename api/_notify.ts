@@ -3,10 +3,10 @@ import type { Queryable } from "./_db.js";
 // Email del portale. Ogni messaggio viene salvato nella tabella `notifications`; l'invio reale avviene se sono
 // configurati RESEND_API_KEY e MAIL_FROM (servizio Resend), altrimenti lo stato resta "logged" (non inviato).
 
-export type Template = "invitation" | "new_registration" | "supplier_modified" | "revision_requested" | "rejection" | "buyer_approved" | "vendor_created" | "sap_code";
+export type Template = "invitation" | "new_registration" | "supplier_modified" | "revision_requested" | "rejection" | "buyer_approved" | "vendor_created" | "sap_code" | "doc_reminder" | "doc_unresponsive";
 export type Lang = "IT" | "EN";
 
-interface Vars { name?: string; link?: string; reason?: string; sapCode?: string; expires?: string; companies?: string }
+interface Vars { items?: string; name?: string; link?: string; reason?: string; sapCode?: string; expires?: string; companies?: string }
 
 const T: Record<Template, Record<Lang, (v: Vars) => { subject: string; body: string }>> = {
   invitation: {
@@ -40,6 +40,14 @@ const T: Record<Template, Record<Lang, (v: Vars) => { subject: string; body: str
   sap_code: {
     IT: v => ({ subject: "Registrazione completata: il tuo codice fornitore", body: `Gentile ${v.name},\n\nla registrazione è completata. Il tuo codice fornitore è ${v.sapCode}.\n\nPuoi consultare e aggiornare i tuoi dati nella tua area personale: ${v.link}` }),
     EN: v => ({ subject: "Registration completed: your supplier code", body: `Dear ${v.name},\n\nyour registration is complete. Your supplier code is ${v.sapCode}.\n\nYou can view and update your data in your personal area: ${v.link}` }),
+  },
+  doc_reminder: {
+    IT: v => ({ subject: "Documenti di qualifica da aggiornare", body: `Gentile ${v.name},\n\nalcuni documenti della tua azienda richiedono il tuo intervento:\n\n${v.items}\n\nAccedi alla tua area personale per caricare i documenti aggiornati: ${v.link}\n\nSe hai già provveduto o hai dubbi, rispondi a questa email.` }),
+    EN: v => ({ subject: "Qualification documents to update", body: `Dear ${v.name},\n\nsome of your company's documents need your attention:\n\n${v.items}\n\nSign in to your personal area to upload the updated documents: ${v.link}\n\nIf you have already done so or have questions, just reply to this email.` }),
+  },
+  doc_unresponsive: {
+    IT: v => ({ subject: `Fornitore che non risponde ai reminder: ${v.name}`, body: `Il fornitore ${v.name} non ha aggiornato i documenti nonostante i solleciti:\n\n${v.items}\n\nServe un tuo intervento (telefonata, contatto diretto o altra azione): ${v.link}` }),
+    EN: v => ({ subject: `Supplier not answering reminders: ${v.name}`, body: `Supplier ${v.name} has not updated its documents despite the reminders:\n\n${v.items}\n\nYour action is needed (phone call, direct contact or other): ${v.link}` }),
   },
 };
 

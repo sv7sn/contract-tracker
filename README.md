@@ -31,6 +31,13 @@ Il Buyer invita un fornitore (Fornitori → Invita fornitore): il fornitore rice
 - **Email**: senza `RESEND_API_KEY` e `MAIL_FROM` i messaggi sono solo registrati; il link d'invito si può copiare e inviare a mano.
 - Non ancora coperti: dati fiscali brasiliani, fornitore già esistente in SAP (estensione società), promemoria automatici di scadenza dei documenti.
 
+### Documenti di qualifica, scadenze e reminder
+
+- **Documenti per paese e codice merceologico**: in *Configurazione* (solo Manager) si decide per ogni documento a chi viene chiesto (tutti, un paese, un codice merceologico) e se è obbligatorio o facoltativo; si possono aggiungere nuovi documenti. Di serie ci sono anche ISO 9001, ISO 17025 e ISO 27001, senza regole: si attivano per i codici merceologici scelti.
+- **Pagina Scadenze** (Manager, Buyer, Finance): stato di tutti i documenti (scaduti, mancanti, in scadenza), solleciti inviati e, in evidenza, i fornitori che non rispondono ai reminder, con azioni per il Buyer (nuovo sollecito, registrazione di una telefonata).
+- **Reminder automatici**: Vercel Cron esegue ogni mattina `/api/portal?op=cron-reminders` (file `vercel.json`); serve la variabile `CRON_SECRET`. Giorni di preavviso, ripetizione e soglia "non risponde" sono configurabili. Senza provider email (`RESEND_API_KEY`, `MAIL_FROM`) i messaggi sono solo registrati.
+- **Controllo AI dei documenti**: predisposto ma spento di default. Con `DOC_AI_PROVIDER=anthropic` e `ANTHROPIC_API_KEY` ogni file caricato (PDF o immagine) riceve un primo controllo su tipo, intestatario, partita IVA e scadenza. Segnala, non approva né rifiuta. Il motore è in `api/_docai.ts` e si può sostituire.
+
 ## Architettura
 
 ```
