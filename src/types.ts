@@ -144,6 +144,8 @@ export interface PortalConfig {
   docTypes: DocTypeDef[]; docRules: DocRule[]; reminders: ReminderPolicy;
   emailConfigured: boolean; ai: { provider: string; configured: boolean };
   rda: RdaConfig; privacy: PrivacySettings; sanctions: SanctionsStatus;
+  /** Fonti esterne collegate per la verifica dell'azienda. */
+  externalChecks: { vies: boolean; openapi: boolean };
 }
 
 export type MonitorState = "expired" | "expiring" | "missing" | "valid";

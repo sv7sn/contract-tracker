@@ -1,4 +1,4 @@
-// Liste sanzioni ufficiali e gratuite (UE, ONU, USA/OFAC): scaricate ogni notte e confrontate in locale con i fornitori.
+// Liste sanzioni ufficiali e gratuite (UE, ONU, Regno Unito, USA/OFAC): scaricate ogni notte e confrontate in locale con i fornitori.
 // Non serve nessun servizio a pagamento né una chiave: le liste sono pubbliche.
 import type { CheckStatus, SanctionsStatus } from "../src/types.ts";
 import { getPool, inTransaction, type Queryable } from "./_db.js";
@@ -67,10 +67,25 @@ export function parseOfac([sdn, alt]: string[]): Entry[] {
   return out;
 }
 
+/** UK Sanctions List (FCDO, unica lista UK dal 28/01/2026): CSV con una riga "Report Date" in testa; Name 1–5 = nomi, Name 6 = cognome o denominazione. */
+export function parseUk([csv]: string[]): Entry[] {
+  const text = csv.replace(/^\uFEFF/, "");
+  const firstLines = text.split(/\r?\n/, 3).join("\n");
+  const sep = (firstLines.match(/;/g)?.length ?? 0) > (firstLines.match(/,/g)?.length ?? 0) ? ";" : ",";
+  const rows = parseCsv(text, sep);
+  const h = rows.findIndex(r => r.some(c => c.trim().endsWith("Unique ID")) && r.some(c => c.trim() === "Name 6"));
+  if (h < 0) throw new Error("formato del file UK cambiato (mancano Unique ID / Name 6)");
+  const head = rows[h].map(c => c.trim());
+  const col = (n: string) => head.findIndex(c => c === n || c.endsWith(n));
+  const id = col("Unique ID"), names = ["Name 1", "Name 2", "Name 3", "Name 4", "Name 5", "Name 6"].map(col);
+  return rows.slice(h + 1).map(r => ({ ref: `UK ${(r[id] ?? "").trim()}`, name: names.map(i => (i >= 0 ? (r[i] ?? "").trim() : "")).filter(Boolean).join(" ") })).filter(e => e.name);
+}
+
 const env = (k: string, d: string) => process.env[k]?.trim() || d;
 export const SOURCES: Source[] = [
   { key: "eu", label: "Unione Europea", urls: () => [env("SANCTIONS_EU_URL", "https://webgate.ec.europa.eu/fsd/fsf/public/files/csvFullSanctionsList_1_1/content?token=dG9rZW4tMjAxNw")], parse: parseEu },
   { key: "un", label: "ONU", urls: () => [env("SANCTIONS_UN_URL", "https://scsanctions.un.org/resources/xml/en/consolidated.xml")], parse: parseUn },
+  { key: "uk", label: "Regno Unito", urls: () => [env("SANCTIONS_UK_URL", "https://sanctionslist.fcdo.gov.uk/docs/UK-Sanctions-List.csv")], parse: parseUk },
   { key: "us", label: "USA (OFAC)", urls: () => [env("SANCTIONS_OFAC_URL", "https://www.treasury.gov/ofac/downloads/sdn.csv"), env("SANCTIONS_OFAC_ALT_URL", "https://www.treasury.gov/ofac/downloads/alt.csv")], parse: parseOfac },
 ];
 

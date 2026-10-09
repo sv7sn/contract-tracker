@@ -101,7 +101,7 @@ export async function loadConfig(): Promise<PortalConfig> {
   const industryCodes: IndustryCode[] = i.rows.map(r => ({ code: r.code, name: r.name, buyerIds: ib.rows.filter(x => x.industry_code === r.code).map(x => x.user_id) }));
   const paymentTerms: PaymentTerm[] = pt.rows.map(r => ({ code: r.code, label: r.label }));
   const cat = await loadCatalog(db);
-  return { companies, industryCodes, paymentTerms, sap: st.rows[0]?.value as SapSettings, buyers: b.rows, ...docConfig(cat, await loadPolicy(db)), rda: await loadRdaConfig(db), privacy: await loadPrivacy(db), sanctions: await sanctionsStatus(db) };
+  return { companies, industryCodes, paymentTerms, sap: st.rows[0]?.value as SapSettings, buyers: b.rows, ...docConfig(cat, await loadPolicy(db)), rda: await loadRdaConfig(db), privacy: await loadPrivacy(db), sanctions: await sanctionsStatus(db), externalChecks: { vies: (process.env.VIES_MODE ?? "live") !== "off", openapi: !!process.env.OPENAPI_COMPANY_TOKEN?.trim() } };
 }
 
 const CODE_RE = /^[A-Za-z0-9_.-]{1,20}$/;

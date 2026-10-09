@@ -1,6 +1,7 @@
 import type { CheckStatus, ComplianceCheck, DuplicateMatch, FieldChange, Lifecycle, Qualification, ResolvedDocType, SupplierData, SupplierDocument } from "../src/types.ts";
 import type { Queryable } from "./_db.js";
 import { screenName } from "./_sanctions.js";
+import { checkCompany, type CompanyCheck } from "./_company.js";
 import { countryName, docValidity, EU_COUNTRIES, missingRequired, normalizeIban, normName, normTax } from "./_supplier-rules.js";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -79,7 +80,7 @@ export function qualificationOf(status: string, resolved: ResolvedDocType[], doc
 }
 
 // ─── Controlli di conformità ─────────────────────────────────
-export interface StoredCompliance { checkedAt?: string; vies?: { status: CheckStatus; detail: string }; sanctions?: { status: CheckStatus; detail: string }; manualSanctions?: { by: string; at: string; note: string } }
+export interface StoredCompliance { checkedAt?: string; vies?: { status: CheckStatus; detail: string }; sanctions?: { status: CheckStatus; detail: string }; company?: CompanyCheck; manualSanctions?: { by: string; at: string; note: string } }
 
 const VIES_CODE = (c: string) => (c === "GR" ? "EL" : c);
 /** Verifica della partita IVA nel sistema europeo VIES. VIES_MODE=off la disattiva, mock serve ai test. */
@@ -132,8 +133,11 @@ export async function runExternalChecks(db: Queryable, supplierId: number): Prom
   if (!r) return;
   const d: SupplierData = r.data ?? {};
   const legal = d.company?.legalName || r.name;
-  const [vies, sanctions] = await Promise.all([checkVies(d.address?.country, d.company?.vatCode, legal), checkSanctions(db, legal, d.address?.country)]);
-  const next: StoredCompliance = { ...(r.compliance ?? {}), checkedAt: new Date().toISOString(), vies, sanctions };
+  const [vies, sanctions, company] = await Promise.all([
+    checkVies(d.address?.country, d.company?.vatCode, legal), checkSanctions(db, legal, d.address?.country),
+    checkCompany(d.address?.country, d.company?.vatCode, d.company?.fiscalCode, legal),
+  ]);
+  const next: StoredCompliance = { ...(r.compliance ?? {}), checkedAt: new Date().toISOString(), vies, sanctions, company };
   await db.query("update suppliers set compliance = $1 where id = $2", [JSON.stringify(next), supplierId]);
 }
 
@@ -145,6 +149,7 @@ export function complianceChecks(d: SupplierData, stored: StoredCompliance | nul
   const decl = d.declarations ?? {};
   const checks: ComplianceCheck[] = [
     { key: "vies", label: "Partita IVA (VIES)", ...(s.vies ?? { status: "todo", detail: "Controllo non ancora eseguito" }) },
+    { key: "company", label: "Situazione dell'azienda", ...(s.company ? { status: s.company.status, detail: s.company.detail } : { status: "todo" as const, detail: "Controllo non ancora eseguito" }) },
     { key: "iban_country", label: "Paese del conto bancario", ...(!iban ? { status: country === "BR" ? "na" as const : "todo" as const, detail: "IBAN non indicato" } : ibanCc === country ? { status: "ok" as const, detail: `Conto nello stesso paese della sede (${ibanCc})` } : { status: "warn" as const, detail: `Conto in ${countryName(ibanCc) || ibanCc}, sede in ${countryName(country) || country || "—"}: verifica il motivo` }) },
     { key: "duplicates", label: "Doppioni", ...(dups.length === 0 ? { status: "ok" as const, detail: "Nessun altro fornitore con gli stessi dati" } : dups.every(x => x.confirmed) ? { status: "ok" as const, detail: `Verificati dal Buyer come fornitori distinti: ${dups.map(x => x.name).join(", ")}` } : { status: dups.some(x => x.severe) ? "fail" as const : "warn" as const, detail: dups.map(x => `${x.name} (${x.fields.join(", ")}${x.lifecycle === "excluded" ? ", ESCLUSO" : ""})`).join("; ") }) },
     { key: "documents", label: "Documenti di qualifica", ...(qualification === "lapsed" || missingDocs > 0 ? { status: "fail" as const, detail: "Documenti obbligatori scaduti o mancanti" } : qualification === "expiring" ? { status: "warn" as const, detail: "Documenti obbligatori in scadenza entro 30 giorni" } : { status: "ok" as const, detail: "Documenti obbligatori presenti e validi" }) },
