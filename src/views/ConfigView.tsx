@@ -22,12 +22,13 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
   const [pol, setPol] = useState<{ enabled: boolean; days: string; repeatDays: string; escalateAfter: string } | null>(null);
   const [polBusy, setPolBusy] = useState(false);
   const [sla, setSla] = useState("7");
+  const [threshold, setThreshold] = useState("10000");
 
   const fail = useCallback((err: unknown) => {
     if (err instanceof ApiError && err.status === 401) { onSessionExpired(); return "Sessione scaduta"; }
     return err instanceof Error ? err.message : "Operazione non riuscita";
   }, [onSessionExpired]);
-  const adopt = (c: PortalConfig) => { setCfg(c); setSap(c.sap); setPol(policyToForm(c.reminders)); setSla(String(c.rda.slaDays)); };
+  const adopt = (c: PortalConfig) => { setCfg(c); setSap(c.sap); setPol(policyToForm(c.reminders)); setSla(String(c.rda.slaDays)); setThreshold(String(c.rda.sourcingThreshold)); };
   useEffect(() => { portalApi.config().then(adopt).catch(err => setError(fail(err))); }, [fail]);
 
   if (error) return <EmptyState icon={<AlertTriangle size={26} />} title="Impossibile caricare la configurazione" text={error} />;
@@ -48,6 +49,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
     try { adopt(await portalApi.saveConfig("reminders", "save", { enabled: pol.enabled, days: pol.days.split(/[,\s;]+/).filter(Boolean).map(Number), repeatDays: Number(pol.repeatDays), escalateAfter: Number(pol.escalateAfter) })); notify("Reminder salvati"); } catch (err) { notify(`⚠️ ${fail(err)}`); }
     setPolBusy(false);
   };
+  const saveThreshold = async () => { try { adopt(await portalApi.saveConfig("rda", "save", { sourcingThreshold: Number(threshold) })); notify("Soglia salvata"); } catch (err) { notify(`⚠️ ${fail(err)}`); } };
   const saveSla = async () => { try { adopt(await portalApi.saveConfig("rda", "save", { slaDays: Number(sla) })); notify("Giorni di lavorazione salvati"); } catch (err) { notify(`⚠️ ${fail(err)}`); } };
   const saveGroup = async (pgr: string, userId: string) => { try { adopt(await portalApi.saveConfig("pgr", "save", { pgr, userId: userId ? Number(userId) : null })); notify("Assegnazione salvata"); } catch (err) { notify(`⚠️ ${fail(err)}`); } };
   const removeDocType = async (t: DocTypeDef) => {
@@ -125,6 +127,13 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
             <input id="r-sla" type="number" min={1} max={90} value={sla} onChange={e => setSla(e.target.value)} style={{ ...iStyle, width: 110 }} />
             <button onClick={saveSla} style={{ ...btnGhost, padding: "9px 14px", fontSize: 13 }}>Salva</button>
           </div>
+        </Field>
+        <Field label="Soglia per il confronto con un altro fornitore (importo della RDA)" htmlFor="r-th">
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <input id="r-th" type="number" min={0} step={500} value={threshold} onChange={e => setThreshold(e.target.value)} style={{ ...iStyle, width: 140 }} />
+            <button onClick={saveThreshold} style={{ ...btnGhost, padding: "9px 14px", fontSize: 13 }}>Salva</button>
+          </div>
+          <div style={{ ...sans, fontSize: 12, color: C.subtle, marginTop: 6, lineHeight: 1.5 }}>Sopra soglia la RDA si chiude solo con almeno un'offerta alternativa, oppure se la fornitura è strategica o single source, o con un'eccezione approvata dal Manager.</div>
         </Field>
         <div style={{ ...sans, fontSize: 12, fontWeight: 650, color: C.muted, margin: "4px 0 8px" }}>Buyer per gruppo di acquisto</div>
         {cfg.rda.groups.length === 0 ? <div style={{ ...sans, fontSize: 13, color: C.subtle, marginBottom: 12 }}>Nessun gruppo ancora: importa l'elenco delle RDA dalla pagina Task.</div> : cfg.rda.groups.map(g => (
