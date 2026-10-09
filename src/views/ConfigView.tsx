@@ -4,7 +4,7 @@ import { COUNTRIES, countryName } from "../supplierRules.ts";
 import { ApiError, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, sans } from "../theme.ts";
 import { Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
-import { AlertTriangle, Bell, Building2, History, Lock, Inbox, FileCheck2, Loader2, Pencil, Plus, Save, Settings, Sparkles, Trash2, Wallet, FileText, X } from "../components/icons.tsx";
+import { AlertTriangle, Bell, Building2, History, Lock, RotateCcw, ShieldCheck, Inbox, FileCheck2, Loader2, Pencil, Plus, Save, Settings, Sparkles, Trash2, Wallet, FileText, X } from "../components/icons.tsx";
 import { Notice, Portal } from "../components/vendorUi.tsx";
 
 type Entity = "company" | "industry" | "payment_term";
@@ -170,6 +170,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
         <button onClick={saveSap} disabled={busy} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}Salva parametri SAP</button>
       </Card>
 
+      <SanctionsCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
       <PrivacyCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
       <AuditCard cfg={cfg} fail={fail} />
 
@@ -311,6 +312,39 @@ function AuditCard({ cfg, fail }: { cfg: PortalConfig; fail: (e: unknown) => str
         </div>
       ))}
       {entries && entries.length > 12 && <button onClick={() => setAll(v => !v)} style={{ ...btnGhost, marginTop: 8, padding: "7px 12px", fontSize: 12.5 }}>{all ? "Mostra meno" : `Mostra tutte (${entries.length})`}</button>}
+    </Card>
+  );
+}
+
+/** Liste sanzioni ufficiali (UE, ONU, USA): scaricate ogni notte e usate per controllare tutti i fornitori. */
+function SanctionsCard({ cfg, fail, notify, onSaved }: { cfg: PortalConfig; fail: (e: unknown) => string; notify: (m: string) => void; onSaved: (c: PortalConfig) => void }) {
+  const [busy, setBusy] = useState(false);
+  const st = cfg.sanctions;
+  const refresh = async () => {
+    setBusy(true);
+    try {
+      const r = await portalApi.sanctionsRefresh(); onSaved(r.config);
+      notify(r.errors.length ? `⚠️ ${r.errors.join("; ")}` : `Liste aggiornate: ${r.rescreened} fornitori ricontrollati${r.newHits ? `, ${r.newHits} da verificare` : ""}`);
+    } catch (err) { notify(`⚠️ ${fail(err)}`); }
+    setBusy(false);
+  };
+  return (
+    <Card>
+      <CardTitle icon={<ShieldCheck size={16} />}>Liste sanzioni</CardTitle>
+      {st.provider === "lists" ? (<>
+        <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-6px 0 12px", lineHeight: 1.55 }}>Ogni notte si scaricano le liste ufficiali e gratuite di Unione Europea, ONU e Tesoro USA (OFAC). Ogni fornitore viene controllato all'invio della registrazione e ricontrollato dopo ogni aggiornamento: le corrispondenze compaiono nei controlli di conformità della scheda.</p>
+        <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
+          {st.sources.map(x => (
+            <div key={x.key} style={{ ...sans, display: "flex", gap: 10, fontSize: 13, flexWrap: "wrap", alignItems: "baseline" }}>
+              <b style={{ minWidth: 130 }}>{x.label}</b>
+              <span style={{ color: x.count ? C.text : C.subtle }} className="tabular">{x.count ? `${x.count.toLocaleString("it-IT")} nomi` : "non ancora scaricata"}</span>
+              {x.at && <span style={{ color: C.subtle, fontSize: 12 }}>aggiornata il {new Date(x.at).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}</span>}
+              {x.error && <span style={{ color: C.red, fontSize: 12 }}>ultimo tentativo non riuscito: {x.error}</span>}
+            </div>
+          ))}
+        </div>
+        <button onClick={refresh} disabled={busy} style={{ ...btnGhost, padding: "9px 14px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 7 }}>{busy ? <Loader2 className="spin" size={15} /> : <RotateCcw size={15} />}{busy ? "Scaricamento in corso…" : "Aggiorna ora"}</button>
+      </>) : <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: 0 }}>Controllo tramite servizio esterno ({st.provider}).</p>}
     </Card>
   );
 }

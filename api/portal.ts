@@ -8,6 +8,7 @@ import { runExternalChecks } from "./_governance.js";
 import { listConfigAudit, logConfigChange } from "./_audit.js";
 import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
 import { computeKpis } from "./_kpi.js";
+import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
 import { createManualTask, decideSourcingException, deleteManualTask, getTask, importSapFile, listTasks, saveSourcing, taskSummary, updateTask } from "./_tasks.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
@@ -58,7 +59,9 @@ async function handle(request: Request): Promise<Response> {
       const reminders = await runReminders(originOf(request));
       const { staleFiles, ...retention } = await runRetention();
       await deleteDocuments(staleFiles);
-      return json({ ...reminders, retention });
+      // Liste sanzioni: un errore di download non deve bloccare reminder e pulizia.
+      const sanctions = await refreshIfStale().catch(err => ({ error: err instanceof Error ? err.message : "errore" }));
+      return json({ ...reminders, retention, sanctions });
     }
 
     // ── Ingresso automatico dei file SAP (es. da una regola sulla casella che riceve le mail di SAP) ──
@@ -186,6 +189,11 @@ async function handle(request: Request): Promise<Response> {
       // Ogni modifica alle regole resta tracciata: chi, quando, valori prima e dopo.
       await logConfigChange(user, entity, action, item, before, after);
       return json({ config: after });
+    }
+    if (op === "sanctions-refresh" && method === "POST") {
+      if (!canConfigurePortal(user)) throw new HttpError(403, "Operazione non consentita");
+      const res = await refreshSanctionLists();
+      return json({ ...res, config: await loadConfig() });
     }
     if (op === "config-audit" && method === "GET") {
       if (!canConfigurePortal(user)) throw new HttpError(403, "Operazione non consentita");

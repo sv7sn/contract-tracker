@@ -159,6 +159,11 @@ alter table suppliers add column if not exists approved_at timestamptz;
 alter table suppliers add column if not exists compliance jsonb;
 alter table suppliers add column if not exists dup_confirmed integer[] not null default '{}';
 alter table suppliers add column if not exists anonymized_at timestamptz;
+create table if not exists sanction_entries (
+  id serial primary key, source text not null, ref text not null default '', name text not null, key text not null, tokens text[] not null
+);
+create index if not exists sanction_entries_key_idx on sanction_entries (key);
+create index if not exists sanction_entries_tokens_idx on sanction_entries using gin (tokens);
 create table if not exists config_audit (
   id serial primary key, at timestamptz not null default now(), actor text not null, area text not null, action text not null,
   subject text not null default '', detail text not null default '', before jsonb, after jsonb

@@ -1,5 +1,6 @@
 import type { CheckStatus, ComplianceCheck, DuplicateMatch, FieldChange, Lifecycle, Qualification, ResolvedDocType, SupplierData, SupplierDocument } from "../src/types.ts";
 import type { Queryable } from "./_db.js";
+import { screenName } from "./_sanctions.js";
 import { countryName, docValidity, EU_COUNTRIES, missingRequired, normalizeIban, normName, normTax } from "./_supplier-rules.js";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -106,11 +107,11 @@ async function checkVies(country: string | undefined, vat: string | undefined, l
   }
 }
 
-/** Ricerca nelle liste di sanzioni (OpenSanctions). Senza servizio collegato serve la verifica manuale del Finance. */
-async function checkSanctions(legalName: string, country: string | undefined): Promise<{ status: CheckStatus; detail: string }> {
+/** Ricerca nelle liste di sanzioni: di base le liste ufficiali UE, ONU e OFAC scaricate ogni notte; in alternativa OpenSanctions (a pagamento). */
+async function checkSanctions(db: Queryable, legalName: string, country: string | undefined): Promise<{ status: CheckStatus; detail: string }> {
   const provider = process.env.SANCTIONS_PROVIDER ?? "";
   if (provider === "mock") return /sanction/i.test(legalName) ? { status: "fail", detail: `Possibile corrispondenza in lista sanzioni: "${legalName}"` } : { status: "ok", detail: "Nessuna corrispondenza nelle liste sanzioni" };
-  if (provider !== "opensanctions" || !process.env.OPENSANCTIONS_API_KEY) return { status: "todo", detail: "Nessun servizio di verifica collegato: serve la verifica manuale" };
+  if (provider !== "opensanctions" || !process.env.OPENSANCTIONS_API_KEY) return screenName(db, legalName);
   try {
     const res = await fetch("https://api.opensanctions.org/match/sanctions", {
       method: "POST", signal: AbortSignal.timeout(8000), headers: { Authorization: `ApiKey ${process.env.OPENSANCTIONS_API_KEY}`, "Content-Type": "application/json" },
@@ -131,7 +132,7 @@ export async function runExternalChecks(db: Queryable, supplierId: number): Prom
   if (!r) return;
   const d: SupplierData = r.data ?? {};
   const legal = d.company?.legalName || r.name;
-  const [vies, sanctions] = await Promise.all([checkVies(d.address?.country, d.company?.vatCode, legal), checkSanctions(legal, d.address?.country)]);
+  const [vies, sanctions] = await Promise.all([checkVies(d.address?.country, d.company?.vatCode, legal), checkSanctions(db, legal, d.address?.country)]);
   const next: StoredCompliance = { ...(r.compliance ?? {}), checkedAt: new Date().toISOString(), vies, sanctions };
   await db.query("update suppliers set compliance = $1 where id = $2", [JSON.stringify(next), supplierId]);
 }
