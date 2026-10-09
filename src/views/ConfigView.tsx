@@ -330,9 +330,22 @@ function SanctionsCard({ cfg, fail, notify, onSaved }: { cfg: PortalConfig; fail
   };
   return (
     <Card>
-      <CardTitle icon={<ShieldCheck size={16} />}>Liste sanzioni</CardTitle>
+      <CardTitle icon={<ShieldCheck size={16} />}>Verifiche esterne sui fornitori</CardTitle>
+      <div style={{ display: "grid", gap: 6, marginBottom: 14 }}>
+        {([
+          ["Partita IVA (VIES, UE)", cfg.externalChecks.vies, "gratuito: verifica che la partita IVA europea sia attiva e a chi è intestata"],
+          ["Registro LEI (GLEIF)", true, "gratuito: stato dell'azienda per chi ha un codice LEI (in genere aziende medio-grandi)"],
+          ["Registro Imprese (Openapi)", cfg.externalChecks.openapi, cfg.externalChecks.openapi ? "collegato: stato di attività (attiva, in liquidazione, fallita, cessata), data di costituzione, capitale, fatturato e dipendenti" : "non collegato: serve un account Openapi (30 verifiche gratis al mese, poi circa 0,10 € l'una) e la variabile OPENAPI_COMPANY_TOKEN su Vercel"],
+        ] as [string, boolean, string][]).map(([l, on, t]) => (
+          <div key={l} style={{ ...sans, display: "flex", gap: 10, fontSize: 13, alignItems: "baseline", flexWrap: "wrap" }}>
+            <span style={{ width: 8, height: 8, borderRadius: 4, background: on ? C.green : C.subtle, flexShrink: 0, alignSelf: "center" }} aria-hidden />
+            <b style={{ minWidth: 190 }}>{l}</b><span style={{ color: C.muted, flex: "1 1 260px" }}>{on ? "" : "⚠ "}{t}</span>
+          </div>
+        ))}
+      </div>
+      <div style={{ ...sans, fontSize: 12, fontWeight: 650, color: C.muted, margin: "4px 0 8px" }}>Liste sanzioni</div>
       {st.provider === "lists" ? (<>
-        <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-6px 0 12px", lineHeight: 1.55 }}>Ogni notte si scaricano le liste ufficiali e gratuite di Unione Europea, ONU e Tesoro USA (OFAC). Ogni fornitore viene controllato all'invio della registrazione e ricontrollato dopo ogni aggiornamento: le corrispondenze compaiono nei controlli di conformità della scheda.</p>
+        <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-6px 0 12px", lineHeight: 1.55 }}>Ogni notte si scaricano le liste ufficiali e gratuite di Unione Europea, ONU, Regno Unito e Tesoro USA (OFAC). Ogni fornitore viene controllato all'invio della registrazione e ricontrollato dopo ogni aggiornamento: le corrispondenze compaiono nei controlli di conformità della scheda.</p>
         <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
           {st.sources.map(x => (
             <div key={x.key} style={{ ...sans, display: "flex", gap: 10, fontSize: 13, flexWrap: "wrap", alignItems: "baseline" }}>
