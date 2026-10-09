@@ -176,6 +176,25 @@ export function accountGroup(d: SupplierData): "ITD1" | "ITW1" | "ITF3" | "BRD6"
   return "ITF3";
 }
 
+/** Normalizzazioni usate per riconoscere i doppioni. */
+export const normName = (s?: string) => (s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+  .replace(/\b(s\.?\s?p\.?\s?a|s\.?\s?r\.?\s?l(\.?\s?s)?|s\.?\s?n\.?\s?c|s\.?\s?a\.?\s?s|gmbh|ltda|ltd|limited|inc|llc|b\.?v|a\.?g|s\.?l|s\.?a)\b\.?/g, " ")
+  .replace(/[^a-z0-9]+/g, " ").trim();
+export const normTax = (s?: string) => (s ?? "").replace(/[^A-Za-z0-9]/g, "").toUpperCase().replace(/^[A-Z]{2}(?=\d)/, "");
+
+/** Paesi UE per il controllo della partita IVA (VIES); la Grecia in VIES è "EL". */
+export const EU_COUNTRIES = ["AT", "BE", "BG", "CY", "CZ", "DE", "DK", "EE", "GR", "ES", "FI", "FR", "HR", "HU", "IE", "IT", "LT", "LU", "LV", "MT", "NL", "PL", "PT", "RO", "SE", "SI", "SK"];
+
+/** Dichiarazioni obbligatorie del fornitore, controllate al momento dell'invio. */
+export function validateDeclarations(d: SupplierData): Record<string, string> {
+  const e: Record<string, string> = {}; const x = d.declarations ?? {};
+  if (x.conflictOfInterest !== true && x.conflictOfInterest !== false) e["declarations.conflictOfInterest"] = "Rispondi sì o no";
+  else if (x.conflictOfInterest && (x.conflictDetails ?? "").trim().length < 5) e["declarations.conflictDetails"] = "Descrivi il rapporto";
+  if (x.noSanctions !== true) e["declarations.noSanctions"] = "Dichiarazione obbligatoria";
+  if (x.privacyAccepted !== true) e["declarations.privacyAccepted"] = "Devi prendere visione dell'informativa privacy";
+  return e;
+}
+
 export const STATUS_LABELS: Record<string, string> = {
   invited: "Invitato", draft: "In compilazione", pending: "In verifica (Buyer)", pending_revision: "Modifiche richieste",
   approved: "Approvato (attesa Finance)", rejected: "Rifiutato", registered: "Registrato in SAP",

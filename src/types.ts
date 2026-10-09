@@ -62,6 +62,8 @@ export interface SupplierData {
   payment?: { iban?: string; swift?: string; accountNumber?: string; bankName?: string; currency?: string; withholdingTax?: boolean | null; withholdingType?: string; withholdingSpec?: string };
   contacts?: { language?: "IT" | "EN"; ordersEmail?: string; adminEmail?: string; phone?: string };
   acceptedTerms?: boolean;
+  /** Dichiarazioni del fornitore (conflitto d'interessi, sanzioni) e presa visione dell'informativa privacy. */
+  declarations?: { conflictOfInterest?: boolean | null; conflictDetails?: string; noSanctions?: boolean; privacyAccepted?: boolean; privacyAcceptedAt?: string };
 }
 
 export interface DocTypeDef { key: string; label: string; help: string; expires: boolean; multiple: boolean }
@@ -93,8 +95,22 @@ export interface Supplier {
   documents: SupplierDocument[]; events: SupplierEvent[];
   /** Documenti applicabili a questo fornitore, con l'indicazione di quelli obbligatori. */
   docTypes: ResolvedDocType[];
+  lifecycle: Lifecycle; lifecycleReason: string; qualification: Qualification;
+  approvedAt: string | null;
+  /** Solo per lo staff: differenze rispetto ai dati approvati, possibili doppioni e controlli di conformità. */
+  changes: FieldChange[]; bankChanged: boolean; bankLetterAfterChange: boolean;
+  duplicates: DuplicateMatch[]; compliance: ComplianceCheck[]; complianceCheckedAt: string | null;
 }
-export type SupplierSummary = Omit<Supplier, "documents" | "events" | "data" | "docTypes"> & { country: string; legalName: string; documentCount: number };
+
+/** Stato operativo del fornitore, indipendente dal flusso di registrazione. */
+export type Lifecycle = "active" | "blocked" | "inactive" | "excluded";
+/** Qualifica documentale: "lapsed" = almeno un documento obbligatorio scaduto o mancante. */
+export type Qualification = "valid" | "expiring" | "lapsed" | "na";
+export interface FieldChange { field: string; label: string; before: string; after: string; bank: boolean }
+export interface DuplicateMatch { supplierId: number; name: string; status: SupplierStatus; lifecycle: Lifecycle; sapCode: string | null; fields: string[]; severe: boolean; confirmed: boolean }
+export type CheckStatus = "ok" | "warn" | "fail" | "todo" | "na";
+export interface ComplianceCheck { key: string; label: string; status: CheckStatus; detail: string }
+export type SupplierSummary = Omit<Supplier, "documents" | "events" | "data" | "docTypes" | "changes" | "duplicates" | "compliance" | "complianceCheckedAt" | "bankLetterAfterChange"> & { country: string; legalName: string; documentCount: number; duplicate: boolean };
 
 export interface BuyingCompany { code: string; name: string; sapCompanyCode: string; purchOrg: string }
 export interface IndustryCode { code: string; name: string; buyerIds: number[] }
@@ -129,7 +145,7 @@ export interface MonitorItem {
 export interface MonitorData { items: MonitorItem[]; policy: ReminderPolicy; emailConfigured: boolean; lastRunAt: string | null }
 
 export interface InviteInput { email: string; name: string; companyCodes: string[]; industryCode: string; customerCode?: string; referenceBuyerId: number }
-export type VendorAction = "approve" | "reject" | "request_revision" | "set_payment_terms" | "change_status";
+export type VendorAction = "approve" | "reject" | "request_revision" | "set_payment_terms" | "change_status" | "block" | "deactivate" | "exclude" | "reactivate" | "sanctions_manual";
 
 // ─── Task ────────────────────────────────────────────────────
 export type TaskSource = "contract" | "rda" | "manual";

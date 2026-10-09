@@ -3,7 +3,7 @@ import type { Queryable } from "./_db.js";
 // Email del portale. Ogni messaggio viene salvato nella tabella `notifications`; l'invio reale avviene se sono
 // configurati RESEND_API_KEY e MAIL_FROM (servizio Resend), altrimenti lo stato resta "logged" (non inviato).
 
-export type Template = "invitation" | "new_registration" | "supplier_modified" | "revision_requested" | "rejection" | "buyer_approved" | "vendor_created" | "sap_code" | "doc_reminder" | "doc_unresponsive";
+export type Template = "invitation" | "new_registration" | "supplier_modified" | "revision_requested" | "rejection" | "buyer_approved" | "vendor_created" | "sap_code" | "doc_reminder" | "doc_unresponsive" | "bank_change_alert";
 export type Lang = "IT" | "EN";
 
 interface Vars { items?: string; name?: string; link?: string; reason?: string; sapCode?: string; expires?: string; companies?: string }
@@ -48,6 +48,10 @@ const T: Record<Template, Record<Lang, (v: Vars) => { subject: string; body: str
   doc_unresponsive: {
     IT: v => ({ subject: `Fornitore che non risponde ai reminder: ${v.name}`, body: `Il fornitore ${v.name} non ha aggiornato i documenti nonostante i solleciti:\n\n${v.items}\n\nServe un tuo intervento (telefonata, contatto diretto o altra azione): ${v.link}` }),
     EN: v => ({ subject: `Supplier not answering reminders: ${v.name}`, body: `Supplier ${v.name} has not updated its documents despite the reminders:\n\n${v.items}\n\nYour action is needed (phone call, direct contact or other): ${v.link}` }),
+  },
+  bank_change_alert: {
+    IT: v => ({ subject: "Richiesta di modifica delle coordinate bancarie", body: `Gentile ${v.name},\n\nabbiamo ricevuto dal portale fornitori una richiesta di modifica delle coordinate bancarie della vostra azienda.\n\nSe la richiesta è stata fatta da voi non serve fare nulla: vi contatteremo per una verifica prima di applicarla.\nSe NON l'avete fatta voi, rispondete subito a questa email: potrebbe trattarsi di un tentativo di frode.` }),
+    EN: v => ({ subject: "Bank details change request", body: `Dear ${v.name},\n\nwe received through the supplier portal a request to change your company's bank details.\n\nIf you made this request, no action is needed: we will contact you to verify it before applying it.\nIf you did NOT make it, reply to this email immediately: it could be a fraud attempt.` }),
   },
 };
 

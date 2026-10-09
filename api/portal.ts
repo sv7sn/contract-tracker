@@ -3,7 +3,8 @@ import { deleteDocuments, handleUploadPresigned, issueSignedToken, openDocument 
 import { createSessionToken, sessionCookie } from "./_crypto.js";
 import { checkStoredDocument } from "./_docai.js";
 import { monitorData, remindSupplier, runReminders } from "./_docs.js";
-import { ensureSchema } from "./_db.js";
+import { ensureSchema, getPool } from "./_db.js";
+import { runExternalChecks } from "./_governance.js";
 import { createManualTask, deleteManualTask, getTask, importSapFile, listTasks, taskSummary, updateTask } from "./_tasks.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
@@ -15,7 +16,7 @@ import { DOC_EXTENSIONS, DOC_MIME, MAX_DOC_BYTES, SUPPLIER_FILE_PATH_RE } from "
 import type { VendorAction } from "../src/types.ts";
 
 // Router unico del portale fornitori (un solo file = una sola funzione Vercel). Si sceglie l'operazione con ?op=...
-const VENDOR_ACTIONS: VendorAction[] = ["approve", "reject", "request_revision", "set_payment_terms", "change_status"];
+const VENDOR_ACTIONS: VendorAction[] = ["approve", "reject", "request_revision", "set_payment_terms", "change_status", "block", "deactivate", "exclude", "reactivate", "sanctions_manual"];
 const STAFF = ["manager", "buyer", "finance"] as const;
 
 function originOf(request: Request) {
@@ -157,6 +158,11 @@ async function handle(request: Request): Promise<Response> {
       return json({ supplier: await getVendor(user, owner) });
     }
     if (op === "vendors" && method === "GET") return json({ vendors: await listVendors(user) });
+    if (op === "vendor-checks" && method === "POST") {
+      const id = idOf(url); await getVendor(user, id);
+      await runExternalChecks(getPool(), id);
+      return json({ supplier: await getVendor(user, id) });
+    }
     if (op === "vendor" && method === "GET") return json({ supplier: await getVendor(user, idOf(url)) });
     if (op === "config" && method === "GET") return json({ config: await loadConfig() });
     if (op === "config-save" && method === "POST") {
