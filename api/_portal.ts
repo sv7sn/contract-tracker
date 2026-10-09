@@ -9,6 +9,7 @@ import { accountGroup, COUNTRIES, MAX_DOC_BYTES, missingRequired, resolveDocType
 import { canInviteSuppliers } from "./_permissions.js";
 import { visibleWhere } from "./_access.js";
 import { docConfig, loadCatalog, loadPolicy, saveDocType, savePolicy } from "./_docs.js";
+import { loadRdaConfig, saveRda } from "./_tasks.js";
 
 const bad = (msg: string): never => { throw new HttpError(400, msg); };
 const INVITE_DAYS = Number(process.env.INVITE_DAYS) > 0 ? Number(process.env.INVITE_DAYS) : 14;
@@ -76,7 +77,7 @@ export async function loadConfig(): Promise<PortalConfig> {
   const industryCodes: IndustryCode[] = i.rows.map(r => ({ code: r.code, name: r.name, buyerIds: ib.rows.filter(x => x.industry_code === r.code).map(x => x.user_id) }));
   const paymentTerms: PaymentTerm[] = pt.rows.map(r => ({ code: r.code, label: r.label }));
   const cat = await loadCatalog(db);
-  return { companies, industryCodes, paymentTerms, sap: st.rows[0]?.value as SapSettings, buyers: b.rows, ...docConfig(cat, await loadPolicy(db)) };
+  return { companies, industryCodes, paymentTerms, sap: st.rows[0]?.value as SapSettings, buyers: b.rows, ...docConfig(cat, await loadPolicy(db)), rda: await loadRdaConfig(db) };
 }
 
 const CODE_RE = /^[A-Za-z0-9_.-]{1,20}$/;
@@ -84,6 +85,7 @@ export async function saveConfig(entity: string, action: string, item: Row): Pro
   const db = getPool();
   const code = str(item?.code, 20);
   const del = action === "delete";
+  if (entity === "rda" || entity === "pgr") return saveRda(entity, item);
   if (entity === "doc_type") return saveDocType(action, item);
   if (entity === "reminders") return savePolicy(item);
   if (entity === "sap") {
