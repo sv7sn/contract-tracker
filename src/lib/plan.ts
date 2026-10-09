@@ -12,6 +12,8 @@ export const PLANNING_STEPS: StepTemplate[] = [
   { id: "expiry",      daysBeforeEnd: 0,  icon: "expiry",  label: "Scadenza",                actor: "system" },
 ];
 export const stepTemplate = (id: string) => PLANNING_STEPS.find(s => s.id === id)!;
+/** Etichetta dell'attività: con il preavviso l'ultima tappa è il termine per la disdetta, non la scadenza. */
+export const stepLabel = (id: string, c?: { noticeDate: string } | null) => id === "expiry" && c?.noticeDate ? "Termine disdetta" : stepTemplate(id).label;
 
 export const BO_DECISIONS = ["Rinnovare alle stesse condizioni", "Rinnovare con rinegoziazione", "Mettere in gara (RFQ/RFP)", "Prorogare temporaneamente", "Cessare l'attività"];
 export const BO_COLORS: Record<string, { bg: string; color: string }> = {

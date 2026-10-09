@@ -28,7 +28,7 @@ export function BOFormModal({ contract, currentUser, onSubmit, onClose }: { cont
               <div style={{ ...font, fontSize: 14, color: "#fff", fontWeight: 700 }}>Decisione richiesta: {contract.supplier}</div>
             </div>
             <p style={{ ...sans, fontSize: 13, color: C.text, lineHeight: 1.6, marginBottom: 16 }}>
-              Il contratto con <b>{contract.supplier}</b> scade il <b>{fmtDate(contract.end)}</b>.<br />
+              Il contratto con <b>{contract.supplier}</b> scade il <b>{fmtDate(contract.end)}</b>{contract.noticeDate && <> (disdetta entro il <b>{fmtDate(contract.noticeDate)}</b>)</>}.<br />
               Valore: <b>{fmt(contract.value, contract.currency)}</b>
             </p>
             <div style={{ marginBottom: 14 }}>
@@ -80,15 +80,19 @@ const TYPES = ["Fornitura","Servizi","AMS","SaaS","Licenza","Framework","NDA","A
 const CURRENCIES = ["EUR","USD","GBP","CNY","CHF"];
 const RENEWAL_OPTIONS = ["In negoziazione","Rinnovo automatico","Da rescindere","Da rilanciare a gara","Non definito"];
 
-type FormState = Omit<ContractData, "value"> & { value: string | number };
-type FormErrors = Partial<Record<"supplier" | "object" | "end" | "boEmail" | "file", string>>;
+type FormState = Omit<ContractData, "value" | "noticeDays"> & { value: string | number; noticeDays: string | number | null };
+type FormErrors = Partial<Record<"supplier" | "object" | "end" | "boEmail" | "file" | "notice", string>>;
+
+/** Data limite di disdetta = scadenza meno i giorni di preavviso. */
+const minusDays = (iso: string, days: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - days); return d.toISOString().slice(0, 10); };
+const daysBetween = (from: string, to: string) => Math.round((new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / 864e5);
 type TextField = "supplier" | "object" | "country" | "boEmail" | "category" | "type" | "currency" | "renewal";
 
 export function ContractForm({ initial, currentUser, users, canUpload, onSave, onClose }: { initial: Contract | null; currentUser: User; users: User[]; canUpload: boolean; onSave: (data: ContractData) => void; onClose: () => void }) {
   const isBuyer = currentUser.role === "buyer";
   const owners = users.filter(u => u.active && (u.role === "buyer" || u.role === "manager")).map(u => u.name);
   if (!owners.includes(currentUser.name) && !isBuyer) owners.unshift(currentUser.name);
-  const [form, setForm] = useState<FormState>(initial || { supplier: "", object: "", category: "", country: "Italia", value: "", currency: "EUR", start: "", end: "", owner: isBuyer ? currentUser.name : "", boEmail: "", renewal: "Non definito", type: "Servizi", notes: "", ceased: false, fileName: null, filePath: null });
+  const [form, setForm] = useState<FormState>(initial || { supplier: "", object: "", category: "", country: "Italia", value: "", currency: "EUR", start: "", end: "", owner: isBuyer ? currentUser.name : "", boEmail: "", renewal: "Non definito", type: "Servizi", notes: "", ceased: false, fileName: null, filePath: null, noticeDays: null, noticeDate: "" });
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   // `file` è presente solo per un documento scelto ora (da caricare); `path` per uno già salvato.
@@ -96,12 +100,20 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
   const fileRef = useRef<HTMLInputElement>(null);
   const up = <K extends keyof FormState>(k: K) => (v: FormState[K]) => setForm(f => ({ ...f, [k]: v }));
   const isNew = !initial;
+  // Giorni e data limite restano allineati: cambiando uno (o la scadenza) si ricalcola l'altro.
+  const setNoticeDays = (v: string) => setForm(f => ({ ...f, noticeDays: v === "" ? null : v, noticeDate: v === "" ? "" : f.end && Number(v) > 0 ? minusDays(f.end, Number(v)) : f.noticeDate }));
+  const setNoticeDate = (v: string) => setForm(f => ({ ...f, noticeDate: v, noticeDays: v && f.end && daysBetween(v, f.end) > 0 ? daysBetween(v, f.end) : v ? f.noticeDays : null }));
+  const setEnd = (v: string) => setForm(f => ({ ...f, end: v, noticeDate: v && f.noticeDays ? minusDays(v, Number(f.noticeDays)) : f.noticeDate }));
   const validate = () => {
     const e: FormErrors = {};
     if (!form.supplier.trim()) e.supplier = "Obbligatorio";
     if (!form.object.trim()) e.object = "Obbligatorio";
     if (!form.end) e.end = "Obbligatorio";
     else if (form.start && form.end < form.start) e.end = "La scadenza deve essere successiva alla data di inizio";
+    const nd = form.noticeDays === null || form.noticeDays === "" ? null : Number(form.noticeDays);
+    if (nd !== null && (!Number.isInteger(nd) || nd < 1 || nd > 1095)) e.notice = "Giorni di preavviso non validi (1–1095)";
+    else if (form.noticeDate && form.end && form.noticeDate > form.end) e.notice = "La data limite di disdetta deve precedere la scadenza";
+    else if (nd !== null && !form.noticeDate) e.notice = "Indica la data limite di disdetta";
     if (form.boEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.boEmail)) e.boEmail = "Email non valida";
     if (isNew && !attachedFile) e.file = "Documento obbligatorio";
     setErrors(e);
@@ -119,7 +131,7 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
         setBusy(false);
       }
     }
-    onSave({ ...form, owner: form.owner || currentUser.name, value: parseFloat(String(form.value).replace(",", ".")) || 0, fileName: attachedFile?.name ?? null, filePath });
+    onSave({ ...form, owner: form.owner || currentUser.name, value: parseFloat(String(form.value).replace(",", ".")) || 0, noticeDays: form.noticeDays === null || form.noticeDays === "" ? null : Number(form.noticeDays), noticeDate: form.noticeDate || "", fileName: attachedFile?.name ?? null, filePath });
   };
   const fi = (key: TextField, ph: string, type = "text") => <input id={`f-${key}`} value={form[key]} onChange={e => up(key)(e.target.value)} placeholder={ph} type={type} style={{ ...iStyle, borderColor: (errors as Record<string, string | undefined>)[key] ? C.red : C.border }} />;
   const sel = (key: TextField, opts: string[]) => <select id={`f-${key}`} value={form[key]} onChange={e => up(key)(e.target.value)} style={iStyle}><option value="">— Seleziona —</option>{opts.map(o => <option key={o}>{o}</option>)}</select>;
@@ -139,8 +151,13 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
         <div style={{ ...two, gridTemplateColumns: "2fr 1fr" }}><Field label="Valore" htmlFor="f-value"><input id="f-value" value={form.value} onChange={e => up("value")(e.target.value)} type="number" min="0" style={iStyle} /></Field><Field label="Valuta" htmlFor="f-currency">{sel("currency", CURRENCIES)}</Field></div>
         <div style={two}>
           <Field label="Inizio" htmlFor="f-start"><input id="f-start" value={form.start} onChange={e => up("start")(e.target.value)} type="date" style={iStyle} /></Field>
-          <Field label="Scadenza" req error={errors.end} htmlFor="f-end"><input id="f-end" value={form.end} onChange={e => up("end")(e.target.value)} type="date" style={{ ...iStyle, borderColor: errors.end ? C.red : C.border }} /></Field>
+          <Field label="Scadenza" req error={errors.end} htmlFor="f-end"><input id="f-end" value={form.end} onChange={e => setEnd(e.target.value)} type="date" style={{ ...iStyle, borderColor: errors.end ? C.red : C.border }} /></Field>
         </div>
+        <div style={two}>
+          <Field label="Preavviso di disdetta (giorni)" htmlFor="f-notice-days"><input id="f-notice-days" value={form.noticeDays ?? ""} onChange={e => setNoticeDays(e.target.value)} type="number" min="1" placeholder="Nessun preavviso" style={{ ...iStyle, borderColor: errors.notice ? C.red : C.border }} /></Field>
+          <Field label="Disdetta entro il" error={errors.notice} htmlFor="f-notice-date"><input id="f-notice-date" value={form.noticeDate} onChange={e => setNoticeDate(e.target.value)} type="date" style={{ ...iStyle, borderColor: errors.notice ? C.red : C.border }} /></Field>
+        </div>
+        {form.noticeDate && form.end && <div style={{ ...sans, fontSize: 12, color: C.muted, margin: "-4px 0 12px" }}>Con il preavviso il piano di rinnovo e gli avvisi si contano dalla data limite di disdetta, non dalla scadenza.</div>}
         <div style={two}>
           <Field label="Paese" htmlFor="f-country">{fi("country", "Es. Italia")}</Field>
           <Field label="Contract Owner" htmlFor="f-owner">

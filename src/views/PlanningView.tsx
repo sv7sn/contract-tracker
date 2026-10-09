@@ -1,8 +1,8 @@
 import { useState } from "react";
 import type { AuditLogs, Contract, PlanStep, Plans, StepTemplate, User } from "../types.ts";
 import { C, font, radius, sans, URGENCY_COLORS } from "../theme.ts";
-import { daysToExpiry, fmtDate, urgency } from "../lib/format.ts";
-import { BO_COLORS, planProgress, stepTemplate } from "../lib/plan.ts";
+import { daysToDeadline, fmtDate, urgency } from "../lib/format.ts";
+import { BO_COLORS, planProgress, stepLabel, stepTemplate } from "../lib/plan.ts";
 import { canEditContract, canRespondBO } from "../permissions.ts";
 import { AuditTrail, Avatar, Card, CardTitle, DaysChip, EmptyState, Grid, StepIcon } from "../components/ui.tsx";
 import { StepDateEditor } from "../components/Modals.tsx";
@@ -21,7 +21,7 @@ export function PlanningView({ contracts, plans, auditLogs, currentUser, onSendB
   const [editingStep, setEditingStep] = useState<{ step: PlanStep; tmpl: StepTemplate } | null>(null);
 
   // I contratti arrivano già filtrati dal server in base al ruolo: qui si tengono solo quelli in scadenza entro 120 giorni.
-  const sorted = contracts.filter(c => !c.ceased && daysToExpiry(c.end) <= 120).sort((a, b) => daysToExpiry(a.end) - daysToExpiry(b.end));
+  const sorted = contracts.filter(c => !c.ceased && daysToDeadline(c) <= 120).sort((a, b) => daysToDeadline(a) - daysToDeadline(b));
   const contract = selectedId !== null ? contracts.find(c => c.id === selectedId) : undefined;
 
   if (contract) {
@@ -38,7 +38,7 @@ export function PlanningView({ contracts, plans, auditLogs, currentUser, onSendB
             <div style={{ ...sans, fontSize: 13, color: "rgba(255,255,255,.65)", marginTop: 2 }}>{contract.object}</div>
           </div>
           <div style={{ display: "flex", gap: 28, flexWrap: "wrap" }}>
-            {[["Scadenza", fmtDate(contract.end)], ["Buyer", contract.owner || "—"], ["Avanzamento", `${prog}%`]].map(([k, v]) => <div key={k}><div style={{ ...sans, fontSize: 11, color: "rgba(255,255,255,.5)", fontWeight: 600 }}>{k}</div><div className="tabular" style={{ ...sans, fontSize: 15, fontWeight: 650, marginTop: 2 }}>{v}</div></div>)}
+            {[["Scadenza", fmtDate(contract.end)], ...(contract.noticeDate ? [["Disdetta entro", fmtDate(contract.noticeDate)]] : []), ["Buyer", contract.owner || "—"], ["Avanzamento", `${prog}%`]].map(([k, v]) => <div key={k}><div style={{ ...sans, fontSize: 11, color: "rgba(255,255,255,.5)", fontWeight: 600 }}>{k}</div><div className="tabular" style={{ ...sans, fontSize: 15, fontWeight: 650, marginTop: 2 }}>{v}</div></div>)}
           </div>
         </div>
 
@@ -59,7 +59,7 @@ export function PlanningView({ contracts, plans, auditLogs, currentUser, onSendB
                   </div>
                   <div style={{ flex: 1, paddingBottom: isLast ? 0 : 16, minWidth: 0 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
-                      <div style={{ ...sans, fontSize: 14, fontWeight: 650, color: done ? C.green : pending ? C.yellow : C.text }}>{tmpl.label}</div>
+                      <div style={{ ...sans, fontSize: 14, fontWeight: 650, color: done ? C.green : pending ? C.yellow : C.text }}>{stepLabel(step.stepId, contract)}</div>
                       <button onClick={() => isEditable && setEditingStep({ step, tmpl })} title={isEditable ? "Cambia la data" : undefined} style={{ ...sans, display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: isEditable ? C.accent : C.subtle, background: "none", border: "none", cursor: isEditable ? "pointer" : "default", padding: 0, fontWeight: step.modified ? 700 : 500 }}>
                         {isEditable && <Pencil size={12} />}<span className="tabular">{fmtDate(step.scheduledDate)}</span>
                       </button>
@@ -102,7 +102,7 @@ export function PlanningView({ contracts, plans, auditLogs, currentUser, onSendB
           const prog = planProgress(plan);
           const next = plan.find(s => s.status !== "done" && s.stepId !== "expiry");
           const nextTmpl = next ? stepTemplate(next.stepId) : null;
-          const days = daysToExpiry(c.end);
+          const days = daysToDeadline(c);
           const u = urgency(c);
           const boStep = plan.find(s => s.stepId === "bo_response");
           return (

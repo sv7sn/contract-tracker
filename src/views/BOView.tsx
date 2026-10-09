@@ -1,6 +1,6 @@
 import type { Contract, Plans, User } from "../types.ts";
 import { C, font, radius, sans, URGENCY_COLORS } from "../theme.ts";
-import { daysToExpiry, fmtDate, urgency } from "../lib/format.ts";
+import { daysToDeadline, fmtDate, urgency } from "../lib/format.ts";
 import { BO_COLORS } from "../lib/plan.ts";
 import { Avatar, Card, DaysChip, EmptyState, Grid, StatCard } from "../components/ui.tsx";
 import { CheckCircle2, ClipboardCheck, FileText, Hourglass } from "../components/icons.tsx";
@@ -30,9 +30,9 @@ export function BOView({ contracts, plans, currentUser, onOpenBOForm }: { contra
               <Card key={c.id} style={{ borderLeft: `4px solid ${C.yellow}`, borderRadius: radius.md }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
                   <div style={{ minWidth: 0 }}><div style={{ ...sans, fontSize: 14.5, fontWeight: 650, color: C.text }}>{c.supplier}</div><div style={{ ...sans, fontSize: 12.5, color: C.muted, marginTop: 1 }}>{c.object}</div></div>
-                  <DaysChip days={daysToExpiry(c.end)} level={urgency(c)} />
+                  <DaysChip days={daysToDeadline(c)} level={urgency(c)} />
                 </div>
-                <div style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "12px 0" }}>Scade il <b style={{ color: C.text }}>{fmtDate(c.end)}</b></div>
+                <div style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "12px 0" }}>Scade il <b style={{ color: C.text }}>{fmtDate(c.end)}</b>{c.noticeDate && <> · disdetta entro <b style={{ color: C.text }}>{fmtDate(c.noticeDate)}</b></>}</div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, ...sans, fontSize: 12.5, color: C.muted }}><Avatar name={c.owner || "?"} size={24} />Buyer: {c.owner}</div>
                   <button onClick={() => onOpenBOForm(c)} style={{ ...sans, display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, cursor: "pointer", fontSize: 13, boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><ClipboardCheck size={16} />Rispondi</button>
@@ -48,7 +48,7 @@ export function BOView({ contracts, plans, currentUser, onOpenBOForm }: { contra
           <h3 style={{ ...font, fontSize: 15, margin: "0 0 12px", color: C.text }}>I tuoi contratti</h3>
           <Grid min={340} gap={12}>
             {others.map(c => {
-              const days = daysToExpiry(c.end); const u = urgency(c);
+              const days = daysToDeadline(c); const u = urgency(c);
               const boStep = (plans[c.id] || []).find(s => s.stepId === "bo_response");
               return (
                 <Card key={c.id} style={{ borderLeft: `4px solid ${URGENCY_COLORS[u]}`, borderRadius: radius.md, padding: 16 }}>

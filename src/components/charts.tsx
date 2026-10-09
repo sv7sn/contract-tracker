@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { Contract } from "../types.ts";
 import { C, CHART, font, radius, sans, shadow } from "../theme.ts";
-import { daysToExpiry, NOW } from "../lib/format.ts";
+import { daysToDeadline, keyDate, NOW } from "../lib/format.ts";
 import { BarChart3, Table2 } from "./icons.tsx";
 
 // Grafici disegnati a mano (nessuna libreria): segni sottili (max 24 px, 4 px arrotondati sul lato dei dati),
@@ -51,8 +51,8 @@ const niceMax = (n: number) => (n <= 4 ? 4 : n <= 8 ? 8 : Math.ceil(n / 4) * 4);
 export function ExpiryColumns({ contracts }: { contracts: Contract[] }) {
   const active = contracts.filter(c => !c.ceased);
   const months = Array.from({ length: 12 }, (_, i) => new Date(NOW.getFullYear(), NOW.getMonth() + i, 1));
-  const data = months.map(m => ({ m, items: active.filter(c => { const e = new Date(c.end); return e.getFullYear() === m.getFullYear() && e.getMonth() === m.getMonth() && daysToExpiry(c.end) >= 0; }) }));
-  const overdue = active.filter(c => daysToExpiry(c.end) < 0).length;
+  const data = months.map(m => ({ m, items: active.filter(c => { const e = new Date(keyDate(c)); return e.getFullYear() === m.getFullYear() && e.getMonth() === m.getMonth() && daysToDeadline(c) >= 0; }) }));
+  const overdue = active.filter(c => daysToDeadline(c) < 0).length;
   const max = niceMax(Math.max(...data.map(d => d.items.length), 1));
   const peak = Math.max(...data.map(d => d.items.length));
   const [hover, setHover] = useState<number | null>(null);

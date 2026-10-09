@@ -1,6 +1,6 @@
 import type { AuditEntry, Contract, User } from "../types.ts";
 import { C, font, radius, sans, URGENCY_COLORS } from "../theme.ts";
-import { daysToExpiry, fmt, fmtDate, NOW, urgency } from "../lib/format.ts";
+import { daysToDeadline, fmt, fmtDate, NOW, urgency } from "../lib/format.ts";
 import { canDeleteContract, canEditContract } from "../permissions.ts";
 import { AuditTrail, Avatar, Card, DaysChip, Grid, RenewalBadge } from "../components/ui.tsx";
 import { AlertTriangle, ArrowLeft, Download, ExternalLink, FileText, Pencil, StickyNote, Trash2 } from "../components/icons.tsx";
@@ -11,7 +11,7 @@ const fact = (label: string, value: React.ReactNode) => (
 );
 
 export function ContractDetail({ contract, auditLog, currentUser, canOpenDocuments, onBack, onEdit, onDelete }: { contract: Contract; auditLog: AuditEntry[]; currentUser: User; canOpenDocuments: boolean; onBack: () => void; onEdit: () => void; onDelete: () => void }) {
-  const u = urgency(contract); const days = daysToExpiry(contract.end);
+  const u = urgency(contract); const days = daysToDeadline(contract);
   const startMs = new Date(contract.start).getTime(), endMs = new Date(contract.end).getTime();
   const prog = contract.start && endMs > startMs ? Math.min(100, Math.max(0, ((NOW.getTime() - startMs) / (endMs - startMs)) * 100)) : 0;
   const uc = URGENCY_COLORS[u];
@@ -39,6 +39,7 @@ export function ContractDetail({ contract, auditLog, currentUser, canOpenDocumen
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 20, marginTop: 24 }}>
           {fact("Valore", <span className="tabular" style={{ ...font, fontSize: 26, fontWeight: 700 }}>{fmt(contract.value, contract.currency)}</span>)}
           {fact("Scadenza", <span className="tabular">{fmtDate(contract.end)}</span>)}
+          {contract.noticeDate && fact(`Disdetta entro${contract.noticeDays ? ` (${contract.noticeDays} gg)` : ""}`, <span className="tabular">{fmtDate(contract.noticeDate)}</span>)}
           {fact("Inizio", <span className="tabular">{contract.start ? fmtDate(contract.start) : "—"}</span>)}
         </div>
       </div>

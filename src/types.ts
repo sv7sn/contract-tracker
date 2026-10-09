@@ -10,6 +10,10 @@ export interface Contract {
   id: number; supplier: string; object: string; category: string; country: string;
   value: number; currency: string; start: string; end: string; owner: string; boEmail: string;
   renewal: string; type: string; notes: string; ceased: boolean;
+  /** Giorni di preavviso per la disdetta (null se il contratto non lo prevede). */
+  noticeDays: number | null;
+  /** Data limite per inviare la disdetta ("" se non c'è preavviso): se presente il piano si conta da qui. */
+  noticeDate: string;
   /** Nome del file mostrato all'utente. */
   fileName: string | null;
   /** Percorso del documento nell'archivio privato; null se il file non è stato salvato. */
