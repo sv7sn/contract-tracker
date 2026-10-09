@@ -1,12 +1,12 @@
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import type { AiCheck, SupplierStatus } from "../types.ts";
+import type { AiCheck, Lifecycle, Qualification, SupplierStatus } from "../types.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, sans } from "../theme.ts";
 import { docValidity } from "../supplierRules.ts";
 import { fmtDate } from "../lib/format.ts";
 import { AlertCircle, AlertTriangle, CheckCircle2, Clock, Download, ExternalLink, Hourglass, Loader2, Mail, X } from "./icons.tsx";
 import { supplierDocUrl } from "../api.ts";
-import { STATUS_STYLE } from "../lib/vendors.ts";
+import { LIFECYCLE_STYLE, STATUS_STYLE } from "../lib/vendors.ts";
 
 export function StatusBadge({ status, update }: { status: SupplierStatus; update?: boolean }) {
   const s = STATUS_STYLE[status];
@@ -91,4 +91,17 @@ export { Hourglass, Clock };
 /** Le finestre vanno montate su <body>: dentro la pagina (che ha le animazioni) la barra in alto finirebbe sopra e ne coprirebbe la parte superiore. */
 export function Portal({ children }: { children: ReactNode }) {
   return createPortal(children, document.body);
+}
+
+const pill = (label: string, color: string, bg: string) => <span style={{ ...sans, display: "inline-flex", alignItems: "center", background: bg, color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}>{label}</span>;
+/** Segnalazioni sintetiche sul fornitore: stato operativo, qualifica scaduta, possibile doppione. */
+export function VendorFlags({ lifecycle, qualification, duplicate }: { lifecycle: Lifecycle; qualification: Qualification; duplicate?: boolean }) {
+  return (
+    <>
+      {lifecycle !== "active" && pill(LIFECYCLE_STYLE[lifecycle].label, LIFECYCLE_STYLE[lifecycle].color, LIFECYCLE_STYLE[lifecycle].bg)}
+      {qualification === "lapsed" && pill("Qualifica scaduta", C.red, C.redBg)}
+      {qualification === "expiring" && pill("Qualifica in scadenza", C.yellow, C.yellowBg)}
+      {duplicate && pill("Possibile doppione", C.purple, C.purpleBg)}
+    </>
+  );
 }

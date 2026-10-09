@@ -72,10 +72,11 @@ export const portalApi = {
   // Staff
   vendors: () => request<{ vendors: SupplierSummary[] }>(portal("vendors")).then(r => r.vendors),
   vendor: (id: number) => request<{ supplier: Supplier }>(portal("vendor", `&id=${id}`)).then(r => r.supplier),
-  invite: (input: InviteInput) => post<{ supplier: Supplier; link: string }>(portal("vendor-invite"), input),
+  invite: (input: InviteInput & { confirmDuplicates?: boolean }) => post<{ supplier: Supplier; link: string }>(portal("vendor-invite"), input),
   reinvite: (id: number) => post<{ supplier: Supplier; link: string }>(portal("vendor-reinvite", `&id=${id}`), {}),
   deleteInvite: (id: number) => request<{ ok: true }>(portal("vendor-invite", `&id=${id}`), { method: "DELETE" }),
-  action: (id: number, action: VendorAction, extra: { reason?: string; paymentTerms?: string; status?: string } = {}) => post<{ supplier: Supplier }>(portal("vendor-action", `&id=${id}`), { action, ...extra }).then(r => r.supplier),
+  action: (id: number, action: VendorAction, extra: Record<string, unknown> = {}) => post<{ supplier: Supplier }>(portal("vendor-action", `&id=${id}`), { action, ...extra }).then(r => r.supplier),
+  vendorChecks: (id: number) => post<{ supplier: Supplier }>(portal("vendor-checks", `&id=${id}`), {}).then(r => r.supplier),
   checkDocument: (id: number) => request<{ supplier: Supplier }>(portal("supplier-doc-check", `&id=${id}`), { method: "POST", body: "{}" }).then(r => r.supplier),
   recheckDocument: (id: number) => request<{ supplier: Supplier }>(portal("doc-check", `&id=${id}`), { method: "POST", body: "{}" }).then(r => r.supplier),
   monitor: () => request<MonitorData>(portal("doc-monitor")),

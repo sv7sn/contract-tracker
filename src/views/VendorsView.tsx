@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { InviteInput, PortalConfig, Supplier, SupplierStatus, SupplierSummary, User, VendorAction } from "../types.ts";
+import type { DuplicateMatch, Lifecycle, InviteInput, PortalConfig, Supplier, SupplierStatus, SupplierSummary, User, VendorAction } from "../types.ts";
 import { ApiError, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmtDate } from "../lib/format.ts";
 import { countryName } from "../supplierRules.ts";
 import { Avatar, AuditTrail, Card, CardTitle, EmptyState, Field, Grid, StatCard } from "../components/ui.tsx";
 import { CheckCircle2, Clock, Copy, FileCheck2, Hourglass, Loader2, Mail, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Users, Ban, AlertTriangle } from "../components/icons.tsx";
-import { AiResult, CloseButton, DocLink, KV, Notice, ReasonDialog, StatusBadge, ValidityChip , Portal } from "../components/vendorUi.tsx";
-import { fmtSize, STATUS_STYLE, supplierTimeline } from "../lib/vendors.ts";
+import { AiResult, VendorFlags, CloseButton, DocLink, KV, Notice, ReasonDialog, StatusBadge, ValidityChip , Portal } from "../components/vendorUi.tsx";
+import { CHECK_STYLE, fmtSize, STATUS_STYLE, supplierTimeline } from "../lib/vendors.ts";
 import { Summary } from "./SupplierPortal.tsx";
 
 interface Props { currentUser: User; notify: (m: string) => void; onSessionExpired: () => void }
@@ -18,7 +18,7 @@ export function VendorsView({ currentUser, notify, onSessionExpired }: Props) {
   const [vendors, setVendors] = useState<SupplierSummary[] | null>(null);
   const [config, setConfig] = useState<PortalConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<SupplierStatus | "all">("all");
+  const [filter, setFilter] = useState<SupplierStatus | "all" | "lapsed" | "flags" | "dups">("all");
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<number | null>(null);
   const [inviting, setInviting] = useState(false);
@@ -42,25 +42,27 @@ export function VendorsView({ currentUser, notify, onSessionExpired }: Props) {
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
-    for (const v of vendors ?? []) c[v.status] = (c[v.status] ?? 0) + 1;
+    for (const v of vendors ?? []) { c[v.status] = (c[v.status] ?? 0) + 1; if (v.qualification === "lapsed") c.lapsed = (c.lapsed ?? 0) + 1; }
     return c;
   }, [vendors]);
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return (vendors ?? []).filter(v => (filter === "all" || v.status === filter) && (!q || [v.name, v.legalName, v.email, v.sapCode ?? "", v.referenceBuyerName].some(x => x.toLowerCase().includes(q))))
+    const match = (v: SupplierSummary) => filter === "all" || (filter === "lapsed" ? v.qualification === "lapsed" : filter === "flags" ? v.lifecycle !== "active" : filter === "dups" ? v.duplicate : v.status === filter);
+    return (vendors ?? []).filter(v => match(v) && (!q || [v.name, v.legalName, v.email, v.sapCode ?? "", v.referenceBuyerName].some(x => x.toLowerCase().includes(q))))
       .sort((a, b) => (a.status === mine ? -1 : 0) - (b.status === mine ? -1 : 0) || b.updatedAt.localeCompare(a.updatedAt));
   }, [vendors, filter, search, mine]);
 
   if (error) return <EmptyState icon={<AlertTriangle size={26} />} title="Impossibile caricare i fornitori" text={error} action={<button onClick={reload} style={{ ...btnGhost, padding: "9px 16px" }}>Riprova</button>} />;
   if (!vendors || !config) return <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Loader2 className="spin" size={26} color={C.subtle} /></div>;
 
-  const tiles: { key: SupplierStatus; label: string; icon: React.ReactNode; color: string; sub: string }[] = [
+  const tiles: { key: SupplierStatus | "lapsed"; label: string; icon: React.ReactNode; color: string; sub: string }[] = [
     { key: "pending", label: "Da verificare", icon: <Hourglass size={18} />, color: C.yellow, sub: "Passaggio del Buyer" },
     { key: "approved", label: "In attesa del Finance", icon: <FileCheck2 size={18} />, color: C.purple, sub: "Da registrare in SAP" },
     { key: "pending_revision", label: "Modifiche richieste", icon: <RotateCcw size={18} />, color: C.red, sub: "Attesa del fornitore" },
     { key: "registered", label: "Registrati in SAP", icon: <CheckCircle2 size={18} />, color: C.green, sub: "Codice assegnato" },
     { key: "invited", label: "Inviti aperti", icon: <Mail size={18} />, color: C.gray, sub: "Non ancora attivati" },
+    { key: "lapsed", label: "Qualifica scaduta", icon: <AlertTriangle size={18} />, color: C.red, sub: "Documenti obbligatori scaduti" },
   ];
 
   return (
@@ -86,9 +88,10 @@ export function VendorsView({ currentUser, notify, onSessionExpired }: Props) {
           <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca per nome, email, codice SAP…" aria-label="Cerca fornitori" style={{ ...iStyle, paddingLeft: 36 }} />
         </div>
-        <select value={filter} onChange={e => setFilter(e.target.value as SupplierStatus | "all")} aria-label="Filtra per stato" style={{ ...iStyle, width: "auto", minWidth: 190 }}>
+        <select value={filter} onChange={e => setFilter(e.target.value as typeof filter)} aria-label="Filtra per stato" style={{ ...iStyle, width: "auto", minWidth: 190 }}>
           <option value="all">Tutti gli stati</option>
           {(Object.keys(STATUS_STYLE) as SupplierStatus[]).map(k => <option key={k} value={k}>{STATUS_STYLE[k].label}</option>)}
+          <option value="lapsed">Qualifica scaduta</option><option value="flags">Bloccati, disattivati o esclusi</option><option value="dups">Possibili doppioni</option>
         </select>
       </div>
 
@@ -106,7 +109,7 @@ export function VendorsView({ currentUser, notify, onSessionExpired }: Props) {
                   <td style={{ minWidth: 220, boxShadow: v.status === mine ? `inset 3px 0 0 ${C.accent}` : undefined }}><div style={{ fontWeight: 650, color: C.text }}>{v.legalName || v.name}</div><div style={{ fontSize: 12, color: C.muted }}>{v.email}</div></td>
                   <td>{v.country ? countryName(v.country) : "—"}</td>
                   <td style={{ color: C.muted }}>{v.companyCodes.join(", ")}</td>
-                  <td><StatusBadge status={v.status} update={v.isUpdate} /></td>
+                  <td><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><StatusBadge status={v.status} update={v.isUpdate} /><VendorFlags lifecycle={v.lifecycle} qualification={v.qualification} duplicate={v.duplicate} /></div></td>
                   <td><div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}><Avatar name={v.referenceBuyerName || "?"} size={24} /><span style={{ color: C.muted }}>{v.referenceBuyerName || "—"}</span></div></td>
                   <td className="tabular" style={{ whiteSpace: "nowrap", color: C.muted }}>{fmtDate(v.updatedAt)}</td>
                   <td style={{ color: C.subtle, whiteSpace: "nowrap" }}>{v.documentCount > 0 && <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><Paperclip size={14} />{v.documentCount}</span>}</td>
@@ -121,7 +124,7 @@ export function VendorsView({ currentUser, notify, onSessionExpired }: Props) {
               <Card key={v.id} className="lift" onClick={() => setOpenId(v.id)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setOpenId(v.id); }} style={{ padding: 16, cursor: "pointer", borderRadius: radius.md }}>
                 <div style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text }}>{v.legalName || v.name}</div>
                 <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginBottom: 10, overflowWrap: "anywhere" }}>{v.email}</div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><StatusBadge status={v.status} update={v.isUpdate} /><span style={{ ...sans, fontSize: 12, color: C.subtle, marginLeft: "auto" }}>{fmtDate(v.updatedAt)}</span></div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><StatusBadge status={v.status} update={v.isUpdate} /><VendorFlags lifecycle={v.lifecycle} qualification={v.qualification} duplicate={v.duplicate} /><span style={{ ...sans, fontSize: 12, color: C.subtle, marginLeft: "auto" }}>{fmtDate(v.updatedAt)}</span></div>
               </Card>
             ))}
           </Grid>
@@ -140,11 +143,16 @@ function InviteModal({ config, currentUser, onClose, onDone, fail }: { config: P
   const [f, setF] = useState<InviteInput>({ name: "", email: "", companyCodes: config.companies.length === 1 ? [config.companies[0].code] : [], industryCode: "", customerCode: "", referenceBuyerId: myBuyer?.id ?? 0 });
   const [error, setError] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const [link, setLink] = useState<string | null>(null); const [copied, setCopied] = useState(false);
+  const [dups, setDups] = useState<DuplicateMatch[] | null>(null);
   const toggle = (code: string) => setF(x => ({ ...x, companyCodes: x.companyCodes.includes(code) ? x.companyCodes.filter(c => c !== code) : [...x.companyCodes, code] }));
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setError(null);
-    try { const r = await portalApi.invite({ ...f, customerCode: f.industryCode === "CT00" ? f.customerCode : "" }); setLink(r.link); onDone(); }
-    catch (err) { setError(fail(err)); setBusy(false); }
+    try { const r = await portalApi.invite({ ...f, customerCode: f.industryCode === "CT00" ? f.customerCode : "", confirmDuplicates: !!dups }); setLink(r.link); onDone(); }
+    catch (err) {
+      // Possibile doppione: si mostra l'elenco e si chiede una conferma esplicita.
+      if (err instanceof ApiError && err.status === 409 && Array.isArray(err.data.duplicates)) setDups(err.data.duplicates as DuplicateMatch[]);
+      setError(fail(err)); setBusy(false);
+    }
   };
   return (
     <div className="dialog-overlay" role="dialog" aria-modal="true">
@@ -179,9 +187,10 @@ function InviteModal({ config, currentUser, onClose, onDone, fail }: { config: P
               <select id="i-buy" required value={f.referenceBuyerId || ""} onChange={e => setF({ ...f, referenceBuyerId: Number(e.target.value) })} style={iStyle}><option value="">Seleziona…</option>{config.buyers.filter(b => b.active).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
             </Field>
             {error && <Notice kind="error">{error}</Notice>}
+            {dups && <DuplicateList dups={dups} />}
             <div style={{ display: "flex", gap: 10 }}>
               <button type="button" onClick={onClose} style={{ ...btnGhost, flex: 1 }}>Annulla</button>
-              <button type="submit" disabled={busy || f.companyCodes.length === 0} style={{ ...btnPrimary, flex: 2, opacity: busy || f.companyCodes.length === 0 ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Send size={16} />}Invia invito</button>
+              <button type="submit" disabled={busy || f.companyCodes.length === 0} style={{ ...btnPrimary, flex: 2, opacity: busy || f.companyCodes.length === 0 ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Send size={16} />}{dups ? "Non è un doppione: invita" : "Invia invito"}</button>
             </div>
           </>
         )}
@@ -197,8 +206,12 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
   const [terms, setTerms] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<"reject" | "revision" | null>(null);
+  const [dialog, setDialog] = useState<"reject" | "revision" | "block" | "deactivate" | "exclude" | "reactivate" | "sanctions" | null>(null);
   const [copied, setCopied] = useState(false);
+  // Conferme richieste dai controlli: doppioni (Buyer), verifica del conto e valutazione dei controlli (Finance).
+  const [dupOk, setDupOk] = useState(false); const [dupReason, setDupReason] = useState("");
+  const [bankContact, setBankContact] = useState(""); const [bankNote, setBankNote] = useState("");
+  const [ack, setAck] = useState(false); const [ackNote, setAckNote] = useState("");
 
   useEffect(() => {
     let off = false;
@@ -210,10 +223,15 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
   const isBuyerStep = currentUser.role === "manager" || currentUser.role === "buyer";
   const isFinanceStep = currentUser.role === "manager" || currentUser.role === "finance";
 
-  const run = async (label: string, action: VendorAction, extra: { reason?: string; paymentTerms?: string } = {}): Promise<string | null> => {
+  const run = async (label: string, action: VendorAction, extra: Record<string, unknown> = {}): Promise<string | null> => {
     setBusy(label); setError(null);
     try { const v = await portalApi.action(id, action, extra); setS(v); setTerms(v.paymentTerms ?? ""); onChanged(); setBusy(null); return null; }
     catch (err) { const m = fail(err); setError(m); setBusy(null); return m; }
+  };
+  const rerunChecks = async () => {
+    setBusy("checks"); setError(null);
+    try { setS(await portalApi.vendorChecks(id)); notify("Controlli eseguiti"); } catch (err) { setError(fail(err)); }
+    setBusy(null);
   };
   const recheck = async (docId: number) => {
     setBusy(`ai${docId}`); setError(null);
@@ -239,7 +257,7 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ ...font, fontSize: 20, fontWeight: 700, color: C.text, overflowWrap: "anywhere" }}>{s?.data.company?.legalName || s?.name || "…"}</div>
-            {s && <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}><StatusBadge status={s.status} update={s.isUpdate} /><span style={{ ...sans, fontSize: 12.5, color: C.muted }}>{s.email}</span></div>}
+            {s && <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}><StatusBadge status={s.status} update={s.isUpdate} /><VendorFlags lifecycle={s.lifecycle} qualification={s.qualification} duplicate={s.duplicates.some(d => !d.confirmed)} /><span style={{ ...sans, fontSize: 12.5, color: C.muted }}>{s.email}</span></div>}
           </div>
           <CloseButton onClick={onClose} />
         </div>
@@ -262,6 +280,8 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
             )}
 
             {s.rejectionReason && (s.status === "pending_revision" || s.status === "rejected") && <Notice kind={s.status === "rejected" ? "error" : "warn"}><b>{s.status === "rejected" ? "Motivo del rifiuto" : "Modifiche richieste"}:</b> {s.rejectionReason}</Notice>}
+            {s.lifecycle !== "active" && <Notice kind="error"><b>{s.lifecycle === "blocked" ? "Fornitore bloccato" : s.lifecycle === "inactive" ? "Fornitore disattivato" : "Fornitore escluso"}.</b> {s.lifecycleReason} {s.sapCode ? "Ricorda di bloccarlo anche in SAP." : ""}</Notice>}
+            {s.qualification === "lapsed" && <Notice kind="error"><b>Qualifica scaduta:</b> almeno un documento obbligatorio è scaduto o mancante. Il fornitore riceve i reminder; puoi sollecitarlo dalla pagina Scadenze.</Notice>}
             {s.isUpdate && s.status === "pending" && <Notice kind="info">Il fornitore, già registrato in SAP{s.sapCode ? ` (${s.sapCode})` : ""}, ha modificato dati o documenti: serve una nuova verifica.</Notice>}
 
             {s.status !== "invited" && (<>
@@ -273,8 +293,16 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
                   <Field label="Condizioni di pagamento" req htmlFor="v-terms">
                     <select id="v-terms" value={terms} onChange={e => setTerms(e.target.value)} style={iStyle}><option value="">Seleziona…</option>{config.paymentTerms.map(p => <option key={p.code} value={p.code}>{p.code} · {p.label}</option>)}</select>
                   </Field>
+                  {s.bankChanged && !s.bankLetterAfterChange && <Notice kind="error">Le coordinate bancarie sono cambiate ma il fornitore non ha caricato la nuova lettera della banca: chiedi modifiche.</Notice>}
+                  {s.duplicates.some(d => !d.confirmed) && (
+                    <div style={{ marginBottom: 12 }}>
+                      <DuplicateList dups={s.duplicates.filter(d => !d.confirmed)} />
+                      <label style={{ ...sans, display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, margin: "4px 0 8px", cursor: "pointer" }}><input type="checkbox" checked={dupOk} onChange={e => setDupOk(e.target.checked)} style={{ accentColor: C.accent, width: 16, height: 16, marginTop: 2 }} />Ho verificato: è un fornitore diverso (o una sede distinta) e va registrato comunque</label>
+                      {dupOk && <textarea value={dupReason} onChange={e => setDupReason(e.target.value)} placeholder="Perché non è un doppione?" aria-label="Motivo" style={{ ...iStyle, height: 60, resize: "vertical" }} />}
+                    </div>
+                  )}
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={() => run("approve", "approve", { paymentTerms: terms })} disabled={!!busy || !terms} style={{ ...btn(true), opacity: busy || !terms ? 0.6 : 1 }}>{spin("approve")}<CheckCircle2 size={16} />Approva e passa al Finance</button>
+                    <button onClick={() => run("approve", "approve", { paymentTerms: terms, confirmDuplicates: dupOk, duplicateReason: dupReason })} disabled={!!busy || !terms} style={{ ...btn(true), opacity: busy || !terms ? 0.6 : 1 }}>{spin("approve")}<CheckCircle2 size={16} />Approva e passa al Finance</button>
                     <button onClick={() => setDialog("revision")} disabled={!!busy} style={btn(false)}><RotateCcw size={15} />Chiedi modifiche</button>
                     <button onClick={() => setDialog("reject")} disabled={!!busy} style={btn(false, true)}><Ban size={15} />Rifiuta</button>
                   </div>
@@ -284,8 +312,22 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
                 <Card style={{ borderColor: "#d9d2f5", background: "#fbfaff" }}>
                   <CardTitle icon={<FileCheck2 size={16} />}>Registrazione in SAP</CardTitle>
                   <p style={{ ...sans, fontSize: 13, color: C.muted, margin: "0 0 12px", lineHeight: 1.55 }}>Il Buyer ha approvato (condizioni di pagamento {s.paymentTerms ?? "—"}). Il portale invia l'anagrafica a SAP e salva il codice fornitore, che viene comunicato a fornitore e Buyer.</p>
+                  {s.bankChanged && (
+                    <div style={{ background: C.redBg, borderRadius: 12, padding: 12, marginBottom: 12 }}>
+                      <div style={{ ...sans, fontSize: 13, color: C.red, fontWeight: 650, marginBottom: 6 }}>Coordinate bancarie cambiate: verifica obbligatoria</div>
+                      <div style={{ ...sans, fontSize: 12.5, color: C.text, lineHeight: 1.5, marginBottom: 8 }}>Chiama il fornitore a un numero già noto (non quello indicato nella richiesta) e fatti confermare il nuovo conto. Nuova lettera della banca: <b>{s.bankLetterAfterChange ? "caricata" : "mancante"}</b>.</div>
+                      <input value={bankContact} onChange={e => setBankContact(e.target.value)} placeholder="Chi hai chiamato e a quale numero" aria-label="Contatto chiamato" style={{ ...iStyle, marginBottom: 8 }} />
+                      <input value={bankNote} onChange={e => setBankNote(e.target.value)} placeholder="Esito della verifica" aria-label="Esito della verifica" style={iStyle} />
+                    </div>
+                  )}
+                  {s.compliance.some(c => c.status === "fail" || c.status === "warn" || c.status === "todo") && (
+                    <div style={{ marginBottom: 12 }}>
+                      <label style={{ ...sans, display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, marginBottom: 8, cursor: "pointer" }}><input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} style={{ accentColor: C.accent, width: 16, height: 16, marginTop: 2 }} />Ho valutato i controlli di conformità non superati (vedi sotto) e confermo la registrazione</label>
+                      {ack && <textarea value={ackNote} onChange={e => setAckNote(e.target.value)} placeholder="Nota sulla valutazione" aria-label="Nota sui controlli" style={{ ...iStyle, height: 60, resize: "vertical" }} />}
+                    </div>
+                  )}
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={() => { if (window.confirm("Creare il fornitore in SAP?")) run("sap", "approve"); }} disabled={!!busy} style={btn(true)}>{spin("sap")}<Send size={16} />Registra in SAP</button>
+                    <button onClick={() => { if (window.confirm("Creare il fornitore in SAP?")) run("sap", "approve", { bankVerification: { contact: bankContact, note: bankNote }, complianceAck: ack, complianceNote: ackNote }); }} disabled={!!busy} style={btn(true)}>{spin("sap")}<Send size={16} />Registra in SAP</button>
                     <button onClick={() => setDialog("revision")} disabled={!!busy} style={btn(false)}><RotateCcw size={15} />Chiedi modifiche</button>
                     <button onClick={() => setDialog("reject")} disabled={!!busy} style={btn(false, true)}><Ban size={15} />Rifiuta</button>
                   </div>
@@ -295,6 +337,34 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
               {s.status === "approved" && !isFinanceStep && <Notice kind="info">Approvato dal Buyer: ora tocca al Finance registrarlo in SAP.</Notice>}
               {s.status === "registered" && <Notice kind="ok"><b>Registrato in SAP</b>{s.sapCode ? <> · codice fornitore <b>{s.sapCode}</b></> : null}{s.sapAccountGroup ? ` · gruppo conti ${s.sapAccountGroup}` : ""}</Notice>}
               {error && <Notice kind="error">{error}</Notice>}
+
+              {s.changes.length > 0 && (
+                <Card style={{ borderColor: s.bankChanged ? "#f0c9c9" : undefined }}>
+                  <CardTitle icon={<RotateCcw size={16} />}>Modifiche rispetto ai dati approvati{s.approvedAt ? ` il ${fmtDate(s.approvedAt)}` : ""}</CardTitle>
+                  <div style={{ overflowX: "auto" }}>
+                    <table className="data-table" style={{ minWidth: 480 }}>
+                      <thead><tr><th>Campo</th><th>Prima</th><th>Ora</th></tr></thead>
+                      <tbody>{s.changes.map(c => <tr key={c.field} style={{ cursor: "default", background: c.bank ? C.redBg : undefined }}><td style={{ fontWeight: 650, color: c.bank ? C.red : C.text }}>{c.label}</td><td style={{ color: C.muted, overflowWrap: "anywhere" }}>{c.before || "—"}</td><td style={{ overflowWrap: "anywhere" }}>{c.after || "—"}</td></tr>)}</tbody>
+                    </table>
+                  </div>
+                </Card>
+              )}
+
+              {s.status !== "draft" && (
+                <Card>
+                  <CardTitle icon={<FileCheck2 size={16} />} action={<button onClick={rerunChecks} disabled={!!busy} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}>{spin("checks")}<RotateCcw size={13} />Ripeti</button>}>Controlli di conformità</CardTitle>
+                  {s.compliance.map(c => (
+                    <div key={c.key} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 0", borderTop: `1px solid ${C.borderLight}`, flexWrap: "wrap" }}>
+                      <span style={{ ...sans, flex: "0 0 auto", background: CHECK_STYLE[c.status].bg, color: CHECK_STYLE[c.status].color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 650, minWidth: 96, textAlign: "center" }}>{CHECK_STYLE[c.status].label}</span>
+                      <div style={{ flex: "1 1 260px", minWidth: 0 }}><div style={{ ...sans, fontSize: 13, fontWeight: 650 }}>{c.label}</div><div style={{ ...sans, fontSize: 12.5, color: C.muted, overflowWrap: "anywhere" }}>{c.detail}</div></div>
+                      {c.key === "sanctions" && c.status === "todo" && <button onClick={() => setDialog("sanctions")} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12 }}>Registra verifica manuale</button>}
+                    </div>
+                  ))}
+                  {s.complianceCheckedAt && <div style={{ ...sans, fontSize: 11.5, color: C.subtle, marginTop: 6 }}>Controlli esterni eseguiti il {new Date(s.complianceCheckedAt).toLocaleString("it-IT", { dateStyle: "medium", timeStyle: "short" })}</div>}
+                </Card>
+              )}
+
+              {s.duplicates.length > 0 && <Card><CardTitle>Possibili doppioni</CardTitle><DuplicateList dups={s.duplicates} /></Card>}
 
               <Card>
                 <CardTitle>Anagrafica</CardTitle>
@@ -330,20 +400,51 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
               </Card>
             )}
 
+            {(isBuyerStep && s.status !== "invited") && (
+              <Card>
+                <CardTitle icon={<Ban size={16} />}>Stato del fornitore</CardTitle>
+                <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-6px 0 10px", lineHeight: 1.5 }}>Bloccato: resta nel portale ma non può essere approvato. Disattivato: non accede più. Escluso: non accede e non può essere reinvitato senza un Manager. Il blocco in SAP, per ora, va fatto a mano.</p>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {s.lifecycle === "active" && <button onClick={() => setDialog("block")} style={btn(false)}>Blocca</button>}
+                  {currentUser.role === "manager" && s.lifecycle !== "inactive" && <button onClick={() => setDialog("deactivate")} style={btn(false)}>Disattiva</button>}
+                  {currentUser.role === "manager" && s.lifecycle !== "excluded" && <button onClick={() => setDialog("exclude")} style={btn(false, true)}>Escludi</button>}
+                  {currentUser.role === "manager" && s.lifecycle !== "active" && <button onClick={() => setDialog("reactivate")} style={btn(true)}>Riattiva</button>}
+                </div>
+              </Card>
+            )}
             <AuditTrail entries={supplierTimeline(s)} />
             <div style={{ ...sans, fontSize: 11.5, color: C.subtle, display: "flex", alignItems: "center", gap: 6 }}><Clock size={13} />Aggiornato il {fmtDate(s.updatedAt)}</div>
           </div>
         )}
       </div>
 
-      {dialog && s && (
-        <ReasonDialog
-          title={dialog === "reject" ? "Rifiuta la registrazione" : "Chiedi modifiche al fornitore"}
-          text={dialog === "reject" ? "Il fornitore riceverà questo motivo via email e potrà correggere e reinviare." : "Spiega cosa deve correggere: il fornitore riceverà il testo via email e potrà modificare dati e documenti."}
-          confirmLabel={dialog === "reject" ? "Rifiuta" : "Invia richiesta"} danger={dialog === "reject"}
-          onConfirm={async reason => { const e = await run(dialog, dialog === "reject" ? "reject" : "request_revision", { reason }); if (!e) setDialog(null); return e; }}
-          onClose={() => setDialog(null)} />
-      )}
+      {dialog && s && (() => {
+        const cfg = {
+          reject: ["Rifiuta la registrazione", "Il fornitore riceverà questo motivo via email e potrà correggere e reinviare.", "Rifiuta", true, "reject"],
+          revision: ["Chiedi modifiche al fornitore", "Spiega cosa deve correggere: il fornitore riceverà il testo via email e potrà modificare dati e documenti.", "Invia richiesta", false, "request_revision"],
+          block: ["Blocca il fornitore", "Il fornitore non potrà essere approvato finché non viene riattivato. Il motivo resta nello storico.", "Blocca", true, "block"],
+          deactivate: ["Disattiva il fornitore", "Il fornitore non potrà più accedere all'area personale né ricevere reminder.", "Disattiva", true, "deactivate"],
+          exclude: ["Escludi il fornitore", "Esclusione definitiva: non accede, non riceve reminder e non può essere reinvitato senza un Manager.", "Escludi", true, "exclude"],
+          reactivate: ["Riattiva il fornitore", "Il fornitore torna operativo.", "Riattiva", false, "reactivate"],
+          sanctions: ["Verifica manuale delle sanzioni", "Indica la fonte consultata (es. lista consolidata UE, OFAC) e l'esito.", "Registra verifica", false, "sanctions_manual"],
+        }[dialog] as [string, string, string, boolean, VendorAction];
+        return <ReasonDialog title={cfg[0]} text={cfg[1]} confirmLabel={cfg[2]} danger={cfg[3]} onConfirm={async reason => { const e = await run(dialog, cfg[4], { reason }); if (!e) setDialog(null); return e; }} onClose={() => setDialog(null)} />;
+      })()}
     </div>
   );
 }
+
+/** Elenco dei possibili doppioni con i dati in comune. */
+function DuplicateList({ dups }: { dups: DuplicateMatch[] }) {
+  return (
+    <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
+      {dups.map(d => (
+        <div key={d.supplierId} style={{ ...sans, background: d.severe ? C.redBg : C.purpleBg, color: d.severe ? C.red : C.purple, borderRadius: 10, padding: "9px 12px", fontSize: 12.5, lineHeight: 1.5 }}>
+          <b>{d.name}</b>{d.sapCode ? ` · SAP ${d.sapCode}` : ""} · {STATUS_STYLE[d.status].label}{d.lifecycle !== "active" ? ` · ${LIFECYCLE_LABEL[d.lifecycle]}` : ""}
+          <div>Stessi dati: {d.fields.join(", ")}{d.severe ? " — attenzione: possibile frode o fornitore escluso" : ""}{d.confirmed ? " — già verificato come fornitore distinto" : ""}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+const LIFECYCLE_LABEL: Record<Lifecycle, string> = { active: "Attivo", blocked: "Bloccato", inactive: "Disattivato", excluded: "Escluso" };

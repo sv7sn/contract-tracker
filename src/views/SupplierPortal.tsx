@@ -3,7 +3,7 @@ import type { ResolvedDocType, Supplier, SupplierData, SupplierDocument } from "
 import { ApiError, portalApi, uploadSupplierDocument } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmtDate } from "../lib/format.ts";
-import { COUNTRIES, countryName, CURRENCIES, DOC_EXTENSIONS, MAX_DOC_BYTES, missingRequired, REGION_REQUIRED, validateSupplierData, WITHHOLDING_TYPES } from "../supplierRules.ts";
+import { COUNTRIES, countryName, CURRENCIES, DOC_EXTENSIONS, MAX_DOC_BYTES, missingRequired, REGION_REQUIRED, validateDeclarations, validateSupplierData, WITHHOLDING_TYPES } from "../supplierRules.ts";
 import { Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
 import { ArrowLeft, ArrowRight, CheckCircle2, Clock, FileCheck2, Loader2, Paperclip, Pencil, Save, Send, Trash2, Building2, Wallet, History } from "../components/icons.tsx";
 import { AiResult, DocLink, KV, Notice, StatusBadge, ValidityChip } from "../components/vendorUi.tsx";
@@ -13,7 +13,7 @@ import { docValidity } from "../supplierRules.ts";
 const STEPS = ["Società e indirizzo", "Pagamenti e contatti", "Documenti", "Riepilogo e invio"];
 const TRACK = ["Compilazione", "Verifica Buyer", "Verifica Finance", "Registrato"];
 const trackIndex = (s: Supplier) => ({ invited: 0, draft: 0, pending_revision: 0, rejected: 0, pending: 1, approved: 2, registered: 3 })[s.status];
-const stepOf = (key: string) => (key.startsWith("company.") || key.startsWith("address.") ? 0 : key.startsWith("payment.") || key.startsWith("contacts.") ? 1 : key === "acceptedTerms" ? 3 : 0);
+const stepOf = (key: string) => (key.startsWith("company.") || key.startsWith("address.") ? 0 : key.startsWith("payment.") || key.startsWith("contacts.") ? 1 : key === "acceptedTerms" || key.startsWith("declarations.") ? 3 : 0);
 
 const checkFile = (f: File): string | null => {
   const ext = f.name.toLowerCase().split(".").pop() ?? "";
@@ -137,10 +137,17 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
   const country = data.address?.country;
   const dirty = JSON.stringify(data) !== JSON.stringify(s.data);
   const localErrors = validateSupplierData(data);
-  const errors = { ...serverErrors, ...(showErrors ? localErrors : {}) };
+  // Le dichiarazioni (conflitto d'interessi, sanzioni, privacy) si rendono al primo invio della registrazione.
+  const declErrors = amending ? {} : validateDeclarations(data);
+  const errors = { ...serverErrors, ...(showErrors ? { ...localErrors, ...declErrors } : {}) };
+  const decl = data.declarations ?? {};
+  const setDecl = (patch: NonNullable<SupplierData["declarations"]>) => { setData(d => ({ ...d, declarations: { ...d.declarations, ...patch } })); setServerErrors({}); };
+  const bankKeyOf = (d: SupplierData) => [d.payment?.iban, d.payment?.accountNumber, d.payment?.swift].map(x => (x ?? "").replace(/\s+/g, "").toUpperCase()).join("|");
+  const bankEdited = amending && bankKeyOf(data) !== bankKeyOf(s.data);
   const docs = s.documents.map(d => ({ type: d.type, validUntil: d.validUntil }));
   const missing = missingRequired(s.docTypes, docs);
   const labelOf = (k: string) => s.docTypes.find(t => t.key === k)?.label ?? k;
+  const cantSubmit = !(Object.keys(localErrors).length === 0 && Object.keys(declErrors).length === 0 && missing.length === 0 && (amending || data.acceptedTerms));
   const set = <K extends keyof SupplierData>(group: K, patch: Partial<NonNullable<SupplierData[K]>>) => { setData(d => ({ ...d, [group]: { ...(d[group] as object | undefined), ...patch } })); setServerErrors({}); };
 
   const saveNow = async (): Promise<boolean> => {
@@ -227,6 +234,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
   );
 
   const banner = (() => {
+    if (s.lifecycle === "blocked") return <Notice kind="error"><b>La tua anagrafica è temporaneamente bloccata.</b>{s.lifecycleReason ? <><br />{s.lifecycleReason}</> : null}<br />Puoi aggiornare dati e documenti; per chiarimenti contatta il Buyer di riferimento.</Notice>;
     if (s.status === "pending_revision") return <Notice kind="warn"><b>Il Buyer ha chiesto delle modifiche.</b><br />{s.rejectionReason}<br />Correggi i dati o i documenti indicati e invia di nuovo la registrazione.</Notice>;
     if (s.status === "rejected") return <Notice kind="error"><b>La registrazione non è stata approvata.</b><br />{s.rejectionReason}<br />Se pensi sia un errore o vuoi correggere le informazioni, puoi modificarle e inviare di nuovo.</Notice>;
     if (s.status === "pending") return <Notice kind="info"><b>{s.isUpdate ? "Le tue modifiche sono in verifica." : "Registrazione inviata."}</b> Il Buyer sta controllando i dati e i documenti. Fino alla decisione non puoi modificarli; riceverai un'email a ogni passaggio.</Notice>;
@@ -286,6 +294,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
             <TextField id="acc" label="Numero di conto" req value={data.payment?.accountNumber} onChange={v => set("payment", { accountNumber: v })} error={err("payment.accountNumber")} />
             <SelectField id="cur" label="Valuta del conto" req value={data.payment?.currency} onChange={v => set("payment", { currency: v })} error={err("payment.currency")} options={CURRENCIES.map(c => ({ value: c, label: c }))} />
           </Cols>
+          {bankEdited && <div style={{ marginBottom: 12 }}><Notice kind="warn"><b>Stai cambiando le coordinate bancarie.</b> Per sicurezza carica anche una nuova lettera della banca (su carta intestata) nella sezione Documenti: senza, la modifica non può essere approvata. Riceverai un'email di conferma del cambio.</Notice></div>}
           {country === "IT" && (<>
             <Field label="Applichi la ritenuta d'acconto?" req error={err("payment.withholdingTax")}>
               <div style={{ display: "flex", gap: 10 }}>
@@ -324,16 +333,36 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
         {step === 3 && (<>
           <CardTitle icon={<CheckCircle2 size={16} />}>Controlla e invia</CardTitle>
           <Summary s={s} data={data} />
-          {(Object.keys(localErrors).length > 0 || missing.length > 0) ? (
+          {(Object.keys(localErrors).length > 0 || Object.keys(declErrors).length > 0 || missing.length > 0) ? (
             <div style={{ marginTop: 16 }}>
               <Notice kind="warn">Prima di inviare completa ancora:
                 <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
                   {[...new Set(Object.keys(localErrors).map(k => stepOf(k)).filter(n => n < 3))].map(n => <li key={n}>{STEPS[n]} — <button onClick={() => goTo(n)} style={{ background: "none", border: "none", padding: 0, color: "inherit", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>vai al passaggio</button></li>)}
+                  {Object.keys(declErrors).length > 0 && <li>Dichiarazioni qui sotto: rispondi a tutte</li>}
                   {missing.length > 0 && <li>Documenti: {missing.map(labelOf).join(", ")} — <button onClick={() => goTo(2)} style={{ background: "none", border: "none", padding: 0, color: "inherit", textDecoration: "underline", cursor: "pointer", font: "inherit" }}>carica</button></li>}
                 </ul>
               </Notice>
             </div>
           ) : null}
+          {!amending && (
+            <div style={{ marginTop: 18, display: "grid", gap: 14 }}>
+              <CardTitle>Dichiarazioni</CardTitle>
+              <Field label="Esistono rapporti di parentela, partecipazione o interesse tra la tua azienda (titolari, soci, amministratori) e dipendenti o amministratori della nostra società?" req error={err("declarations.conflictOfInterest")}>
+                <div style={{ display: "flex", gap: 10 }}>
+                  {[[false, "No"], [true, "Sì"]].map(([v, l]) => { const on = decl.conflictOfInterest === v; return (
+                    <button key={String(v)} type="button" aria-pressed={on} onClick={() => setDecl({ conflictOfInterest: v as boolean })} style={{ ...sans, minWidth: 80, padding: "9px 18px", borderRadius: 10, border: `2px solid ${on ? C.accent : C.border}`, background: on ? C.accentLight : "#fff", color: on ? C.accent : C.text, fontWeight: 650, cursor: "pointer" }}>{l as string}</button>
+                  ); })}
+                </div>
+              </Field>
+              {decl.conflictOfInterest && <TextField id="coi" label="Descrivi il rapporto (persone coinvolte e ruolo)" req value={decl.conflictDetails} onChange={v => setDecl({ conflictDetails: v })} error={err("declarations.conflictDetails")} />}
+              <DeclCheck checked={!!decl.noSanctions} onChange={v => setDecl({ noSanctions: v })} error={err("declarations.noSanctions")}>
+                Dichiaro che l'azienda, i suoi titolari e amministratori non sono soggetti a sanzioni internazionali (UE, ONU, USA, UK) né a provvedimenti interdittivi o di esclusione dai contratti pubblici.
+              </DeclCheck>
+              <DeclCheck checked={!!decl.privacyAccepted} onChange={v => setDecl({ privacyAccepted: v })} error={err("declarations.privacyAccepted")}>
+                Ho preso visione dell'informativa privacy: i dati di contatto e i documenti caricati sono trattati solo per la qualifica e la gestione del rapporto di fornitura, conservati per la durata del rapporto e degli obblighi di legge, e posso chiederne in ogni momento accesso, rettifica o cancellazione al Buyer di riferimento.
+              </DeclCheck>
+            </div>
+          )}
           {!amending && (
             <label style={{ ...sans, display: "flex", gap: 10, alignItems: "flex-start", margin: "18px 0 4px", fontSize: 13, color: C.text, lineHeight: 1.5, cursor: "pointer" }}>
               <input type="checkbox" checked={!!data.acceptedTerms} onChange={e => setData(d => ({ ...d, acceptedTerms: e.target.checked }))} style={{ marginTop: 3, width: 17, height: 17, accentColor: C.accent }} />
@@ -353,7 +382,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
         {step < 3 ? (
           <button onClick={next} disabled={busy} style={{ ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px" }}>Avanti<ArrowRight size={16} /></button>
         ) : (
-          <button onClick={submit} disabled={busy || Object.keys(localErrors).length > 0 || missing.length > 0 || (!amending && !data.acceptedTerms)} style={{ ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px", opacity: busy || Object.keys(localErrors).length > 0 || missing.length > 0 || (!amending && !data.acceptedTerms) ? 0.55 : 1 }}>
+          <button onClick={submit} disabled={busy || cantSubmit} style={{ ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px", opacity: busy || cantSubmit ? 0.55 : 1 }}>
             {busy ? <Loader2 className="spin" size={16} /> : <Send size={16} />}{amending ? "Invia le modifiche per verifica" : "Invia la registrazione"}
           </button>
         )}
@@ -383,6 +412,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
       {tracker}
       {banner}
       {expiryNotice}
+      {amending && s.bankChanged && !s.bankLetterAfterChange && !wizard && <Notice kind="warn"><b>Hai cambiato le coordinate bancarie:</b> carica una nuova lettera della banca nei documenti di qualifica, altrimenti la modifica non può essere approvata.</Notice>}
       {formError && !wizard && <Notice kind="error">{formError}</Notice>}
       {wizard ? wizardBody : overview}
       {events.length > 0 && (
@@ -408,6 +438,19 @@ export function Summary({ s, data }: { s: Supplier; data: SupplierData }) {
       <KV rows={[["Ragione sociale", c.legalName], ["Partita IVA", c.vatCode], ["Codice fiscale", c.fiscalCode], ["Indirizzo", [a.street, a.houseNumber].filter(Boolean).join(" ")], ["CAP e città", [a.postalCode, a.city].filter(Boolean).join(" ")], ["Regione / provincia", a.region], ["Paese", countryName(a.country)]]} />
       <KV rows={[["IBAN", p.iban], ["SWIFT / BIC", p.swift], ["Banca", p.bankName], ["Numero di conto", p.accountNumber], ["Valuta", p.currency], ...(a.country === "IT" ? [["Ritenuta d'acconto", wh] as [string, string]] : [])]} />
       <KV rows={[["Lingua", k.language === "EN" ? "English" : k.language === "IT" ? "Italiano" : ""], ["Email ordini", k.ordersEmail], ["Email amministrativa", k.adminEmail], ["Telefono", k.phone], ["Documenti caricati", String(s.documents.length)]]} />
+      {data.declarations && (data.declarations.conflictOfInterest !== undefined || data.declarations.noSanctions) && <KV rows={[["Conflitto d'interessi", data.declarations.conflictOfInterest ? `Sì — ${data.declarations.conflictDetails ?? ""}` : data.declarations.conflictOfInterest === false ? "No" : ""], ["Assenza di sanzioni", data.declarations.noSanctions ? "Dichiarata" : ""], ["Informativa privacy", data.declarations.privacyAccepted ? `Accettata${data.declarations.privacyAcceptedAt ? ` il ${fmtDate(data.declarations.privacyAcceptedAt.slice(0, 10))}` : ""}` : ""]]} />}
+    </div>
+  );
+}
+
+function DeclCheck({ checked, onChange, error, children }: { checked: boolean; onChange: (v: boolean) => void; error?: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{ ...sans, display: "flex", gap: 10, alignItems: "flex-start", fontSize: 13, color: C.text, lineHeight: 1.5, cursor: "pointer" }}>
+        <input type="checkbox" checked={checked} onChange={e => onChange(e.target.checked)} style={{ marginTop: 3, width: 17, height: 17, accentColor: C.accent, flexShrink: 0 }} />
+        <span>{children}</span>
+      </label>
+      {error && <div role="alert" style={{ ...sans, fontSize: 12, color: C.red, marginTop: 4, marginLeft: 27 }}>{error}</div>}
     </div>
   );
 }

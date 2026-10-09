@@ -9,13 +9,13 @@ import { ArrowRight } from "../components/icons.tsx";
 
 interface Props { user: User; modules: ModuleDef[]; contracts: Contract[]; plans: Record<number, PlanStep[]>; onOpen: (view: View) => void }
 interface Metric { label: string; value: number | string; tone?: "bad" | "warn" | "good" }
-interface Live { tasks: TaskSummary | null; vendorsToReview: number | null; unresponsive: number | null }
+interface Live { tasks: TaskSummary | null; vendorsToReview: number | null; lapsed: number | null; unresponsive: number | null }
 
 const TONE = { bad: C.red, warn: C.yellow, good: C.green } as const;
 
 /** Pagina iniziale: un riquadro per ogni modulo con i numeri che richiedono attenzione. */
 export function HubView({ user, modules, contracts, onOpen }: Props) {
-  const [live, setLive] = useState<Live>({ tasks: null, vendorsToReview: null, unresponsive: null });
+  const [live, setLive] = useState<Live>({ tasks: null, vendorsToReview: null, lapsed: null, unresponsive: null });
   useEffect(() => {
     let off = false;
     const staff = user.role === "manager" || user.role === "buyer";
@@ -29,6 +29,7 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
       setLive({
         tasks: t.status === "fulfilled" ? t.value : null,
         vendorsToReview: v.status === "fulfilled" ? v.value.filter(x => x.status === mine).length : null,
+        lapsed: v.status === "fulfilled" ? v.value.filter(x => x.qualification === "lapsed").length : null,
         unresponsive: m.status === "fulfilled" ? new Set(m.value.items.filter(i => i.unresponsive).map(i => i.supplierId)).size : null,
       });
     });
@@ -44,6 +45,7 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
     ],
     vendors: [
       ...(live.vendorsToReview !== null ? [{ label: user.role === "finance" ? "Da registrare in SAP" : "Da verificare", value: live.vendorsToReview, tone: live.vendorsToReview ? "warn" as const : undefined }] : []),
+      ...(live.lapsed !== null ? [{ label: "Con qualifica scaduta", value: live.lapsed, tone: live.lapsed ? "bad" as const : "good" as const }] : []),
       ...(live.unresponsive !== null ? [{ label: "Fornitori che non rispondono ai reminder", value: live.unresponsive, tone: live.unresponsive ? "bad" as const : "good" as const }] : []),
     ],
     tasks: live.tasks ? [
