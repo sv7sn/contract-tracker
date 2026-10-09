@@ -136,13 +136,14 @@ export interface ReminderPolicy {
   /** Dopo quanti solleciti senza risposta il fornitore risulta "non risponde". */
   escalateAfter: number;
 }
+export interface SanctionsStatus { provider: "lists" | "opensanctions" | "mock"; updatedAt: string | null; sources: { key: string; label: string; count: number; at: string | null; error: string }[] }
 export interface PrivacySettings { notice: string; inviteDays: number; retentionMonths: number }
 export interface ConfigAuditEntry { id: number; at: string; actor: string; area: string; areaLabel: string; action: string; subject: string; detail: string }
 export interface PortalConfig {
   companies: BuyingCompany[]; industryCodes: IndustryCode[]; paymentTerms: PaymentTerm[]; sap: SapSettings; buyers: { id: number; name: string; active: boolean }[];
   docTypes: DocTypeDef[]; docRules: DocRule[]; reminders: ReminderPolicy;
   emailConfigured: boolean; ai: { provider: string; configured: boolean };
-  rda: RdaConfig; privacy: PrivacySettings;
+  rda: RdaConfig; privacy: PrivacySettings; sanctions: SanctionsStatus;
 }
 
 export type MonitorState = "expired" | "expiring" | "missing" | "valid";

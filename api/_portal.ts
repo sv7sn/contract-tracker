@@ -11,6 +11,7 @@ import { visibleWhere } from "./_access.js";
 import { docConfig, loadCatalog, loadPolicy, saveDocType, savePolicy } from "./_docs.js";
 import { loadRdaConfig, saveRda } from "./_tasks.js";
 import { loadPrivacy, savePrivacy } from "./_privacy.js";
+import { sanctionsStatus } from "./_sanctions.js";
 import { bankKey, complianceChecks, diffData, duplicateIds, findDuplicates, qualificationOf, runExternalChecks, type StoredCompliance } from "./_governance.js";
 
 const bad = (msg: string): never => { throw new HttpError(400, msg); };
@@ -100,7 +101,7 @@ export async function loadConfig(): Promise<PortalConfig> {
   const industryCodes: IndustryCode[] = i.rows.map(r => ({ code: r.code, name: r.name, buyerIds: ib.rows.filter(x => x.industry_code === r.code).map(x => x.user_id) }));
   const paymentTerms: PaymentTerm[] = pt.rows.map(r => ({ code: r.code, label: r.label }));
   const cat = await loadCatalog(db);
-  return { companies, industryCodes, paymentTerms, sap: st.rows[0]?.value as SapSettings, buyers: b.rows, ...docConfig(cat, await loadPolicy(db)), rda: await loadRdaConfig(db), privacy: await loadPrivacy(db) };
+  return { companies, industryCodes, paymentTerms, sap: st.rows[0]?.value as SapSettings, buyers: b.rows, ...docConfig(cat, await loadPolicy(db)), rda: await loadRdaConfig(db), privacy: await loadPrivacy(db), sanctions: await sanctionsStatus(db) };
 }
 
 const CODE_RE = /^[A-Za-z0-9_.-]{1,20}$/;
