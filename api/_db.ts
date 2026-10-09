@@ -134,6 +134,7 @@ create table if not exists tasks (
 );
 create unique index if not exists tasks_source_key_idx on tasks (source, source_key) where source_key is not null;
 create index if not exists tasks_assignee_idx on tasks (assignee_id, status);
+alter table tasks add column if not exists sourcing jsonb;
 create table if not exists rda_lines (
   id serial primary key, pr text not null, item text not null default '0', pgr text not null default '', short_text text not null default '',
   qty numeric not null default 0, unit text not null default '', price numeric not null default 0, per numeric not null default 1, currency text not null default 'EUR',

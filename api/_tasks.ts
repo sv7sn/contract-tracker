@@ -1,4 +1,4 @@
-import type { ImportResult, RdaConfig, RdaMeta, Task, TaskDetail, TaskLine, TaskPo, TaskSummary, User } from "../src/types.ts";
+import type { ImportResult, RdaConfig, RdaMeta, Sourcing, SourcingMode, SourcingQuote, SourcingStatus, Task, TaskDetail, TaskLine, TaskPo, TaskSummary, User } from "../src/types.ts";
 import { getPool, inTransaction, type Queryable } from "./_db.js";
 import { HttpError } from "./_http.js";
 import { detectKind, parsePoLines, parsePrLines, parseSheet, type PrLine } from "./_sap-files.js";
@@ -10,10 +10,25 @@ const day = (d: unknown) => (d ? new Date(d as string).toISOString().slice(0, 10
 const iso = (d: unknown) => (d ? new Date(d as string).toISOString() : "");
 const addDays = (d: string, n: number) => new Date(new Date(d).getTime() + n * 864e5).toISOString().slice(0, 10);
 
-export async function loadSla(db: Queryable): Promise<number> {
-  const v = (await db.query("select value from settings where key = 'rda'")).rows[0]?.value as { slaDays?: number } | undefined;
-  return v?.slaDays && v.slaDays > 0 ? v.slaDays : 7;
+interface RdaSettings { slaDays: number; sourcingThreshold: number }
+export async function loadRdaSettings(db: Queryable): Promise<RdaSettings> {
+  const v = (await db.query("select value from settings where key = 'rda'")).rows[0]?.value as Partial<RdaSettings> | undefined;
+  return { slaDays: v?.slaDays && v.slaDays > 0 ? v.slaDays : 7, sourcingThreshold: typeof v?.sourcingThreshold === "number" && v.sourcingThreshold >= 0 ? v.sourcingThreshold : 10000 };
 }
+export async function loadSla(db: Queryable): Promise<number> { return (await loadRdaSettings(db)).slaDays; }
+
+// ─── Scelta del fornitore (RDA sopra soglia) ─────────────────
+// Sopra soglia serve il confronto con almeno un altro fornitore, salvo fornitura strategica, single source o eccezione approvata dal Manager.
+const SOURCING_MODES: SourcingMode[] = ["comparison", "strategic", "single_source", "exception"];
+const needsSourcing = (r: Row, threshold: number) => r.source === "rda" && Number(r.meta?.value ?? 0) > threshold;
+function sourcingStatusOf(required: boolean, s: Sourcing | null): SourcingStatus {
+  if (!required) return "na";
+  if (!s) return "missing";
+  if (s.mode === "exception") return s.approval === "approved" ? "ok" : s.approval === "pending" ? "pending" : "missing";
+  return "ok";
+}
+/** Condizione SQL: sourcing non ancora valido (manca, o eccezione non approvata). */
+const SOURCING_MISSING_SQL = "(t.sourcing is null or (t.sourcing->>'mode' = 'exception' and coalesce(t.sourcing->>'approval','') <> 'approved'))";
 
 // ─── Importazione dei file SAP ───────────────────────────────
 const IMPORT_MAX_BYTES = 8 * 1024 * 1024;
@@ -112,8 +127,10 @@ function visibleSql(user: User): string {
   return "false";
 }
 
-function mapTask(r: Row, pos: Row[]): Task {
+function mapTask(r: Row, pos: Row[], threshold: number): Task {
+  const required = needsSourcing(r, threshold);
   return {
+    sourcing: r.sourcing ?? null, sourcingRequired: required, sourcingStatus: sourcingStatusOf(required, r.sourcing ?? null),
     id: r.id, source: r.source, sourceKey: r.source_key, title: r.title, detail: r.detail, due: day(r.due), priority: r.priority, assigneeId: r.assignee_id, assigneeName: r.assignee_name ?? "",
     status: r.status, doneAt: r.done_at ? iso(r.done_at) : null, doneReason: r.done_reason, doneBy: r.done_by, meta: r.meta ?? {},
     pos: pos.filter(p => p.pr === r.source_key).map((p): TaskPo => ({ po: p.po, supplierName: p.supplier_name, docDate: day(p.doc_date) })),
@@ -130,13 +147,19 @@ export async function listTasks(user: User): Promise<{ tasks: Task[]; sapUpdated
   const pos = prs.length ? (await db.query("select * from sap_pos where pr = any($1) order by doc_date", [prs])).rows : [];
   const last = (await db.query("select kind, max(at) as at from sap_imports group by kind")).rows;
   const at = (k: string) => { const r = last.find(x => x.kind === k); return r ? iso(r.at) : null; };
-  return { tasks: rows.map(r => mapTask(r, pos)), sapUpdatedAt: { pr: at("pr"), po: at("po") } };
+  const { sourcingThreshold } = await loadRdaSettings(db);
+  return { tasks: rows.map(r => mapTask(r, pos, sourcingThreshold)), sapUpdatedAt: { pr: at("pr"), po: at("po") } };
 }
 
 export async function taskSummary(user: User): Promise<TaskSummary> {
-  const r = (await getPool().query(`select count(*)::int as open, count(*) filter (where t.due < current_date)::int as overdue, count(*) filter (where t.due >= current_date and t.due <= current_date + 7)::int as due_soon,
-    count(*) filter (where t.assignee_id is null)::int as unassigned from tasks t where t.status = 'open' and ${visibleSql(user)}`)).rows[0];
-  return { open: r.open, overdue: r.overdue, dueSoon: r.due_soon, unassigned: r.unassigned };
+  const db = getPool();
+  const { sourcingThreshold } = await loadRdaSettings(db);
+  const r = (await db.query(`select count(*)::int as open, count(*) filter (where t.due < current_date)::int as overdue, count(*) filter (where t.due >= current_date and t.due <= current_date + 7)::int as due_soon,
+    count(*) filter (where t.assignee_id is null)::int as unassigned,
+    count(*) filter (where t.source = 'rda' and coalesce((t.meta->>'value')::numeric, 0) > $1 and ${SOURCING_MISSING_SQL})::int as sourcing_missing
+    from tasks t where t.status = 'open' and ${visibleSql(user)}`, [sourcingThreshold])).rows[0];
+  const p = (await db.query(`select count(*)::int as n from tasks t where t.sourcing->>'approval' = 'pending' and ${visibleSql(user)}`)).rows[0];
+  return { open: r.open, overdue: r.overdue, dueSoon: r.due_soon, unassigned: r.unassigned, sourcingMissing: r.sourcing_missing, exceptionsPending: p.n };
 }
 
 export async function getTask(user: User, id: number): Promise<TaskDetail> {
@@ -146,7 +169,7 @@ export async function getTask(user: User, id: number): Promise<TaskDetail> {
   const pos = r.source === "rda" ? (await db.query("select * from sap_pos where pr = $1 order by doc_date", [r.source_key])).rows : [];
   const lines: TaskLine[] = r.source === "rda" ? (await db.query("select * from rda_lines where pr = $1 order by item, id", [r.source_key])).rows.map(l => ({
     item: l.item, shortText: l.short_text, qty: Number(l.qty), unit: l.unit, price: Number(l.price), per: Number(l.per), currency: l.currency, delivDate: day(l.deliv_date), costCenter: l.cost_center, glAccount: l.gl_account, value: Number(l.value) })) : [];
-  return { ...mapTask(r, pos), lines };
+  return { ...mapTask(r, pos, (await loadRdaSettings(db)).sourcingThreshold), lines };
 }
 
 // ─── Scrittura ───────────────────────────────────────────────
@@ -167,6 +190,11 @@ export async function updateTask(user: User, id: number, input: Row): Promise<Ta
   const cur = await getTask(user, id);
   const sets: string[] = []; const vals: unknown[] = [];
   const set = (col: string, v: unknown) => { vals.push(v); sets.push(`${col} = $${vals.length}`); };
+  if (input?.status === "done" && cur.status === "open" && cur.sourcingRequired && cur.sourcingStatus !== "ok") {
+    throw new HttpError(409, cur.sourcingStatus === "pending"
+      ? "L'eccezione per questa RDA è in attesa di approvazione del Manager: potrai chiuderla dopo l'approvazione"
+      : `RDA sopra soglia (${fmtEur((await loadRdaSettings(getPool())).sourcingThreshold)}): prima di chiuderla registra il confronto con almeno un altro fornitore, oppure indica che è strategica o single source, o chiedi un'eccezione`, { needsSourcing: true });
+  }
   if (input?.status === "done" && cur.status === "open") { set("status", "done"); set("done_at", new Date()); set("done_reason", "manual"); set("done_by", user.name); }
   else if (input?.status === "open" && cur.status === "done") {
     if (cur.source === "rda" && cur.doneReason !== "manual") throw new HttpError(409, "Questa RDA si è chiusa da sola perché non è più aperta in SAP: si riaprirà se riappare nell'elenco");
@@ -190,6 +218,50 @@ export async function updateTask(user: User, id: number, input: Row): Promise<Ta
   return getTask(user, id);
 }
 
+const fmtEur = (n: number) => `${n.toLocaleString("it-IT")} €`;
+
+/** Registra come è stato scelto il fornitore: confronto offerte, fornitura strategica, single source o eccezione. */
+export async function saveSourcing(user: User, id: number, input: Row): Promise<TaskDetail> {
+  const cur = await getTask(user, id);
+  if (cur.source !== "rda") bad("La scelta del fornitore si registra solo sulle RDA");
+  const mode = input?.mode as SourcingMode;
+  if (!SOURCING_MODES.includes(mode)) bad("Scegli come è stato individuato il fornitore");
+  const justification = str(input?.justification, 2000);
+  let quotes: SourcingQuote[] = [];
+  if (mode === "comparison") {
+    if (!Array.isArray(input?.quotes) || input.quotes.length < 2 || input.quotes.length > 10) bad("Inserisci il fornitore scelto e almeno un'altra offerta");
+    quotes = (input.quotes as Row[]).map(q => ({ supplier: str(q?.supplier, 200), amount: Number(q?.amount), chosen: q?.chosen === true }));
+    if (quotes.some(q => q.supplier.length < 2)) bad("Indica il nome di ogni fornitore");
+    if (quotes.some(q => !Number.isFinite(q.amount) || q.amount <= 0)) bad("Indica l'importo di ogni offerta");
+    if (quotes.filter(q => q.chosen).length !== 1) bad("Indica quale offerta è stata scelta");
+    if (new Set(quotes.map(q => q.supplier.toLowerCase().replace(/[^a-z0-9]/g, ""))).size !== quotes.length) bad("Le offerte devono essere di fornitori diversi");
+    const chosen = quotes.find(q => q.chosen)!;
+    if (quotes.some(q => q.amount < chosen.amount) && justification.length < 10) bad("Non è stata scelta l'offerta più bassa: spiega il motivo");
+  } else if (justification.length < 10) bad(mode === "exception" ? "Spiega il motivo dell'eccezione" : "Spiega perché la fornitura è " + (mode === "strategic" ? "strategica" : "single source"));
+  const now = new Date().toISOString();
+  const manager = user.role === "manager";
+  const sourcing: Sourcing = {
+    mode, quotes, justification, recordedBy: user.name, recordedAt: now,
+    approval: mode === "exception" ? (manager ? "approved" : "pending") : null,
+    approvedBy: mode === "exception" && manager ? user.name : "", approvedAt: mode === "exception" && manager ? now : null, approvalNote: "",
+  };
+  await getPool().query("update tasks set sourcing = $2, updated_at = now() where id = $1", [id, JSON.stringify(sourcing)]);
+  return getTask(user, id);
+}
+
+/** Il Manager approva o respinge un'eccezione al confronto tra fornitori. */
+export async function decideSourcingException(user: User, id: number, input: Row): Promise<TaskDetail> {
+  if (user.role !== "manager") throw new HttpError(403, "Solo il Manager approva le eccezioni");
+  const cur = await getTask(user, id);
+  if (cur.sourcing?.mode !== "exception" || cur.sourcing.approval !== "pending") bad("Non c'è nessuna eccezione da approvare");
+  const approve = input?.approve === true;
+  const note = str(input?.note, 1000);
+  if (!approve && note.length < 5) bad("Indica il motivo del rifiuto");
+  const sourcing: Sourcing = { ...cur.sourcing!, approval: approve ? "approved" : "rejected", approvedBy: user.name, approvedAt: new Date().toISOString(), approvalNote: note };
+  await getPool().query("update tasks set sourcing = $2, updated_at = now() where id = $1", [id, JSON.stringify(sourcing)]);
+  return getTask(user, id);
+}
+
 export async function deleteManualTask(user: User, id: number): Promise<void> {
   const cur = await getTask(user, id);
   if (cur.source !== "manual") throw new HttpError(400, "Si possono eliminare solo i task creati a mano");
@@ -205,8 +277,9 @@ export async function loadRdaConfig(db: Queryable): Promise<RdaConfig> {
     db.query("select kind, file_name, rows, at, by from sap_imports order by id desc limit 6"),
   ]);
   const pgrs = [...new Set([...m.rows.map(r => r.pgr as string), ...seen.rows.map(r => r.pgr as string)])].sort();
+  const st = await loadRdaSettings(db);
   return {
-    slaDays: await loadSla(db),
+    slaDays: st.slaDays, sourcingThreshold: st.sourcingThreshold,
     groups: pgrs.map(p => ({ pgr: p, userId: m.rows.find(r => r.pgr === p)?.user_id ?? null, note: m.rows.find(r => r.pgr === p)?.note ?? "", openTasks: open.rows.find(r => r.pgr === p)?.n ?? 0 })),
     ingestConfigured: !!process.env.RDA_INGEST_SECRET,
     lastImports: imps.rows.map(r => ({ kind: r.kind, fileName: r.file_name, rows: r.rows, at: iso(r.at), by: r.by })),
@@ -216,9 +289,12 @@ export async function loadRdaConfig(db: Queryable): Promise<RdaConfig> {
 export async function saveRda(entity: "rda" | "pgr", item: Row): Promise<void> {
   const db = getPool();
   if (entity === "rda") {
-    const d = Number(item?.slaDays);
+    const prev = await loadRdaSettings(db);
+    const d = item?.slaDays === undefined ? prev.slaDays : Number(item.slaDays);
     if (!Number.isInteger(d) || d < 1 || d > 90) bad("I giorni di lavorazione devono essere tra 1 e 90");
-    await db.query("insert into settings (key, value) values ('rda', $1) on conflict (key) do update set value = excluded.value", [JSON.stringify({ slaDays: d })]);
+    const th = item?.sourcingThreshold === undefined ? prev.sourcingThreshold : Number(item.sourcingThreshold);
+    if (!Number.isFinite(th) || th < 0 || th > 100_000_000) bad("Soglia per il confronto tra fornitori non valida");
+    await db.query("insert into settings (key, value) values ('rda', $1) on conflict (key) do update set value = excluded.value", [JSON.stringify({ slaDays: d, sourcingThreshold: th })]);
     // Le scadenze delle RDA aperte seguono il nuovo valore.
     await db.query("update tasks set due = ((meta->>'releaseDate')::date + $1::int) where source = 'rda' and status = 'open' and meta->>'releaseDate' is not null", [d]);
     return;

@@ -51,6 +51,8 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
     tasks: live.tasks ? [
       { label: "Task aperti", value: live.tasks.open }, { label: "In ritardo", value: live.tasks.overdue, tone: live.tasks.overdue ? "bad" : "good" },
       ...(user.role === "manager" ? [{ label: "Da assegnare", value: live.tasks.unassigned, tone: live.tasks.unassigned ? "warn" as const : undefined }] : []),
+      { label: "RDA senza confronto fornitori", value: live.tasks.sourcingMissing, tone: live.tasks.sourcingMissing ? "warn" as const : "good" as const },
+      ...(user.role === "manager" && live.tasks.exceptionsPending ? [{ label: "Eccezioni da approvare", value: live.tasks.exceptionsPending, tone: "warn" as const }] : []),
     ] : [],
     admin: [],
   };

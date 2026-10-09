@@ -156,15 +156,26 @@ export type TaskSource = "contract" | "rda" | "manual";
 export type TaskPriority = "low" | "normal" | "high";
 export interface TaskPo { po: string; supplierName: string; docDate: string | null }
 export interface RdaMeta { pgr?: string; requestedBy?: string; createdBy?: string; value?: number; currency?: string; lines?: number; releaseDate?: string | null; delivDate?: string | null; plant?: string; firstSeen?: string }
+/** Come è stato scelto il fornitore di una RDA sopra soglia. */
+export type SourcingMode = "comparison" | "strategic" | "single_source" | "exception";
+export interface SourcingQuote { supplier: string; amount: number; chosen: boolean }
+export interface Sourcing {
+  mode: SourcingMode; quotes: SourcingQuote[]; justification: string; recordedBy: string; recordedAt: string;
+  /** Solo per le eccezioni: approvazione del Manager. */
+  approval: "pending" | "approved" | "rejected" | null; approvedBy: string; approvedAt: string | null; approvalNote: string;
+}
+/** na = sotto soglia; missing = serve e manca; pending = eccezione in attesa del Manager; ok = documentata. */
+export type SourcingStatus = "na" | "missing" | "pending" | "ok";
 export interface Task {
   id: number; source: "rda" | "manual"; sourceKey: string | null; title: string; detail: string; due: string | null; priority: TaskPriority;
   assigneeId: number | null; assigneeName: string; status: "open" | "done"; doneAt: string | null; doneReason: string; doneBy: string;
   meta: RdaMeta; pos: TaskPo[]; createdBy: string; createdAt: string; updatedAt: string;
+  sourcing: Sourcing | null; sourcingRequired: boolean; sourcingStatus: SourcingStatus;
 }
 export interface TaskLine { item: string; shortText: string; qty: number; unit: string; price: number; per: number; currency: string; delivDate: string | null; costCenter: string; glAccount: string; value: number }
 export interface TaskDetail extends Task { lines: TaskLine[] }
 export interface TaskList { tasks: Task[]; sapUpdatedAt: { pr: string | null; po: string | null } }
 export interface ImportResult { kind: "pr" | "po"; fileName: string; rows: number; prs: number; created: number; updated: number; reopened: number; closedPo: number; closedGone: number; linked: number }
 export interface RdaGroup { pgr: string; userId: number | null; note: string; openTasks: number }
-export interface RdaConfig { slaDays: number; groups: RdaGroup[]; ingestConfigured: boolean; lastImports: { kind: string; fileName: string; rows: number; at: string; by: string }[] }
-export interface TaskSummary { open: number; overdue: number; dueSoon: number; unassigned: number }
+export interface RdaConfig { slaDays: number; sourcingThreshold: number; groups: RdaGroup[]; ingestConfigured: boolean; lastImports: { kind: string; fileName: string; rows: number; at: string; by: string }[] }
+export interface TaskSummary { open: number; overdue: number; dueSoon: number; unassigned: number; sourcingMissing: number; exceptionsPending: number }

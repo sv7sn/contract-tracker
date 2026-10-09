@@ -5,7 +5,7 @@ import { checkStoredDocument } from "./_docai.js";
 import { monitorData, remindSupplier, runReminders } from "./_docs.js";
 import { ensureSchema, getPool } from "./_db.js";
 import { runExternalChecks } from "./_governance.js";
-import { createManualTask, deleteManualTask, getTask, importSapFile, listTasks, taskSummary, updateTask } from "./_tasks.js";
+import { createManualTask, decideSourcingException, deleteManualTask, getTask, importSapFile, listTasks, saveSourcing, taskSummary, updateTask } from "./_tasks.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
 import {
@@ -134,6 +134,8 @@ async function handle(request: Request): Promise<Response> {
       if (op === "task" && method === "GET") return json({ task: await getTask(user, idOf(url)) });
       if (op === "task-create" && method === "POST") return json({ task: await createManualTask(user, (await readJson(request)) as Record<string, unknown>) }, { status: 201 });
       if (op === "task-update" && method === "POST") return json({ task: await updateTask(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-sourcing" && method === "POST") return json({ task: await saveSourcing(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-sourcing-approve" && method === "POST") return json({ task: await decideSourcingException(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task" && method === "DELETE") { await deleteManualTask(user, idOf(url)); return json({ ok: true }); }
       if (op === "rda-import" && method === "POST") {
         const name = decodeURIComponent(request.headers.get("x-file-name") ?? "") || "file.xls";

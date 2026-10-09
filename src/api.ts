@@ -87,6 +87,8 @@ export const portalApi = {
   task: (id: number) => request<{ task: TaskDetail }>(portal("task", `&id=${id}`)).then(r => r.task),
   createTask: (input: { title: string; detail?: string; due?: string | null; priority?: string; assigneeId?: number }) => post<{ task: TaskDetail }>(portal("task-create"), input).then(r => r.task),
   updateTask: (id: number, patch: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-update", `&id=${id}`), patch).then(r => r.task),
+  saveSourcing: (id: number, input: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-sourcing", `&id=${id}`), input).then(r => r.task),
+  decideSourcing: (id: number, approve: boolean, note: string) => post<{ task: TaskDetail }>(portal("task-sourcing-approve", `&id=${id}`), { approve, note }).then(r => r.task),
   deleteTask: (id: number) => request<{ ok: true }>(portal("task", `&id=${id}`), { method: "DELETE" }),
   config: () => request<{ config: PortalConfig }>(portal("config")).then(r => r.config),
   saveConfig: (entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders" | "rda" | "pgr", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),

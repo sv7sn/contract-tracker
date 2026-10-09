@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Contract, PlanStep, Task, TaskDetail, TaskList, User } from "../types.ts";
+import type { Contract, PlanStep, SourcingMode, SourcingQuote, Task, TaskDetail, TaskList, User } from "../types.ts";
 import { ApiError, importSapFile, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmt, fmtDate, isoDate, NOW } from "../lib/format.ts";
 import { stepTemplate } from "../lib/plan.ts";
 import { Avatar, Card, CardTitle, EmptyState, Field, Grid, StatCard } from "../components/ui.tsx";
-import { AlertTriangle, Check, CheckCircle2, Clock, FileText, Inbox, Loader2, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Upload } from "../components/icons.tsx";
+import { AlertTriangle, Check, CheckCircle2, Clock, FileText, Inbox, Loader2, Paperclip, Plus, RotateCcw, Scale, Search, Send, Trash2, Upload } from "../components/icons.tsx";
 import { CloseButton, KV, Notice, Portal } from "../components/vendorUi.tsx";
 
 interface Props {
@@ -26,6 +26,9 @@ const ORIGIN_LABEL = { contract: "Contratto", rda: "RDA", manual: "Manuale" } as
 const ORIGIN_COLOR = { contract: [C.blue, C.blueBg], rda: [C.purple, C.purpleBg], manual: [C.gray, C.grayBg] } as const;
 const DONE_TEXT: Record<string, string> = { po_created: "PO creato", removed_from_sap: "Non più aperta in SAP", manual: "Completato a mano" };
 const PRIO: Record<string, string> = { high: "Alta", normal: "Normale", low: "Bassa" };
+const SOURCING_LABEL: Record<SourcingMode, string> = { comparison: "Confronto tra offerte", strategic: "Fornitura strategica", single_source: "Single source", exception: "Eccezione" };
+/** RDA sopra soglia senza scelta del fornitore documentata (o con eccezione non ancora approvata). */
+const sourcingGap = (t?: Task) => !!t && t.sourcingRequired && t.sourcingStatus !== "ok";
 
 const chip = (label: string, color: string, bg: string) => <span style={{ ...sans, background: bg, color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}>{label}</span>;
 const dueText = (it: Item) => {
@@ -42,7 +45,8 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
   const [buyers, setBuyers] = useState<{ id: number; name: string; active: boolean }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [origin, setOrigin] = useState<Origin>("all");
-  const [status, setStatus] = useState<"open" | "done" | "all">("open");
+  const [status, setStatus] = useState<"open" | "done" | "all" | "sourcing">("open");
+  const [threshold, setThreshold] = useState(10000);
   const [who, setWho] = useState("all");
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<number | null>(null);
@@ -58,7 +62,7 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
   const reload = useCallback(() => portalApi.tasks().then(d => { setData(d); setError(null); }).catch(err => setError(fail(err))), [fail]);
   useEffect(() => {
     let off = false;
-    Promise.all([portalApi.tasks(), portalApi.config()]).then(([d, c]) => { if (!off) { setData(d); setBuyers(c.buyers.filter(b => b.active)); } }).catch(err => { if (!off) setError(fail(err)); });
+    Promise.all([portalApi.tasks(), portalApi.config()]).then(([d, c]) => { if (!off) { setData(d); setBuyers(c.buyers.filter(b => b.active)); setThreshold(c.rda.sourcingThreshold); } }).catch(err => { if (!off) setError(fail(err)); });
     return () => { off = true; };
   }, [fail]);
 
@@ -90,12 +94,12 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
   const counts = useMemo(() => ({
     open: items.filter(i => i.status !== "done").length, late: items.filter(overdue).length,
     soon: items.filter(i => i.status !== "done" && i.due && daysFrom(i.due) >= 0 && daysFrom(i.due) <= 7).length,
-    done: items.filter(recentDone).length, unassigned: items.filter(i => i.origin !== "contract" && i.status !== "done" && i.assigneeId === null).length,
+    done: items.filter(recentDone).length, sourcing: items.filter(i => i.status !== "done" && sourcingGap(i.task)).length, approvals: items.filter(i => i.task?.sourcing?.approval === "pending").length, unassigned: items.filter(i => i.origin !== "contract" && i.status !== "done" && i.assigneeId === null).length,
   }), [items]);
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return items.filter(i => (origin === "all" || i.origin === origin) && (status === "all" || (status === "open" ? i.status !== "done" : i.status === "done"))
+    return items.filter(i => (origin === "all" || i.origin === origin) && (status === "all" || (status === "sourcing" ? sourcingGap(i.task) : status === "open" ? i.status !== "done" : i.status === "done"))
       && (who === "all" || (who === "none" ? i.origin !== "contract" && i.assigneeId === null : String(i.assigneeId) === who)) && (!q || `${i.title} ${i.sub} ${i.assignee}`.toLowerCase().includes(q)))
       .sort((a, b) => Number(overdue(b)) - Number(overdue(a)) || (a.due ?? "9999").localeCompare(b.due ?? "9999"));
   }, [items, origin, status, who, search]);
@@ -131,6 +135,8 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
     { label: "In ritardo", value: counts.late, sub: "Scadenza superata", color: C.red, icon: <AlertTriangle size={18} /> },
     { label: "Entro 7 giorni", value: counts.soon, sub: "In scadenza", color: C.yellow, icon: <Clock size={18} /> },
     ...(isManager ? [{ label: "Da assegnare", value: counts.unassigned, sub: "Senza buyer", color: C.purple, icon: <Send size={18} /> }] : []),
+    { label: "Confronto fornitori", value: counts.sourcing, sub: `RDA oltre ${fmt(threshold)} da documentare`, color: C.accent, icon: <Scale size={18} /> },
+    ...(isManager && counts.approvals ? [{ label: "Eccezioni da approvare", value: counts.approvals, sub: "Senza confronto tra offerte", color: C.purple, icon: <AlertTriangle size={18} /> }] : []),
     { label: "Chiusi di recente", value: counts.done, sub: "Ultimi 7 giorni", color: C.green, icon: <CheckCircle2 size={18} /> },
   ];
 
@@ -172,7 +178,7 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
           <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca task, RDA, fornitore…" aria-label="Cerca" style={{ ...iStyle, paddingLeft: 36 }} />
         </div>
-        <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label="Stato" style={{ ...iStyle, width: "auto", minWidth: 140 }}><option value="open">Aperti</option><option value="done">Chiusi</option><option value="all">Tutti</option></select>
+        <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label="Stato" style={{ ...iStyle, width: "auto", minWidth: 140 }}><option value="open">Aperti</option><option value="done">Chiusi</option><option value="all">Tutti</option><option value="sourcing">Confronto fornitori da documentare</option></select>
         {isManager && <select value={who} onChange={e => setWho(e.target.value)} aria-label="Assegnatario" style={{ ...iStyle, width: "auto", minWidth: 170 }}><option value="all">Tutto il team</option><option value="none">Da assegnare</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
       </div>
 
@@ -185,7 +191,7 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
             <tbody>
               {shown.map(i => (
                 <tr key={i.key} onClick={() => open(i)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter") open(i); }}>
-                  <td style={{ minWidth: 260, boxShadow: overdue(i) ? `inset 3px 0 0 ${C.red}` : i.priority === "high" && i.status !== "done" ? `inset 3px 0 0 ${C.yellow}` : undefined }}><div style={{ fontWeight: 650, color: C.text }}>{i.title}</div><div style={{ fontSize: 12, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 420, whiteSpace: "nowrap" }}>{i.sub}</div></td>
+                  <td style={{ minWidth: 260, boxShadow: overdue(i) ? `inset 3px 0 0 ${C.red}` : i.priority === "high" && i.status !== "done" ? `inset 3px 0 0 ${C.yellow}` : undefined }}><div style={{ fontWeight: 650, color: C.text }}>{i.title}{sourcingChip(i)}</div><div style={{ fontSize: 12, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 420, whiteSpace: "nowrap" }}>{i.sub}</div></td>
                   <td>{chip(ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}</td>
                   <td className="tabular" style={{ whiteSpace: "nowrap", color: overdue(i) ? C.red : C.text, fontWeight: overdue(i) ? 650 : 400 }}>{dueText(i)}</td>
                   <td><div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>{i.assignee !== "Da assegnare" && i.assignee !== "—" && <Avatar name={i.assignee} size={24} />}<span style={{ color: i.assignee === "Da assegnare" ? C.purple : C.muted, fontWeight: i.assignee === "Da assegnare" ? 650 : 400 }}>{i.assignee}</span></div></td>
@@ -200,7 +206,7 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
           <Grid min={320} gap={12}>
             {shown.map(i => (
               <Card key={i.key} className="lift" onClick={() => open(i)} role="button" tabIndex={0} style={{ padding: 14, cursor: "pointer", borderRadius: radius.md, borderLeft: overdue(i) ? `4px solid ${C.red}` : undefined }}>
-                <div style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text }}>{i.title}</div>
+                <div style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text }}>{i.title}{sourcingChip(i)}</div>
                 {i.sub && <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginBottom: 8 }}>{i.sub}</div>}
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>{chip(ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}{statusChip(i)}<span style={{ ...sans, fontSize: 12, color: overdue(i) ? C.red : C.muted }}>{dueText(i)}</span></div>
                 <div style={{ ...sans, fontSize: 12, color: C.subtle, marginTop: 8 }}>{i.assignee}</div>
@@ -212,9 +218,15 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
       </>)}
 
       {creating && <Portal><NewTaskDialog isManager={isManager} buyers={buyers} currentUser={currentUser} fail={fail} onClose={() => setCreating(false)} onCreated={async () => { setCreating(false); notify("Task creato"); await reload(); }} /></Portal>}
-      {openId !== null && <Portal><TaskSheet id={openId} isManager={isManager} buyers={buyers} fail={fail} notify={notify} onClose={() => setOpenId(null)} onChanged={reload} /></Portal>}
+      {openId !== null && <Portal><TaskSheet id={openId} threshold={threshold} isManager={isManager} buyers={buyers} fail={fail} notify={notify} onClose={() => setOpenId(null)} onChanged={reload} /></Portal>}
     </div>
   );
+}
+
+function sourcingChip(i: Item) {
+  const t = i.task; if (!sourcingGap(t)) return null;
+  const label = t!.sourcingStatus === "pending" ? "Eccezione da approvare" : i.status === "done" ? "Chiusa senza confronto" : "Serve confronto";
+  return <span style={{ marginLeft: 8, verticalAlign: "middle" }}>{chip(label, t!.sourcingStatus === "pending" ? C.purple : i.status === "done" ? C.red : C.yellow, t!.sourcingStatus === "pending" ? C.purpleBg : i.status === "done" ? C.redBg : C.yellowBg)}</span>;
 }
 
 function statusChip(i: Item) {
@@ -263,7 +275,7 @@ function NewTaskDialog({ isManager, buyers, currentUser, fail, onClose, onCreate
   );
 }
 
-function TaskSheet({ id, isManager, buyers, fail, notify, onClose, onChanged }: { id: number; isManager: boolean; buyers: { id: number; name: string }[]; fail: (e: unknown) => string; notify: (m: string) => void; onClose: () => void; onChanged: () => void }) {
+function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, onChanged }: { id: number; threshold: number; isManager: boolean; buyers: { id: number; name: string }[]; fail: (e: unknown) => string; notify: (m: string) => void; onClose: () => void; onChanged: () => void }) {
   const [t, setT] = useState<TaskDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -325,6 +337,8 @@ function TaskSheet({ id, isManager, buyers, fail, notify, onClose, onChanged }: 
               </Card>
             )}
 
+            {rda && (t.sourcingRequired || t.sourcing) && <SourcingCard t={t} threshold={threshold} isManager={isManager} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
+
             {t.pos.length > 0 && (
               <Card>
                 <CardTitle>Ordini collegati</CardTitle>
@@ -347,5 +361,101 @@ function TaskSheet({ id, isManager, buyers, fail, notify, onClose, onChanged }: 
         )}
       </div>
     </div>
+  );
+}
+
+const EMPTY_QUOTES: SourcingQuote[] = [{ supplier: "", amount: 0, chosen: true }, { supplier: "", amount: 0, chosen: false }];
+
+/** Come è stato scelto il fornitore di una RDA sopra soglia: confronto offerte, strategica, single source o eccezione. */
+function SourcingCard({ t, threshold, isManager, fail, onSaved }: { t: TaskDetail; threshold: number; isManager: boolean; fail: (e: unknown) => string; onSaved: (t: TaskDetail, msg: string) => void }) {
+  const s = t.sourcing;
+  const [editing, setEditing] = useState(!s);
+  const [mode, setMode] = useState<SourcingMode>(s?.mode ?? "comparison");
+  const [quotes, setQuotes] = useState<{ supplier: string; amount: string; chosen: boolean }[]>((s?.quotes.length ? s.quotes : EMPTY_QUOTES).map(q => ({ supplier: q.supplier, amount: q.amount ? String(q.amount) : "", chosen: q.chosen })));
+  const [justification, setJustification] = useState(s?.justification ?? "");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const cur = t.meta.currency ?? "EUR";
+
+  const save = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const x = await portalApi.saveSourcing(t.id, { mode, justification, quotes: mode === "comparison" ? quotes.map(q => ({ supplier: q.supplier, amount: Number(q.amount.replace(",", ".")), chosen: q.chosen })) : [] });
+      setEditing(false); onSaved(x, mode === "exception" && x.sourcing?.approval === "pending" ? "Eccezione inviata al Manager" : "Scelta del fornitore registrata");
+    } catch (e) { setErr(fail(e)); }
+    setBusy(false);
+  };
+  const decide = async (approve: boolean) => {
+    setBusy(true); setErr(null);
+    try { onSaved(await portalApi.decideSourcing(t.id, approve, note), approve ? "Eccezione approvata" : "Eccezione respinta"); setNote(""); } catch (e) { setErr(fail(e)); }
+    setBusy(false);
+  };
+  const setQ = (k: number, patch: Partial<{ supplier: string; amount: string; chosen: boolean }>) => setQuotes(qs => qs.map((q, j) => j === k ? { ...q, ...patch } : patch.chosen ? { ...q, chosen: false } : q));
+
+  return (
+    <Card>
+      <CardTitle icon={<Scale size={16} />} action={s && !editing ? <button onClick={() => setEditing(true)} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5 }}>Modifica</button> : undefined}>Scelta del fornitore</CardTitle>
+      {t.sourcingRequired && t.sourcingStatus === "missing" && !s && <Notice kind="warn">RDA sopra {fmt(threshold)}: serve il confronto con almeno un altro fornitore, salvo fornitura strategica, single source o eccezione approvata dal Manager.{t.status === "done" ? " La RDA è già diventata un ordine: registra comunque com'è stato scelto il fornitore." : ""}</Notice>}
+      {s && !editing && (
+        <div style={{ display: "grid", gap: 10 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            {chip(SOURCING_LABEL[s.mode], C.blue, C.blueBg)}
+            {s.approval === "pending" && chip("In attesa del Manager", C.purple, C.purpleBg)}
+            {s.approval === "approved" && chip(`Approvata da ${s.approvedBy}`, C.green, C.greenBg)}
+            {s.approval === "rejected" && chip(`Respinta da ${s.approvedBy}`, C.red, C.redBg)}
+            <span style={{ ...sans, fontSize: 12, color: C.subtle }}>Registrata da {s.recordedBy} il {fmtDate(s.recordedAt)}</span>
+          </div>
+          {s.quotes.length > 0 && (
+            <div style={{ display: "grid", gap: 4 }}>
+              {s.quotes.map((q, k) => <div key={k} style={{ ...sans, display: "flex", gap: 10, fontSize: 13, alignItems: "center" }}>{q.chosen ? <CheckCircle2 size={15} color={C.green} /> : <span style={{ width: 15 }} />}<b style={{ fontWeight: q.chosen ? 650 : 500 }}>{q.supplier}</b><span className="tabular" style={{ marginLeft: "auto", color: C.muted }}>{fmt(q.amount, cur)}</span></div>)}
+            </div>
+          )}
+          {s.justification && <div style={{ ...sans, fontSize: 13, color: C.muted, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{s.justification}</div>}
+          {s.approval === "rejected" && s.approvalNote && <Notice kind="error"><b>Motivo del rifiuto:</b> {s.approvalNote}. Registra un confronto tra offerte o un'altra motivazione.</Notice>}
+          {isManager && s.approval === "pending" && (
+            <div style={{ display: "grid", gap: 8, marginTop: 4 }}>
+              <input value={note} onChange={e => setNote(e.target.value)} placeholder="Nota (obbligatoria se respingi)" aria-label="Nota" style={iStyle} />
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button onClick={() => decide(true)} disabled={busy} style={{ ...btnPrimary, padding: "9px 14px", fontSize: 13 }}>Approva l'eccezione</button>
+                <button onClick={() => decide(false)} disabled={busy} style={{ ...btnGhost, padding: "9px 14px", fontSize: 13, color: C.red }}>Respingi</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {editing && (
+        <div style={{ display: "grid", gap: 12, marginTop: 4 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }} role="radiogroup" aria-label="Come è stato scelto il fornitore">
+            {(Object.keys(SOURCING_LABEL) as SourcingMode[]).map(m => (
+              <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => setMode(m)} style={{ ...sans, padding: "7px 14px", borderRadius: 999, border: `1px solid ${mode === m ? C.accent : C.border}`, background: mode === m ? C.accentLight : "#fff", color: mode === m ? C.accent : C.muted, fontWeight: 650, fontSize: 12.5, cursor: "pointer" }}>{SOURCING_LABEL[m]}</button>
+            ))}
+          </div>
+          {mode === "comparison" && (
+            <div style={{ display: "grid", gap: 8 }}>
+              <div style={{ ...sans, fontSize: 12, color: C.muted }}>Offerte ricevute: segna quella scelta. Ne servono almeno due di fornitori diversi.</div>
+              {quotes.map((q, k) => (
+                <div key={k} style={{ display: "grid", gridTemplateColumns: "auto minmax(0,1fr) 130px auto", gap: 8, alignItems: "center" }}>
+                  <input type="radio" name={`chosen-${t.id}`} checked={q.chosen} onChange={() => setQ(k, { chosen: true })} aria-label="Offerta scelta" style={{ width: 17, height: 17, accentColor: C.accent }} />
+                  <input value={q.supplier} onChange={e => setQ(k, { supplier: e.target.value })} placeholder={k === 0 ? "Fornitore scelto" : "Fornitore alternativo"} aria-label="Fornitore" style={iStyle} />
+                  <input value={q.amount} onChange={e => setQ(k, { amount: e.target.value })} inputMode="decimal" placeholder={`Importo ${cur}`} aria-label="Importo" style={iStyle} />
+                  <button type="button" onClick={() => setQuotes(qs => qs.length > 2 ? qs.filter((_, j) => j !== k) : qs)} disabled={quotes.length <= 2} aria-label="Rimuovi offerta" style={{ background: "none", border: "none", cursor: quotes.length > 2 ? "pointer" : "default", color: quotes.length > 2 ? C.subtle : "transparent", padding: 4 }}><Trash2 size={15} /></button>
+                </div>
+              ))}
+              {quotes.length < 10 && <button type="button" onClick={() => setQuotes(qs => [...qs, { supplier: "", amount: "", chosen: false }])} style={{ ...btnGhost, justifySelf: "start", padding: "6px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}><Plus size={14} />Aggiungi offerta</button>}
+            </div>
+          )}
+          <Field label={mode === "comparison" ? "Note (obbligatorie se non scegli l'offerta più bassa)" : mode === "exception" ? "Motivo dell'eccezione" : mode === "strategic" ? "Perché la fornitura è strategica" : "Perché c'è un solo fornitore possibile"} req={mode !== "comparison"} htmlFor={`sj-${t.id}`}>
+            <textarea id={`sj-${t.id}`} value={justification} onChange={e => setJustification(e.target.value)} rows={3} style={{ ...iStyle, resize: "vertical" }} />
+          </Field>
+          {mode === "exception" && !isManager && <div style={{ ...sans, fontSize: 12, color: C.muted, marginTop: -6 }}>L'eccezione va approvata dal Manager: fino ad allora la RDA non si può chiudere.</div>}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={save} disabled={busy} style={{ ...btnPrimary, padding: "9px 16px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 7 }}>{busy && <Loader2 className="spin" size={15} />}Registra</button>
+            {s && <button onClick={() => setEditing(false)} style={{ ...btnGhost, padding: "9px 14px", fontSize: 13 }}>Annulla</button>}
+          </div>
+        </div>
+      )}
+      {err && <div style={{ marginTop: 10 }}><Notice kind="error">{err}</Notice></div>}
+    </Card>
   );
 }
