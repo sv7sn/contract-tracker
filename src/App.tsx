@@ -332,7 +332,7 @@ export default function App() {
       <aside className="sidebar" aria-label="Menu principale">
         <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "2px 8px 26px" }}>
           <BrandMark size={38} />
-          <div><div style={{ ...font, fontSize: 16, fontWeight: 700, color: "#fff" }}>Procurement Lab</div><div style={{ fontSize: 11, color: "rgba(255,255,255,.45)" }}>Procurement indiretto</div></div>
+          <div><div style={{ ...font, fontSize: 16, fontWeight: 700, color: "#fff" }}>Procurement Lab</div><div style={{ fontSize: 11, color: "rgba(255,255,255,.45)" }}>Indirect</div></div>
         </div>
         {(hubAvailable || modules.length > 1) && (<>
           <div style={{ fontSize: 10.5, fontWeight: 650, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.35)", padding: "0 12px 8px" }}>Moduli</div>
@@ -405,6 +405,7 @@ export default function App() {
 
       {view !== "detail" && (
         <nav className="bottom-nav" aria-label="Navigazione">
+          {hubAvailable && curModule !== "hub" && tabBtn("Home", <House size={19} />, false, () => setView("hub"))}
           {curModule === "hub" ? modules.map(m => tabBtn(m.label, m.icon(19), false, () => goModule(m))) : navItems.map(n => tabBtn(n.label, n.icon, activeNav === n.key, () => setView(n.key)))}
           {(hubAvailable || modules.length > 1) && curModule !== "hub" && tabBtn("Moduli", <LayoutGrid size={19} />, false, () => setShowModules(true))}
         </nav>
