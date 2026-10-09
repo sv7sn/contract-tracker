@@ -149,6 +149,13 @@ create table if not exists sap_imports (
   id serial primary key, kind text not null, file_name text not null, rows integer not null default 0, result jsonb not null default '{}'::jsonb,
   at timestamptz not null default now(), by text not null default ''
 );
+alter table suppliers add column if not exists lifecycle text not null default 'active';
+alter table suppliers add column if not exists lifecycle_reason text not null default '';
+alter table suppliers add column if not exists approved_data jsonb;
+alter table suppliers add column if not exists approved_at timestamptz;
+alter table suppliers add column if not exists compliance jsonb;
+alter table suppliers add column if not exists dup_confirmed integer[] not null default '{}';
+update suppliers set approved_data = data, approved_at = updated_at where status = 'registered' and approved_data is null;
 create table if not exists login_attempts (email text not null, at timestamptz not null default now());
 create index if not exists login_attempts_idx on login_attempts (email, at);
 `;

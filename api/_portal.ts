@@ -1,15 +1,16 @@
 import { createHash, randomBytes } from "node:crypto";
-import type { BuyingCompany, IndustryCode, InviteInput, PaymentTerm, PortalConfig, SapSettings, Supplier, SupplierData, SupplierDocument, SupplierEvent, SupplierStatus, SupplierSummary, User, VendorAction } from "../src/types.ts";
+import type { Lifecycle, BuyingCompany, IndustryCode, InviteInput, PaymentTerm, PortalConfig, SapSettings, Supplier, SupplierData, SupplierDocument, SupplierEvent, SupplierStatus, SupplierSummary, User, VendorAction } from "../src/types.ts";
 import { getPool, inTransaction, type Queryable } from "./_db.js";
 import { HttpError } from "./_http.js";
 import { hashPassword } from "./_crypto.js";
 import { sendMail, type Lang } from "./_notify.js";
 import { buildVendorPayload, assertReadyForSap, sendToSap } from "./_sap.js";
-import { accountGroup, COUNTRIES, MAX_DOC_BYTES, missingRequired, resolveDocTypes, SUPPLIER_FILE_PATH_RE, validateSupplierData, validatePassword, validEmail, DOC_EXTENSIONS, normalizeIban } from "./_supplier-rules.js";
+import { accountGroup, COUNTRIES, MAX_DOC_BYTES, missingRequired, resolveDocTypes, SUPPLIER_FILE_PATH_RE, validateDeclarations, validateSupplierData, validatePassword, validEmail, DOC_EXTENSIONS, normalizeIban } from "./_supplier-rules.js";
 import { canInviteSuppliers } from "./_permissions.js";
 import { visibleWhere } from "./_access.js";
 import { docConfig, loadCatalog, loadPolicy, saveDocType, savePolicy } from "./_docs.js";
 import { loadRdaConfig, saveRda } from "./_tasks.js";
+import { bankKey, complianceChecks, diffData, duplicateIds, findDuplicates, qualificationOf, runExternalChecks, type StoredCompliance } from "./_governance.js";
 
 const bad = (msg: string): never => { throw new HttpError(400, msg); };
 const INVITE_DAYS = Number(process.env.INVITE_DAYS) > 0 ? Number(process.env.INVITE_DAYS) : 14;
@@ -20,21 +21,32 @@ const str = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0
 // ─── Lettura ─────────────────────────────────────────────────
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-function mapSupplier(r: Row): Omit<Supplier, "documents" | "events" | "docTypes"> {
+type Base = Omit<Supplier, "documents" | "events" | "docTypes" | "qualification" | "changes" | "bankChanged" | "bankLetterAfterChange" | "duplicates" | "compliance" | "complianceCheckedAt">;
+function mapSupplier(r: Row): Base {
   return {
     id: r.id, email: r.email, name: r.name, companyCodes: r.company_codes, industryCode: r.industry_code, customerCode: r.customer_code,
     referenceBuyerId: r.reference_buyer_id, referenceBuyerName: r.reference_buyer_name ?? "", status: r.status, data: r.data ?? {},
     paymentTerms: r.payment_terms, sapCode: r.sap_code, sapAccountGroup: r.sap_account_group, rejectionReason: r.rejection_reason, isUpdate: r.is_update,
     invitedAt: iso(r.created_at)!, expiresAt: iso(r.token_expires), submittedAt: iso(r.submitted_at), updatedAt: iso(r.updated_at)!,
+    lifecycle: r.lifecycle ?? "active", lifecycleReason: r.lifecycle_reason ?? "", approvedAt: iso(r.approved_at),
   };
 }
 
 const SELECT = "select s.*, rb.name as reference_buyer_name from suppliers s left join users rb on rb.id = s.reference_buyer_id";
 
 export async function listVendors(user: User): Promise<SupplierSummary[]> {
-  const { rows } = await getPool().query(`select s.*, rb.name as reference_buyer_name, (select count(*)::int from supplier_documents d where d.supplier_id = s.id) as doc_count
-    from suppliers s left join users rb on rb.id = s.reference_buyer_id where ${visibleWhere(user)} order by s.updated_at desc`);
-  return rows.map(r => { const { data, ...rest } = mapSupplier(r); return { ...rest, country: data.address?.country ?? "", legalName: data.company?.legalName ?? r.name, documentCount: r.doc_count }; });
+  const db = getPool();
+  const { rows } = await db.query(`select s.*, rb.name as reference_buyer_name from suppliers s left join users rb on rb.id = s.reference_buyer_id where ${visibleWhere(user)} order by s.updated_at desc`);
+  const ids = rows.map(r => r.id);
+  const docs = ids.length ? (await db.query("select supplier_id, type, valid_until from supplier_documents where supplier_id = any($1)", [ids])).rows : [];
+  const cat = await loadCatalog(db);
+  const dup = await duplicateIds(db);
+  return rows.map(r => {
+    const { data, ...rest } = mapSupplier(r);
+    const mine = docs.filter(d => d.supplier_id === r.id).map(d => ({ type: d.type, validUntil: d.valid_until ? new Date(d.valid_until).toISOString().slice(0, 10) : null }));
+    const qualification = qualificationOf(r.status, resolveDocTypes(cat.types, cat.rules, data.address?.country, r.industry_code), mine);
+    return { ...rest, qualification, bankChanged: false, country: data.address?.country ?? "", legalName: data.company?.legalName ?? r.name, documentCount: mine.length, duplicate: dup.has(r.id) };
+  });
 }
 
 async function loadFull(db: Queryable, id: number, forSupplier = false): Promise<Supplier | undefined> {
@@ -50,8 +62,18 @@ async function loadFull(db: Queryable, id: number, forSupplier = false): Promise
   // Documenti applicabili (paese e codice merceologico) più quelli già caricati di tipi non più richiesti.
   const resolved = resolveDocTypes(cat.types, cat.rules, s.data.address?.country, s.industryCode);
   const docTypes = [...resolved, ...cat.types.filter(t => !resolved.some(x => x.key === t.key) && docs.some(d => d.type === t.key)).map(t => ({ ...t, required: false }))];
-  // Il fornitore non vede dati interni (condizioni di pagamento, buyer di riferimento).
-  return { ...s, ...(forSupplier ? { paymentTerms: null, referenceBuyerName: "" } : {}), documents, events, docTypes };
+  const qualification = qualificationOf(r.status, resolved, documents);
+  const changes = r.approved_data && r.status !== "registered" ? diffData(r.approved_data, s.data) : [];
+  const bankChanged = changes.some(c => c.bank);
+  const bankLetterAfterChange = bankChanged && docs.some(d => d.type === "bank_letter" && (!r.approved_at || new Date(d.uploaded_at) > new Date(r.approved_at)));
+  if (forSupplier) {
+    // Il fornitore non vede dati interni (condizioni di pagamento, buyer di riferimento, controlli e doppioni).
+    return { ...s, paymentTerms: null, referenceBuyerName: "", lifecycleReason: "", documents, events, docTypes, qualification, changes: [], bankChanged: false, bankLetterAfterChange: false, duplicates: [], compliance: [], complianceCheckedAt: null };
+  }
+  const duplicates = await findDuplicates(db, { id: r.id, name: r.name, data: s.data, confirmed: r.dup_confirmed ?? [] });
+  const stored = (r.compliance ?? null) as StoredCompliance | null;
+  const compliance = complianceChecks(s.data, stored, duplicates, qualification, missingRequired(resolved, documents).length, s.lifecycle);
+  return { ...s, documents, events, docTypes, qualification, changes, bankChanged, bankLetterAfterChange, duplicates, compliance, complianceCheckedAt: stored?.checkedAt ?? null };
 }
 
 export async function getVendor(user: User, id: number): Promise<Supplier> {
@@ -145,6 +167,7 @@ export async function inviteSupplier(actor: User, input: unknown, origin: string
   const customerCode = str(i.customerCode, 40);
   if (industryCode === "CT00" && !customerCode) bad("Il codice cliente è obbligatorio per il codice merceologico CT00");
   const refId = Number(i.referenceBuyerId);
+  const confirmDup = (input as Row)?.confirmDuplicates === true;
 
   const token = randomBytes(32).toString("base64url");
   const expires = new Date(Date.now() + INVITE_DAYS * 864e5);
@@ -156,10 +179,15 @@ export async function inviteSupplier(actor: User, input: unknown, origin: string
     if (!(await db.query("select 1 from users where id = $1 and active and role in ('buyer','manager')", [refId])).rows.length) bad("Seleziona un buyer di riferimento attivo");
     if ((await db.query("select 1 from suppliers where lower(email) = $1", [email])).rows.length) throw new HttpError(409, "Questo fornitore è già stato invitato o registrato");
     if ((await db.query("select 1 from users where lower(email) = $1", [email])).rows.length) throw new HttpError(409, "Questa email appartiene già a un utente");
+    // Controllo doppioni prima di creare un nuovo fornitore: stessa ragione sociale di uno esistente.
+    const dups = await findDuplicates(db, { name, data: { company: { legalName: name } } });
+    if (dups.some(d => d.lifecycle === "excluded") && actor.role !== "manager") throw new HttpError(409, "Esiste un fornitore escluso con lo stesso nome: solo un Manager può invitarlo", { duplicates: dups });
+    if (dups.length && !confirmDup) throw new HttpError(409, "Esiste già un fornitore con lo stesso nome: controlla che non sia un doppione", { duplicates: dups, needsConfirm: true });
     const r = await db.query(`insert into suppliers (email, name, company_codes, industry_code, customer_code, reference_buyer_id, status, token_hash, token_expires, invited_by, data)
       values ($1,$2,$3,$4,$5,$6,'invited',$7,$8,$9,$10) returning id`, [email, name, companyCodes, industryCode, customerCode, refId, sha(token), expires, actor.id, JSON.stringify({ company: { legalName: name }, contacts: { language: "IT", ordersEmail: email, adminEmail: email } })]);
     const sid = r.rows[0].id as number;
     await addEvent(db, sid, actor.name, "Invito creato", `Inviato a ${email}`, true);
+    if (confirmDup) await addEvent(db, sid, actor.name, "Possibile doppione confermato all'invito", "Esisteva già un fornitore con lo stesso nome");
     const names = (await db.query("select name from buying_companies where code = any($1) order by name", [companyCodes])).rows.map(x => x.name).join(", ");
     const status = await sendMail(db, { to: email, template: "invitation", supplierId: sid, vars: { name, link, expires: fmtDay(expires), companies: names } });
     await addEvent(db, sid, "Sistema", status === "sent" ? "Email di invito inviata" : status === "failed" ? "Invio email non riuscito" : "Email di invito non inviata (servizio email non configurato): usa il link", "");
@@ -243,11 +271,19 @@ function sanitizeData(input: unknown): SupplierData {
   }
   if (x.contacts && typeof x.contacts === "object") out.contacts = { language: x.contacts.language === "EN" ? "EN" : "IT", ordersEmail: s(x.contacts.ordersEmail).toLowerCase(), adminEmail: s(x.contacts.adminEmail).toLowerCase(), phone: s(x.contacts.phone, 30) };
   if (typeof x.acceptedTerms === "boolean") out.acceptedTerms = x.acceptedTerms;
+  if (x.declarations && typeof x.declarations === "object") {
+    const d = x.declarations;
+    out.declarations = { conflictOfInterest: typeof d.conflictOfInterest === "boolean" ? d.conflictOfInterest : null, conflictDetails: s(d.conflictDetails, 1000), noSanctions: d.noSanctions === true, privacyAccepted: d.privacyAccepted === true };
+  }
   return out;
 }
-const merge = (a: SupplierData, b: SupplierData): SupplierData => ({
-  ...a, ...b, company: { ...a.company, ...b.company }, address: { ...a.address, ...b.address }, payment: { ...a.payment, ...b.payment }, contacts: { ...a.contacts, ...b.contacts },
-});
+const merge = (a: SupplierData, b: SupplierData): SupplierData => {
+  const out: SupplierData = { ...a, ...b, company: { ...a.company, ...b.company }, address: { ...a.address, ...b.address }, payment: { ...a.payment, ...b.payment }, contacts: { ...a.contacts, ...b.contacts }, declarations: { ...a.declarations, ...b.declarations } };
+  // Data della presa visione dell'informativa privacy: si registra la prima volta.
+  if (out.declarations?.privacyAccepted && !out.declarations.privacyAcceptedAt) out.declarations.privacyAcceptedAt = new Date().toISOString();
+  if (out.declarations && !out.declarations.privacyAccepted) delete out.declarations.privacyAcceptedAt;
+  return out;
+};
 const stable = (o: unknown): string => JSON.stringify(o, (_k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b))) : v));
 
 /** Un fornitore già approvato che modifica i dati torna "in verifica" e il buyer deve riapprovare. */
@@ -266,6 +302,12 @@ export async function saveMyData(user: User, input: unknown, origin?: string): P
     if (stable(merged) === stable(r.data ?? {})) return;
     await db.query("update suppliers set data = $1, updated_at = now() where id = $2", [JSON.stringify(merged), r.id]);
     await reopenIfRegistered(db, r, user.name, "Modifica dei dati", origin);
+    // Cambio delle coordinate bancarie di un fornitore già approvato: avviso ai contatti già noti (protezione dalle frodi).
+    if (r.approved_data && bankKey(merged) !== bankKey(r.data) && bankKey(merged) !== bankKey(r.approved_data)) {
+      const known = [...new Set([r.approved_data?.contacts?.adminEmail, r.email].filter(Boolean).map((e: string) => e.toLowerCase()))];
+      for (const to of known) await sendMail(db, { to, template: "bank_change_alert", lang: langOf(r.approved_data), supplierId: r.id, vars: { name: r.name } });
+      await addEvent(db, r.id, "Sistema", "Coordinate bancarie modificate dal fornitore", `Avviso di sicurezza inviato a ${known.join(", ")}`);
+    }
   });
   return getMySupplier(user);
 }
@@ -277,6 +319,7 @@ export async function submitMyRegistration(user: User, origin: string): Promise<
     const data: SupplierData = r.data ?? {};
     const errors = validateSupplierData(data);
     if (data.acceptedTerms !== true) errors["acceptedTerms"] = "Devi accettare i termini e le condizioni";
+    Object.assign(errors, validateDeclarations(data));
     const docs = (await db.query("select type, valid_until from supplier_documents where supplier_id = $1", [r.id])).rows.map(d => ({ type: d.type, validUntil: d.valid_until ? new Date(d.valid_until).toISOString().slice(0, 10) : null }));
     const cat = await loadCatalog(db);
     const missing = missingRequired(resolveDocTypes(cat.types, cat.rules, data.address?.country, r.industry_code), docs);
@@ -285,6 +328,8 @@ export async function submitMyRegistration(user: User, origin: string): Promise<
     await addEvent(db, r.id, user.name, r.sap_code ? "Aggiornamento inviato" : "Registrazione inviata", "In attesa della verifica del Buyer", true);
     for (const b of await buyersFor(db, r)) await sendMail(db, { to: b.email, template: r.sap_code ? "supplier_modified" : "new_registration", supplierId: r.id, vars: { name: r.name, link: `${origin}/` } });
   });
+  // Controlli esterni (VIES, sanzioni) dopo il salvataggio: un servizio lento non deve bloccare l'invio.
+  try { await runExternalChecks(getPool(), (await ownSupplierRow(getPool(), user)).id); } catch (err) { console.error("Controlli di conformità non riusciti", err); }
   return getMySupplier(user);
 }
 
@@ -362,13 +407,51 @@ export async function vendorAction(user: User, id: number, action: VendorAction,
   const statusIn = (...s: SupplierStatus[]) => { if (!s.includes(base.status)) throw new HttpError(409, `Azione non possibile nello stato "${base.status}"`); };
   const termsOk = async (code: string | null) => { if (!code || !(await db.query("select 1 from payment_terms where code = $1", [code])).rows.length) bad("Seleziona le condizioni di pagamento prima di approvare"); };
 
+  const full = async () => (await loadFull(db, id))!;
+  const lifecycleOk = () => { if ((base.lifecycle ?? "active") !== "active") throw new HttpError(409, "Il fornitore è bloccato, disattivato o escluso: riattivalo prima di procedere"); };
+
+  if (action === "block" || action === "deactivate" || action === "exclude" || action === "reactivate") {
+    // Blocco temporaneo: Buyer o Manager. Disattivazione, esclusione e riattivazione: solo Manager.
+    if (action === "block" ? !isBuyerStep(user) : user.role !== "manager") throw new HttpError(403, action === "block" ? "Operazione non consentita" : "Solo un Manager può farlo");
+    if (reason.length < 3) bad("Scrivi il motivo: resta nello storico del fornitore");
+    const to: Lifecycle = action === "block" ? "blocked" : action === "deactivate" ? "inactive" : action === "exclude" ? "excluded" : "active";
+    if ((base.lifecycle ?? "active") === to) throw new HttpError(409, "Il fornitore è già in questo stato");
+    const label = { blocked: "Fornitore bloccato", inactive: "Fornitore disattivato", excluded: "Fornitore escluso", active: "Fornitore riattivato" }[to];
+    await inTransaction(async tx => {
+      await tx.query("update suppliers set lifecycle = $1, lifecycle_reason = $2, updated_at = now() where id = $3", [to, to === "active" ? "" : reason, id]);
+      // Disattivato o escluso: non può più accedere all'area personale. Bloccato: accede ma non viene approvato.
+      if (base.user_id) await tx.query("update users set active = $1 where id = $2", [to === "active" || to === "blocked", base.user_id]);
+      await addEvent(tx, id, user.name, label, reason);
+    });
+    return full();
+  }
+  if (action === "sanctions_manual") {
+    if (!isFinanceStep(user) && user.role !== "buyer") throw new HttpError(403, "Operazione non consentita");
+    if (reason.length < 5) bad("Descrivi la verifica fatta (fonte consultata ed esito)");
+    const stored: StoredCompliance = { ...(base.compliance ?? {}), manualSanctions: { by: user.name, at: new Date().toISOString(), note: reason } };
+    await inTransaction(async tx => { await tx.query("update suppliers set compliance = $1 where id = $2", [JSON.stringify(stored), id]); await addEvent(tx, id, user.name, "Verifica sanzioni manuale", reason); });
+    return full();
+  }
+
   if (action === "set_payment_terms") {
     if (!isBuyerStep(user)) throw new HttpError(403, "Solo il Buyer può modificare le condizioni di pagamento");
     const code = str(input?.paymentTerms, 20); await termsOk(code);
     await inTransaction(async tx => { await tx.query("update suppliers set payment_terms = $1, updated_at = now() where id = $2", [code, id]); await addEvent(tx, id, user.name, "Condizioni di pagamento", code); });
   } else if (action === "approve" && base.status === "pending") {
     if (!isBuyerStep(user)) throw new HttpError(403, "Il passaggio spetta al Buyer");
+    lifecycleOk();
     await termsOk(str(input?.paymentTerms, 20) || base.payment_terms);
+    // Possibili doppioni: il Buyer deve confermare che si tratta di un fornitore diverso, spiegando perché.
+    const all = await findDuplicates(db, { id, name: base.name, data: base.data ?? {}, confirmed: base.dup_confirmed ?? [] });
+    if (all.some(d => d.lifecycle === "excluded")) throw new HttpError(409, "Lo stesso fornitore risulta escluso: non si può approvare", { duplicates: all });
+    const dups = all.filter(d => !d.confirmed);
+    if (dups.length && !(input?.confirmDuplicates === true && str(input?.duplicateReason, 500).length >= 5)) throw new HttpError(409, "Possibile doppione: conferma che è un fornitore diverso e spiega il motivo", { duplicates: dups, needsDuplicateConfirm: true });
+    const fb = await full();
+    if (fb.bankChanged && !fb.bankLetterAfterChange) throw new HttpError(409, "Le coordinate bancarie sono cambiate ma manca la nuova lettera della banca: chiedi modifiche al fornitore");
+    if (dups.length) {
+      await db.query("update suppliers set dup_confirmed = array(select distinct unnest(dup_confirmed || $1::int[])) where id = $2", [dups.map(d => d.supplierId), id]);
+      await addEvent(db, id, user.name, "Doppione verificato dal Buyer", `${dups.map(d => d.name).join(", ")}: ${str(input?.duplicateReason, 500)}`);
+    }
     await inTransaction(async tx => {
       const pt = str(input?.paymentTerms, 20) || base.payment_terms;
       await tx.query("update suppliers set status = 'approved', payment_terms = $1, updated_at = now() where id = $2", [pt, id]);
@@ -377,6 +460,21 @@ export async function vendorAction(user: User, id: number, action: VendorAction,
     });
   } else if (action === "approve" && base.status === "approved") {
     if (!isFinanceStep(user)) throw new HttpError(403, "Il passaggio spetta al Finance");
+    lifecycleOk();
+    const f = await full();
+    // Coordinate bancarie cambiate: servono la nuova lettera della banca e la verifica telefonica a un contatto già noto.
+    if (f.bankChanged) {
+      if (!f.bankLetterAfterChange) throw new HttpError(409, "Le coordinate bancarie sono cambiate: serve una nuova lettera della banca caricata dal fornitore");
+      const v = input?.bankVerification ?? {};
+      if (str(v.contact, 200).length < 3 || str(v.note, 1000).length < 5) bad("Le coordinate bancarie sono cambiate: indica chi hai chiamato (a un numero già noto, non preso dalla richiesta) e l'esito della verifica");
+      await addEvent(db, id, user.name, "Coordinate bancarie verificate", `Telefonata a ${str(v.contact, 200)}: ${str(v.note, 1000)}`);
+    }
+    // Controlli di conformità non tutti superati: il Finance conferma di averli valutati.
+    const open = f.compliance.filter(c => c.status === "fail" || c.status === "warn" || c.status === "todo");
+    if (open.length) {
+      if (input?.complianceAck !== true || str(input?.complianceNote, 1000).length < 5) throw new HttpError(409, `Controlli da valutare: ${open.map(c => c.label).join(", ")}. Conferma di averli verificati e scrivi una nota`, { needsComplianceAck: true });
+      await addEvent(db, id, user.name, "Controlli di conformità valutati", `${open.map(c => `${c.label}: ${c.detail}`).join(" | ")} — Nota: ${str(input?.complianceNote, 1000)}`);
+    }
     await createInSap(user, base, origin);
   } else if (action === "approve") {
     throw new HttpError(409, `Non c'è nulla da approvare nello stato "${base.status}"`);
@@ -422,7 +520,7 @@ async function createInSap(user: User, base: Row, origin: string): Promise<void>
     }
     await inTransaction(async tx => {
       await tx.query("insert into sap_requests (supplier_id, mode, payload, response, ok) values ($1,$2,$3,$4,true)", [base.id, result.mode, JSON.stringify(payload), JSON.stringify(result.response)]);
-      await tx.query("update suppliers set status = 'registered', sap_code = $1, sap_account_group = $2, is_update = false, rejection_reason = '', sap_lock = null, updated_at = now() where id = $3", [result.vendorCode, accountGroup(base.data ?? {}), base.id]);
+      await tx.query("update suppliers set status = 'registered', sap_code = $1, sap_account_group = $2, is_update = false, rejection_reason = '', sap_lock = null, approved_data = data, approved_at = now(), updated_at = now() where id = $3", [result.vendorCode, accountGroup(base.data ?? {}), base.id]);
       await addEvent(tx, base.id, user.name, payload.mode === "create" ? "Creato in SAP" : "Aggiornato in SAP", `Codice fornitore ${result.vendorCode}${result.mode === "simulated" ? " (simulato)" : ""}`, true);
       const link = `${origin}/`;
       for (const x of [...(await buyersFor(tx, base)), ...(await financeUsers(tx))]) await sendMail(tx, { to: x.email, template: "vendor_created", supplierId: base.id, vars: { name: base.name, sapCode: result.vendorCode, link } });

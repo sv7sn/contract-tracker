@@ -79,7 +79,7 @@ interface Outstanding { supplier: Row; item: MonitorItem }
 /** Elenco di tutti i documenti richiesti/caricati dei fornitori registrati, con stato, solleciti e segnalazione "non risponde". */
 async function collect(db: Queryable, whereSql: string, policy: ReminderPolicy, now = new Date()): Promise<Outstanding[]> {
   const cat = await loadCatalog(db);
-  const suppliers = (await db.query(`select s.*, rb.name as reference_buyer_name from suppliers s left join users rb on rb.id = s.reference_buyer_id where s.status = 'registered' and ${whereSql} order by s.name`)).rows;
+  const suppliers = (await db.query(`select s.*, rb.name as reference_buyer_name from suppliers s left join users rb on rb.id = s.reference_buyer_id where s.status = 'registered' and s.lifecycle in ('active','blocked') and ${whereSql} order by s.name`)).rows;
   if (!suppliers.length) return [];
   const ids = suppliers.map(s => s.id);
   const docs = (await db.query("select * from supplier_documents where supplier_id = any($1) order by id", [ids])).rows;
