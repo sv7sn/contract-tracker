@@ -29,7 +29,9 @@ export function modulesFor(user: User, apiMode: boolean): ModuleDef[] {
   if (apiMode && user.role === "manager") {
     mods.push({ key: "admin", label: "Amministrazione", description: "Utenti, documenti richiesti, reminder e parametri SAP", icon: s => <ShieldCheck size={s} />, pages: [page("config", "Configurazione", <SlidersHorizontal size={19} />), page("users", "Utenti", <ShieldCheck size={19} />)] });
   }
-  return mods;
+  // Ordine nel menu e nella Home: Task, Contratti, Fornitori, Amministrazione.
+  const order: ModuleKey[] = ["tasks", "contracts", "vendors", "admin"];
+  return mods.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
 }
 
 export function moduleOfView(v: View): ModuleKey | "hub" | null {
