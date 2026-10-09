@@ -8,6 +8,7 @@ import { runExternalChecks } from "./_governance.js";
 import { listConfigAudit, logConfigChange } from "./_audit.js";
 import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
 import { computeKpis } from "./_kpi.js";
+import { createDemoSupplier } from "./_demo.js";
 import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
 import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, setTaskLinks, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
@@ -188,6 +189,7 @@ async function handle(request: Request): Promise<Response> {
       return json({ supplier: await getVendor(user, owner) });
     }
     if (op === "kpis" && method === "GET") return json(await computeKpis(user));
+    if (op === "vendor-demo" && method === "POST") return json(await createDemoSupplier(user), { status: 201 });
     if (op === "vendors" && method === "GET") return json({ vendors: await listVendors(user) });
     if (op === "vendor-checks" && method === "POST") {
       const id = idOf(url); await getVendor(user, id);

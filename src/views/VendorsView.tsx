@@ -22,6 +22,8 @@ export function VendorsView({ currentUser, notify, onSessionExpired }: Props) {
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<number | null>(null);
   const [inviting, setInviting] = useState(false);
+  const [demo, setDemo] = useState<{ name: string; email: string; password: string } | null>(null);
+  const [demoBusy, setDemoBusy] = useState(false);
 
   const fail = useCallback((err: unknown) => {
     if (err instanceof ApiError && err.status === 401) { onSessionExpired(); return "Sessione scaduta"; }
@@ -37,6 +39,11 @@ export function VendorsView({ currentUser, notify, onSessionExpired }: Props) {
     return () => { off = true; };
   }, [fail]);
 
+  const makeDemo = async () => {
+    setDemoBusy(true);
+    try { const d = await portalApi.demoSupplier(); setDemo(d); notify(`${d.name} creato`); await reload(); } catch (err) { notify(`⚠️ ${fail(err)}`); }
+    setDemoBusy(false);
+  };
   const canInvite = currentUser.role === "manager" || currentUser.role === "buyer";
   const mine: SupplierStatus = currentUser.role === "finance" ? "approved" : "pending";
 
@@ -72,8 +79,12 @@ export function VendorsView({ currentUser, notify, onSessionExpired }: Props) {
           <div style={{ ...font, fontSize: 18, fontWeight: 700, color: C.text }}>Fornitori</div>
           <div style={{ ...sans, fontSize: 12, color: C.muted }}>{vendors.length} schede · {counts[mine] ?? 0} {currentUser.role === "finance" ? "da registrare" : "da verificare"}</div>
         </div>
-        {canInvite && <button onClick={() => setInviting(true)} style={{ ...sans, display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, cursor: "pointer", fontSize: 13, boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={16} />Invita fornitore</button>}
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {currentUser.role === "manager" && <button onClick={makeDemo} disabled={demoBusy} title="Crea un fornitore già registrato e in regola, per provare contratti e acquisti" style={{ ...btnGhost, display: "flex", alignItems: "center", gap: 7, padding: "9px 14px", fontSize: 13 }}>{demoBusy ? <Loader2 className="spin" size={15} /> : <Plus size={15} />}Fornitore di prova</button>}
+          {canInvite && <button onClick={() => setInviting(true)} style={{ ...sans, display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, cursor: "pointer", fontSize: 13, boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={16} />Invita fornitore</button>}
+        </div>
       </div>
+      {demo && <Notice kind="ok"><b>{demo.name} creato</b>: registrato, documenti validi e controlli superati. Per provare anche l'area del fornitore accedi con <b>{demo.email}</b> e password <b style={{ userSelect: "all" }}>{demo.password}</b> (mostrata solo ora).</Notice>}
 
       <Grid min={190} gap={12} fill style={{ marginBottom: 16 }}>
         {tiles.filter(t => currentUser.role !== "finance" || t.key !== "invited").map(t => (
