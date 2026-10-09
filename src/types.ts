@@ -2,7 +2,7 @@
 export type Role = "manager" | "buyer" | "finance" | "bo" | "supplier";
 export type Urgency = "green" | "yellow" | "red" | "gray";
 export type StepStatus = "upcoming" | "done" | "pending_bo";
-export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries";
+export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub";
 
 /** Utente autenticato, come restituito dall'API (mai con la password). */
 export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean }
@@ -116,6 +116,7 @@ export interface PortalConfig {
   companies: BuyingCompany[]; industryCodes: IndustryCode[]; paymentTerms: PaymentTerm[]; sap: SapSettings; buyers: { id: number; name: string; active: boolean }[];
   docTypes: DocTypeDef[]; docRules: DocRule[]; reminders: ReminderPolicy;
   emailConfigured: boolean; ai: { provider: string; configured: boolean };
+  rda: RdaConfig;
 }
 
 export type MonitorState = "expired" | "expiring" | "missing" | "valid";
@@ -129,3 +130,21 @@ export interface MonitorData { items: MonitorItem[]; policy: ReminderPolicy; ema
 
 export interface InviteInput { email: string; name: string; companyCodes: string[]; industryCode: string; customerCode?: string; referenceBuyerId: number }
 export type VendorAction = "approve" | "reject" | "request_revision" | "set_payment_terms" | "change_status";
+
+// ─── Task ────────────────────────────────────────────────────
+export type TaskSource = "contract" | "rda" | "manual";
+export type TaskPriority = "low" | "normal" | "high";
+export interface TaskPo { po: string; supplierName: string; docDate: string | null }
+export interface RdaMeta { pgr?: string; requestedBy?: string; createdBy?: string; value?: number; currency?: string; lines?: number; releaseDate?: string | null; delivDate?: string | null; plant?: string; firstSeen?: string }
+export interface Task {
+  id: number; source: "rda" | "manual"; sourceKey: string | null; title: string; detail: string; due: string | null; priority: TaskPriority;
+  assigneeId: number | null; assigneeName: string; status: "open" | "done"; doneAt: string | null; doneReason: string; doneBy: string;
+  meta: RdaMeta; pos: TaskPo[]; createdBy: string; createdAt: string; updatedAt: string;
+}
+export interface TaskLine { item: string; shortText: string; qty: number; unit: string; price: number; per: number; currency: string; delivDate: string | null; costCenter: string; glAccount: string; value: number }
+export interface TaskDetail extends Task { lines: TaskLine[] }
+export interface TaskList { tasks: Task[]; sapUpdatedAt: { pr: string | null; po: string | null } }
+export interface ImportResult { kind: "pr" | "po"; fileName: string; rows: number; prs: number; created: number; updated: number; reopened: number; closedPo: number; closedGone: number; linked: number }
+export interface RdaGroup { pgr: string; userId: number | null; note: string; openTasks: number }
+export interface RdaConfig { slaDays: number; groups: RdaGroup[]; ingestConfigured: boolean; lastImports: { kind: string; fileName: string; rows: number; at: string; by: string }[] }
+export interface TaskSummary { open: number; overdue: number; dueSoon: number; unassigned: number }

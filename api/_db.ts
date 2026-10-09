@@ -121,6 +121,34 @@ create table if not exists doc_reminders (
   note text not null default '', sent_at timestamptz not null default now()
 );
 create index if not exists doc_reminders_supplier_idx on doc_reminders (supplier_id, doc_type);
+create table if not exists tasks (
+  id serial primary key, source text not null check (source in ('rda','manual')), source_key text,
+  title text not null, detail text not null default '', due date, priority text not null default 'normal',
+  assignee_id integer references users(id) on delete set null, assignee_auto boolean not null default false,
+  group_key text not null default '', status text not null default 'open' check (status in ('open','done')),
+  done_at timestamptz, done_reason text not null default '', done_by text not null default '',
+  meta jsonb not null default '{}'::jsonb, created_by text not null default '',
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now()
+);
+create unique index if not exists tasks_source_key_idx on tasks (source, source_key) where source_key is not null;
+create index if not exists tasks_assignee_idx on tasks (assignee_id, status);
+create table if not exists rda_lines (
+  id serial primary key, pr text not null, item text not null default '0', pgr text not null default '', short_text text not null default '',
+  qty numeric not null default 0, unit text not null default '', price numeric not null default 0, per numeric not null default 1, currency text not null default 'EUR',
+  req_date date, deliv_date date, release_date date, requested_by text not null default '', created_by text not null default '',
+  plant text not null default '', cost_center text not null default '', gl_account text not null default '', value numeric not null default 0
+);
+create index if not exists rda_lines_pr_idx on rda_lines (pr);
+create table if not exists sap_pos (
+  po text not null, pr text not null, supplier_code text not null default '', supplier_name text not null default '',
+  doc_date date, pgr text not null default '', created_by text not null default '', seen_at timestamptz not null default now(), primary key (po, pr)
+);
+create index if not exists sap_pos_pr_idx on sap_pos (pr);
+create table if not exists pgr_assignments (pgr text primary key, user_id integer references users(id) on delete set null, note text not null default '');
+create table if not exists sap_imports (
+  id serial primary key, kind text not null, file_name text not null, rows integer not null default 0, result jsonb not null default '{}'::jsonb,
+  at timestamptz not null default now(), by text not null default ''
+);
 create table if not exists login_attempts (email text not null, at timestamptz not null default now());
 create index if not exists login_attempts_idx on login_attempts (email, at);
 `;
@@ -137,6 +165,7 @@ export function ensureSchema() {
     await db.query(`insert into settings (key, value) values ('sap', $1) on conflict do nothing`, [JSON.stringify({ tradingPartner: "999999", sortKey: "002", cashManagementGroup: "0_VEND_001", releaseGroup: "MFL1", reconciliationAccounts: {} })]);
     await db.query(`insert into industry_codes (code, name) values ('CT00', 'Partner / Clienti') on conflict do nothing`);
     await db.query(`insert into payment_terms (code, label) values ('0030','30 giorni data fattura'),('0060','60 giorni data fattura'),('0090','90 giorni data fattura') on conflict do nothing`);
+    await db.query(`insert into settings (key, value) values ('rda', $1) on conflict do nothing`, [JSON.stringify({ slaDays: 7 })]);
     await db.query(`insert into settings (key, value) values ('reminders', $1) on conflict do nothing`, [JSON.stringify({ enabled: true, days: [60, 30, 15], repeatDays: 7, escalateAfter: 2 })]);
     if (!(await db.query("select 1 from doc_types limit 1")).rows.length) {
       for (const [i, t] of DEFAULT_DOC_TYPES.entries()) await db.query("insert into doc_types (key, label, help, expires, multiple, position) values ($1,$2,$3,$4,$5,$6) on conflict do nothing", [t.key, t.label, t.help, t.expires, t.multiple, i]);
