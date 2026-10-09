@@ -2,7 +2,7 @@
 export type Role = "manager" | "buyer" | "finance" | "bo" | "supplier";
 export type Urgency = "green" | "yellow" | "red" | "gray";
 export type StepStatus = "upcoming" | "done" | "pending_bo";
-export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier";
+export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries";
 
 /** Utente autenticato, come restituito dall'API (mai con la password). */
 export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean }

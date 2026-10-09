@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type CommitResult, type InviteInput, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type CommitResult, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -67,7 +67,7 @@ export const portalApi = {
   myself: () => request<{ supplier: Supplier }>(portal("supplier-me")).then(r => r.supplier),
   save: (data: SupplierData) => post<{ supplier: Supplier }>(portal("supplier-save"), data).then(r => r.supplier),
   submit: () => post<{ supplier: Supplier }>(portal("supplier-submit"), {}).then(r => r.supplier),
-  addDocument: (doc: { type: string; fileName: string; filePath: string; size: number; validUntil: string | null }) => post<{ supplier: Supplier }>(portal("supplier-doc-add"), doc).then(r => r.supplier),
+  addDocument: (doc: { type: string; fileName: string; filePath: string; size: number; validUntil: string | null }) => post<{ supplier: Supplier; docId: number }>(portal("supplier-doc-add"), doc),
   removeDocument: (id: number) => request<{ supplier: Supplier }>(portal("supplier-doc", `&id=${id}`), { method: "DELETE" }).then(r => r.supplier),
   // Staff
   vendors: () => request<{ vendors: SupplierSummary[] }>(portal("vendors")).then(r => r.vendors),
@@ -76,8 +76,13 @@ export const portalApi = {
   reinvite: (id: number) => post<{ supplier: Supplier; link: string }>(portal("vendor-reinvite", `&id=${id}`), {}),
   deleteInvite: (id: number) => request<{ ok: true }>(portal("vendor-invite", `&id=${id}`), { method: "DELETE" }),
   action: (id: number, action: VendorAction, extra: { reason?: string; paymentTerms?: string; status?: string } = {}) => post<{ supplier: Supplier }>(portal("vendor-action", `&id=${id}`), { action, ...extra }).then(r => r.supplier),
+  checkDocument: (id: number) => request<{ supplier: Supplier }>(portal("supplier-doc-check", `&id=${id}`), { method: "POST", body: "{}" }).then(r => r.supplier),
+  recheckDocument: (id: number) => request<{ supplier: Supplier }>(portal("doc-check", `&id=${id}`), { method: "POST", body: "{}" }).then(r => r.supplier),
+  monitor: () => request<MonitorData>(portal("doc-monitor")),
+  remind: (supplierId: number, channel: "email" | "phone", note = "") => post<{ sent: number }>(portal("doc-remind"), { supplierId, channel, note }),
+  runReminders: () => post<{ suppliers: number; emails: number; items: number; alerts: number }>(portal("reminders-run"), {}),
   config: () => request<{ config: PortalConfig }>(portal("config")).then(r => r.config),
-  saveConfig: (entity: "company" | "industry" | "payment_term" | "sap", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
+  saveConfig: (entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
 };
 
 export const supplierDocUrl = (id: number, download = false) => `/api/portal?op=doc-download&id=${id}${download ? "&download=1" : ""}`;

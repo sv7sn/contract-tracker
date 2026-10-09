@@ -7,7 +7,7 @@ import { clearLocal, DEMO_PASSWORD, DEMO_USERS, demoState, loadLocal, saveLocal 
 import { makePlan, RENEWAL_BY_DECISION, reschedulePlan, stepTemplate } from "./lib/plan.ts";
 import { canCreateContract, canManageUsers, canViewTeam } from "./permissions.ts";
 import { Avatar, BrandMark } from "./components/ui.tsx";
-import { AlertTriangle, Bell, Building2, CalendarRange, CheckCircle2, ChevronLeft, ClipboardCheck, FileText, LayoutDashboard, Loader2, Plus, Search, Settings, ShieldCheck, SlidersHorizontal, Users } from "./components/icons.tsx";
+import { AlertTriangle, Bell, Building2, CalendarRange, CalendarClock, CheckCircle2, ChevronLeft, ClipboardCheck, FileText, LayoutDashboard, Loader2, Plus, Search, Settings, ShieldCheck, SlidersHorizontal, Users } from "./components/icons.tsx";
 import { InviteLanding } from "./components/InviteLanding.tsx";
 import { LoginScreen } from "./components/LoginScreen.tsx";
 import { AccountModal, BOFormModal, ContractForm } from "./components/Modals.tsx";
@@ -22,6 +22,7 @@ import { UsersView } from "./views/UsersView.tsx";
 import { SupplierPortal } from "./views/SupplierPortal.tsx";
 import { VendorsView } from "./views/VendorsView.tsx";
 import { ConfigView } from "./views/ConfigView.tsx";
+import { ExpiryView } from "./views/ExpiryView.tsx";
 
 type Mode = "loading" | "api" | "local";
 const homeFor = (u: User): View => (u.role === "bo" ? "bo" : u.role === "supplier" ? "supplier" : u.role === "finance" ? "vendors" : "dashboard");
@@ -268,22 +269,24 @@ export default function App() {
 
   // I fornitori hanno un'area dedicata, senza menu né dati interni.
   if (currentUser.role === "supplier") return (
-    <div className="app-shell" style={{ ...sans, color: C.text }}>
+    <div className="app-shell no-sidebar" style={{ ...sans, color: C.text }}>
+      <div className="main-col">
       <header className="topbar">
-        <div style={{ display: "flex", alignItems: "center", gap: 12, width: "100%", maxWidth: 920, margin: "0 auto" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, maxWidth: 920, margin: "0 auto" }}>
           <BrandMark size={32} />
           <div style={{ flex: 1, minWidth: 0 }}><div className="topbar-eyebrow">Portale fornitori</div><div className="topbar-title">{currentUser.name}</div></div>
           <button onClick={() => setShowAccount(true)} aria-label="Account" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}><Avatar name={currentUser.name} size={34} /></button>
         </div>
       </header>
       <main className="page"><SupplierPortal onSessionExpired={sessionExpired} notify={showToast} /></main>
+      </div>
       {showAccount && <AccountModal user={currentUser} canChangePassword onLogout={handleLogout} onClose={() => setShowAccount(false)} />}
       {toastEl}
     </div>
   );
 
   // ─── Navigazione per ruolo ─────────────────────────────────
-  const vendorNav = mode === "api" ? [{ key: "vendors" as const, icon: <Building2 size={19} />, label: "Fornitori" }] : [];
+  const vendorNav = mode === "api" ? [{ key: "vendors" as const, icon: <Building2 size={19} />, label: "Fornitori" }, { key: "expiries" as const, icon: <CalendarClock size={19} />, label: "Scadenze" }] : [];
   const navByRole: Record<Role, { key: View; icon: ReactNode; label: string }[]> = {
     manager: [
       { key: "dashboard", icon: <LayoutDashboard size={19} />, label: "Panoramica" },
@@ -302,7 +305,7 @@ export default function App() {
       { key: "notifiche", icon: <Bell size={19} />,            label: "Avvisi" },
       ...vendorNav,
     ],
-    finance: [{ key: "vendors", icon: <Building2 size={19} />, label: "Fornitori" }],
+    finance: [{ key: "vendors", icon: <Building2 size={19} />, label: "Fornitori" }, { key: "expiries", icon: <CalendarClock size={19} />, label: "Scadenze" }],
     supplier: [],
     bo: [
       { key: "bo",   icon: <ClipboardCheck size={19} />, label: "Richieste" },
@@ -310,7 +313,7 @@ export default function App() {
     ],
   };
   const navItems = navByRole[currentUser.role];
-  const titles: Record<View, string> = { dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", vendors: "Fornitori", config: "Configurazione", supplier: "Area fornitore", detail: selected?.supplier ?? "" };
+  const titles: Record<View, string> = { dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", vendors: "Fornitori", expiries: "Scadenze documenti", config: "Configurazione", supplier: "Area fornitore", detail: selected?.supplier ?? "" };
   const activeNav = view === "detail" ? "list" : view;
   const navBtn = (n: typeof navItems[number], sidebar: boolean) => {
     const on = activeNav === n.key;
@@ -320,7 +323,7 @@ export default function App() {
         <span style={{ display: "flex", color: on ? "#fff" : "rgba(255,255,255,.55)" }}>{n.icon}</span>{n.label}
       </button>
     ) : (
-      <button key={n.key} onClick={() => setView(n.key)} aria-current={on ? "page" : undefined} style={{ flex: 1, background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: on ? C.accent : C.subtle, padding: "2px 0" }}>
+      <button key={n.key} onClick={() => setView(n.key)} aria-current={on ? "page" : undefined} style={{ flex: "1 0 66px", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: on ? C.accent : C.subtle, padding: "2px 0" }}>
         {n.icon}
         <span style={{ ...sans, fontSize: 10, color: on ? C.accent : C.muted, fontWeight: on ? 650 : 500 }}>{n.label}</span>
       </button>
@@ -385,6 +388,7 @@ export default function App() {
           {view === "notifiche" && currentUser.role !== "bo" && <AlertsView contracts={contracts} users={users} />}
           {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} onPurge={handlePurge} />}
           {view === "vendors" && mode === "api" && <VendorsView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
+          {view === "expiries" && mode === "api" && <ExpiryView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "config" && mode === "api" && currentUser.role === "manager" && <ConfigView notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "detail" && selected && <ContractDetail contract={selected} auditLog={auditLogs[selected.id] || []} currentUser={currentUser} canOpenDocuments={mode === "api"} onBack={() => setView("list")} onEdit={() => { setEditingContract(selected); setShowForm(true); }} onDelete={handleDelete} />}
         </main>

@@ -44,7 +44,7 @@ code { background: #eef0f5; padding: 1px 6px; border-radius: 5px; font-size: .92
 .topbar-back { color: rgba(255,255,255,.7); }
 .topbar-search { display: none; }
 .page { padding: 18px 16px 96px; max-width: 1320px; margin: 0 auto; }
-.bottom-nav { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,.92); backdrop-filter: blur(10px); border-top: 1px solid var(--border); display: flex; padding: 8px 0 18px; box-shadow: 0 -4px 24px rgba(16,24,43,.06); z-index: 20; }
+.bottom-nav { overflow-x: auto; position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,.92); backdrop-filter: blur(10px); border-top: 1px solid var(--border); display: flex; padding: 8px 0 18px; box-shadow: 0 -4px 24px rgba(16,24,43,.06); z-index: 20; }
 .fab { position: fixed; bottom: 92px; right: 18px; width: 54px; height: 54px; border-radius: 50%; background: var(--accent); border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 22px rgba(200,82,42,.45); z-index: 50; }
 
 /* ── Finestre: dal basso su telefono, centrate su desktop ── */
@@ -70,6 +70,7 @@ code { background: #eef0f5; padding: 1px 6px; border-radius: 5px; font-size: .92
 
 @media (min-width: 960px) {
   .app-shell { display: grid; grid-template-columns: 264px minmax(0, 1fr); }
+  .app-shell.no-sidebar { display: block; }
   .sidebar { display: flex; flex-direction: column; position: sticky; top: 0; height: 100vh; background: linear-gradient(190deg, #16213b 0%, #101a30 100%); padding: 22px 14px 16px; overflow-y: auto; }
   .bottom-nav, .fab, .mobile-only { display: none !important; }
   .topbar { background: rgba(244,245,248,.85); backdrop-filter: blur(10px); border-bottom: 1px solid var(--border); padding: 16px 40px; }
