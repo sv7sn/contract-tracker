@@ -2,7 +2,7 @@
 export type Role = "manager" | "buyer" | "finance" | "bo" | "supplier";
 export type Urgency = "green" | "yellow" | "red" | "gray";
 export type StepStatus = "upcoming" | "done" | "pending_bo";
-export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub";
+export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub" | "kpi";
 
 /** Utente autenticato, come restituito dall'API (mai con la password). */
 export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean }
@@ -185,3 +185,17 @@ export interface ImportResult { kind: "pr" | "po"; fileName: string; rows: numbe
 export interface RdaGroup { pgr: string; userId: number | null; note: string; openTasks: number }
 export interface RdaConfig { slaDays: number; sourcingThreshold: number; groups: RdaGroup[]; ingestConfigured: boolean; lastImports: { kind: string; fileName: string; rows: number; at: string; by: string }[] }
 export interface TaskSummary { open: number; overdue: number; dueSoon: number; unassigned: number; sourcingMissing: number; exceptionsPending: number }
+
+/** Indicatori di processo (pagina Indicatori, solo Manager). */
+export interface KpiCount { label: string; n: number }
+export interface Kpis {
+  generatedAt: string;
+  rda: {
+    open: number; overdue: number; slaDays: number; aging: KpiCount[]; closed90: number; withinSla90: number | null; medianCycleDays: number | null;
+    monthly: { month: string; closed: number; medianDays: number | null }[]; byBuyer: { name: string; open: number; overdue: number }[];
+  };
+  sourcing: { threshold: number; required90: number; compliant90: number; byMode: KpiCount[]; openMissing: number; exceptionsPending: number };
+  onboarding: { inProgress: KpiCount[]; registered12m: number; medianDaysToRegister: number | null; stuckAtBuyer: number; stuckAtFinance: number };
+  qualification: { valid: number; expiring: number; lapsed: number; blocked: number };
+  contracts: { active: number; keyNext90: number; withNotice: number; withoutDecision: number; missedDeadline: number };
+}

@@ -197,3 +197,61 @@ export function ValueBars({ contracts }: { contracts: Contract[] }) {
     </ChartCard>
   );
 }
+
+// ─── Barre orizzontali generiche (una sola serie: quantità per categoria) ───
+export function HBars({ title, subtitle, data, unit = "", empty = "Nessun dato" }: { title: string; subtitle?: string; data: { label: string; n: number }[]; unit?: string; empty?: string }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const max = Math.max(...data.map(d => d.n), 1);
+  const total = data.reduce((a, d) => a + d.n, 0);
+  return (
+    <ChartCard title={title} subtitle={subtitle} table={{ head: ["Voce", unit ? `Valore (${unit})` : "Numero"], rows: data.map(d => [d.label, d.n]) }}>
+      {total === 0 ? <div style={{ ...sans, fontSize: 13, color: C.subtle, padding: "8px 0" }}>{empty}</div> : (
+        <div style={{ display: "grid", gap: 10 }}>
+          {data.map((d, i) => (
+            <div key={d.label} tabIndex={0} role="img" aria-label={`${d.label}: ${d.n}${unit ? ` ${unit}` : ""}`} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(i)} onBlur={() => setHover(null)}
+              style={{ display: "grid", gridTemplateColumns: "minmax(110px, 38%) 1fr auto", gap: 10, alignItems: "center", outline: "none", position: "relative" }}>
+              <div style={{ ...sans, fontSize: 12.5, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.label}</div>
+              <div style={{ height: 18, display: "flex", alignItems: "center", borderLeft: `1px solid ${CHART.axis}` }}>
+                {d.n > 0 && <div style={{ height: 14, width: `${Math.max(2, (d.n / max) * 100)}%`, background: CHART.blue, borderRadius: "0 4px 4px 0", opacity: hover !== null && hover !== i ? 0.45 : 1, transition: "opacity .12s ease" }} />}
+              </div>
+              <div className="tabular" style={{ ...sans, fontSize: 12.5, fontWeight: 650, color: C.text, minWidth: 28, textAlign: "right" }}>{d.n}</div>
+              {hover === i && <Tip align="left"><div style={{ fontWeight: 650 }}>{d.label}</div><div style={{ opacity: .85 }}>{d.n}{unit ? ` ${unit}` : ""}{!unit && total ? ` · ${Math.round((d.n / total) * 100)}% del totale` : ""}</div></Tip>}
+            </div>
+          ))}
+        </div>
+      )}
+    </ChartCard>
+  );
+}
+
+// ─── Colonne mensili generiche (una sola serie) ─────────────────────────
+export function MonthColumns({ title, subtitle, data, unit, valueHead }: { title: string; subtitle?: string; data: { month: string; value: number | null; note: string }[]; unit: string; valueHead: string }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const max = niceMax(Math.max(...data.map(d => d.value ?? 0), 1));
+  const H = 200;
+  const label = (m: string) => new Date(`${m}-01T00:00:00`);
+  return (
+    <ChartCard title={title} subtitle={subtitle} table={{ head: ["Mese", valueHead, "Dettaglio"], rows: data.map(d => [monthLong(label(d.month)), d.value ?? "—", d.note]) }}>
+      <div style={{ display: "flex", gap: 8 }}>
+        <div aria-hidden style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: H, ...sans, fontSize: 11, color: CHART.label, textAlign: "right", width: 22 }}><span>{max}</span><span>{max / 2}</span><span>0</span></div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ position: "relative", height: H }}>
+            {[0, 0.5, 1].map(f => <div key={f} aria-hidden style={{ position: "absolute", left: 0, right: 0, top: `${f * 100}%`, height: 1, background: f === 1 ? CHART.axis : CHART.grid }} />)}
+            <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "flex-end" }}>
+              {data.map((d, i) => (
+                <div key={d.month} tabIndex={0} role="img" aria-label={`${monthLong(label(d.month))}: ${d.value ?? "nessun dato"} ${unit}`}
+                  onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(i)} onBlur={() => setHover(null)}
+                  style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", position: "relative", outline: "none" }}>
+                  {hover === i && <Tip align={i < 1 ? "left" : i > data.length - 2 ? "right" : "center"}><div style={{ fontWeight: 650, textTransform: "capitalize" }}>{monthLong(label(d.month))}</div><div style={{ opacity: .85 }}>{d.value === null ? "Nessun dato" : `${d.value} ${unit}`}</div><div style={{ opacity: .75 }}>{d.note}</div></Tip>}
+                  {d.value !== null && <div className="tabular" style={{ ...sans, fontSize: 11, fontWeight: 650, color: C.text, marginBottom: 3 }}>{d.value}</div>}
+                  {d.value !== null && d.value > 0 && <div style={{ width: "min(100%, 24px)", height: Math.max(4, (d.value / max) * H), background: CHART.blue, borderRadius: "4px 4px 0 0", opacity: hover !== null && hover !== i ? 0.45 : 1 }} />}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: "flex", marginTop: 6 }}>{data.map(d => <div key={d.month} style={{ flex: 1, textAlign: "center", ...sans, fontSize: 11, color: CHART.label, textTransform: "capitalize" }}>{monthShort(label(d.month))}</div>)}</div>
+        </div>
+      </div>
+    </ChartCard>
+  );
+}

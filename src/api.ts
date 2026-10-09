@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type ImportResult, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type ImportResult, type Kpis, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -70,6 +70,7 @@ export const portalApi = {
   addDocument: (doc: { type: string; fileName: string; filePath: string; size: number; validUntil: string | null }) => post<{ supplier: Supplier; docId: number }>(portal("supplier-doc-add"), doc),
   removeDocument: (id: number) => request<{ supplier: Supplier }>(portal("supplier-doc", `&id=${id}`), { method: "DELETE" }).then(r => r.supplier),
   // Staff
+  kpis: () => request<Kpis>(portal("kpis")),
   configAudit: () => request<{ entries: ConfigAuditEntry[] }>(portal("config-audit")).then(r => r.entries),
   anonymize: (id: number, reason: string) => post<{ supplier: Supplier }>(portal("vendor-anonymize", `&id=${id}`), { reason }).then(r => r.supplier),
   vendors: () => request<{ vendors: SupplierSummary[] }>(portal("vendors")).then(r => r.vendors),
