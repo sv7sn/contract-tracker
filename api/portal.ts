@@ -7,6 +7,7 @@ import { ensureSchema, getPool } from "./_db.js";
 import { runExternalChecks } from "./_governance.js";
 import { listConfigAudit, logConfigChange } from "./_audit.js";
 import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
+import { computeKpis } from "./_kpi.js";
 import { createManualTask, decideSourcingException, deleteManualTask, getTask, importSapFile, listTasks, saveSourcing, taskSummary, updateTask } from "./_tasks.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
@@ -166,6 +167,7 @@ async function handle(request: Request): Promise<Response> {
       await checkStoredDocument(id, true);
       return json({ supplier: await getVendor(user, owner) });
     }
+    if (op === "kpis" && method === "GET") return json(await computeKpis(user));
     if (op === "vendors" && method === "GET") return json({ vendors: await listVendors(user) });
     if (op === "vendor-checks" && method === "POST") {
       const id = idOf(url); await getVendor(user, id);
