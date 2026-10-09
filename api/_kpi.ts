@@ -31,7 +31,7 @@ export async function computeKpis(user: User): Promise<Kpis> {
   const byBuyer = await q(`select coalesce(u.name, 'Da assegnare') as name, count(*)::int as open, count(*) filter (where t.due < current_date)::int as overdue
     from tasks t left join users u on u.id = t.assignee_id where t.source = 'rda' and t.status = 'open' group by 1 order by 2 desc`);
 
-  const big = `(t.source = 'rda' or (t.source = 'contract' and t.outcome in ('', 'renewed', 'replaced'))) and coalesce((t.meta->>'value')::numeric, 0) > $1`;
+  const big = `(t.source = 'rda' or (t.source = 'manual' and t.kind = 'purchase') or (t.source = 'contract' and t.outcome in ('', 'renewed', 'replaced'))) and coalesce((t.meta->>'value')::numeric, 0) > $1`;
   const okSourcing = `(t.sourcing is not null and (t.sourcing->>'mode' <> 'exception' or t.sourcing->>'approval' = 'approved'))`;
   const [src] = await q(`select count(*) filter (where t.status = 'done' and t.done_at > now() - interval '90 days')::int as req,
       count(*) filter (where t.status = 'done' and t.done_at > now() - interval '90 days' and ${okSourcing})::int as ok,
