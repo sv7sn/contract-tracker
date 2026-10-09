@@ -8,6 +8,13 @@ export function keyDate(c: Pick<Contract, "end" | "noticeDate">) { return c.noti
 export function daysToDeadline(c: Pick<Contract, "end" | "noticeDate">) { return daysToExpiry(keyDate(c)); }
 export function deadlineLabel(c: Pick<Contract, "noticeDate">) { return c.noticeDate ? "Disdetta entro" : "Scadenza"; }
 export function urgency(c: Contract): Urgency { if (c.ceased) return "gray"; const d = daysToDeadline(c); return d <= 30 ? "red" : d <= 90 ? "yellow" : "green"; }
+/** Etichetta dell'esito di un contratto chiuso (null se attivo). */
+export function closedLabel(c: Pick<Contract, "ceased" | "outcome">): string | null {
+  if (c.outcome === "renewed") return "Rinnovato"; if (c.outcome === "replaced") return "Sostituito"; if (c.outcome === "ceased") return "Cessato";
+  return c.ceased ? "Cessato" : null;
+}
+/** Contratto attivo con la scadenza già superata e nessun esito registrato. */
+export function expiredWithoutOutcome(c: Pick<Contract, "ceased" | "end">) { return !c.ceased && daysToExpiry(c.end) < 0; }
 export function fmt(n: number, cur = "EUR") { try { return new Intl.NumberFormat("it-IT", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(n); } catch { return `${n} ${cur}`; } }
 /** Importi grandi in forma breve (8,23 Mio €), sotto il milione per esteso. */
 export function fmtCompact(n: number, cur = "EUR") {

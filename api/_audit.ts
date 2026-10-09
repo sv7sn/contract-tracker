@@ -12,7 +12,7 @@ export const AREA_LABEL: Record<string, string> = {
 const FIELD_LABEL: Record<string, string> = {
   name: "Nome", label: "Descrizione", sapCompanyCode: "Società SAP", purchOrg: "Org. acquisti", buyerIds: "Buyer", help: "Istruzioni",
   expires: "Ha scadenza", multiple: "Più file", rules: "Regole", enabled: "Attivo", days: "Giorni prima della scadenza", repeatDays: "Ripeti ogni (giorni)",
-  escalateAfter: "Escalation dopo", slaDays: "Giorni di lavorazione", sourcingThreshold: "Soglia confronto fornitori", userId: "Buyer", note: "Nota",
+  escalateAfter: "Escalation dopo", slaDays: "Giorni di lavorazione", sourcingThreshold: "Soglia confronto fornitori", renewalLeadDays: "Anticipo task di rinnovo (giorni)", userId: "Buyer", note: "Nota",
   tradingPartner: "Trading partner", sortKey: "Chiave di ordinamento", cashManagementGroup: "Gruppo cash management", releaseGroup: "Gruppo di rilascio",
   reconciliationAccounts: "Conti di riconciliazione", role: "Ruolo", title: "Titolo", active: "Attivo", email: "Email",
   notice: "Testo informativa", inviteDays: "Inviti non attivati (giorni)", retentionMonths: "Conservazione fornitori non attivi (mesi)",
@@ -47,7 +47,7 @@ function pick(cfg: PortalConfig & { privacy?: unknown }, entity: string, item: R
       return { subject: key, value: t ? { ...t, rules: cfg.docRules.filter(r => r.docType === key).map(r => `${r.scope}${r.value ? `=${r.value}` : ""}:${r.level}`) } : null };
     }
     case "pgr": { const g = cfg.rda.groups.find(x => x.pgr === key); return { subject: key, value: g ? { userId: g.userId, note: g.note } : null }; }
-    case "rda": return { subject: "", value: { slaDays: cfg.rda.slaDays, sourcingThreshold: cfg.rda.sourcingThreshold } };
+    case "rda": return { subject: "", value: { slaDays: cfg.rda.slaDays, sourcingThreshold: cfg.rda.sourcingThreshold, renewalLeadDays: cfg.rda.renewalLeadDays } };
     case "sap": return { subject: "", value: cfg.sap as unknown as Row };
     case "reminders": return { subject: "", value: cfg.reminders as unknown as Row };
     case "privacy": return { subject: "", value: (cfg.privacy ?? null) as Row | null };

@@ -18,9 +18,9 @@ export function RenewalBadge({ status }: { status: string }) {
 }
 
 /** Giorni alla scadenza in una pillola colorata. */
-export function DaysChip({ days, level, ceased }: { days: number; level: Urgency; ceased?: boolean }) {
+export function DaysChip({ days, level, ceased }: { days: number; level: Urgency; ceased?: boolean | string }) {
   const color = URGENCY_COLORS[level];
-  const label = ceased ? "Cessato" : days < 0 ? `Scaduto da ${Math.abs(days)} gg` : days === 0 ? "Scade oggi" : `${days} gg`;
+  const label = ceased ? (typeof ceased === "string" ? ceased : "Cessato") : days < 0 ? `Scaduto da ${Math.abs(days)} gg` : days === 0 ? "Scade oggi" : `${days} gg`;
   return <span className="tabular" style={{ ...sans, background: `${color}18`, color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{label}</span>;
 }
 

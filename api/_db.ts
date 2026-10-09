@@ -135,6 +135,26 @@ create table if not exists tasks (
 create unique index if not exists tasks_source_key_idx on tasks (source, source_key) where source_key is not null;
 create index if not exists tasks_assignee_idx on tasks (assignee_id, status);
 alter table tasks add column if not exists sourcing jsonb;
+alter table tasks drop constraint if exists tasks_source_check;
+alter table tasks add constraint tasks_source_check check (source in ('rda','manual','contract'));
+alter table tasks add column if not exists contract_id integer references contracts(id) on delete cascade;
+alter table tasks add column if not exists outcome text not null default '';
+alter table tasks add column if not exists new_contract_id integer references contracts(id) on delete set null;
+alter table tasks add column if not exists rda_numbers text[] not null default '{}';
+alter table tasks add column if not exists po_numbers text[] not null default '{}';
+alter table tasks add column if not exists no_po_reason text not null default '';
+create index if not exists tasks_contract_idx on tasks (contract_id);
+create table if not exists task_documents (
+  id serial primary key, task_id integer not null references tasks(id) on delete cascade, kind text not null,
+  file_name text not null, file_path text not null, size integer not null default 0, uploaded_by text not null default '', uploaded_at timestamptz not null default now()
+);
+alter table contracts add column if not exists status text not null default 'active';
+alter table contracts add column if not exists outcome text not null default '';
+alter table contracts add column if not exists outcome_note text not null default '';
+alter table contracts add column if not exists closed_at timestamptz;
+alter table contracts add column if not exists replaces integer references contracts(id) on delete set null;
+alter table contracts add column if not exists replaced_by integer references contracts(id) on delete set null;
+update contracts set status = 'closed', outcome = 'ceased', closed_at = coalesce(closed_at, now()) where ceased and status = 'active' and outcome = '';
 create table if not exists rda_lines (
   id serial primary key, pr text not null, item text not null default '0', pgr text not null default '', short_text text not null default '',
   qty numeric not null default 0, unit text not null default '', price numeric not null default 0, per numeric not null default 1, currency text not null default 'EUR',
@@ -378,9 +398,11 @@ function rowToContract(r: Record<string, unknown>): Contract {
   return {
     id: r.id as number, supplier: r.supplier as string, object: r.object as string, category: r.category as string, country: r.country as string,
     value: r.value as number, currency: r.currency as string, start: r.start_date as string, end: r.end_date as string, owner: r.owner as string,
-    boEmail: r.bo_email as string, renewal: r.renewal as string, type: r.type as string, notes: r.notes as string, ceased: r.ceased as boolean,
+    boEmail: r.bo_email as string, renewal: r.renewal as string, type: r.type as string, notes: r.notes as string, ceased: (r.ceased as boolean) || r.status === "closed",
     fileName: r.file_name as string | null, filePath: r.file_path as string | null,
     noticeDays: r.notice_days as number | null, noticeDate: (r.notice_date as string) ?? "",
+    status: (r.status as Contract["status"]) ?? "active", outcome: (r.outcome as Contract["outcome"]) ?? "", outcomeNote: (r.outcome_note as string) ?? "",
+    closedAt: r.closed_at ? new Date(r.closed_at as string).toISOString() : null, replaces: (r.replaces as number | null) ?? null, replacedBy: (r.replaced_by as number | null) ?? null,
   };
 }
 function rowToStep(r: Record<string, unknown>): PlanStep {

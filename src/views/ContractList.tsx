@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Contract, User } from "../types.ts";
 import { C, iStyle, radius, sans, shadow, URGENCY_COLORS } from "../theme.ts";
-import { daysToDeadline, fmt, fmtDate, urgency } from "../lib/format.ts";
+import { closedLabel, daysToDeadline, expiredWithoutOutcome, fmt, fmtDate, urgency } from "../lib/format.ts";
 import { canCreateContract, canViewTeam } from "../permissions.ts";
 import { Avatar, Card, DaysChip, EmptyState, Grid, RenewalBadge } from "../components/ui.tsx";
 import { Archive, FileText, LayoutGrid, Paperclip, Plus, Rows3, Search } from "../components/icons.tsx";
@@ -36,7 +36,7 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
         <div role="tablist" style={{ display: "flex", gap: 2, background: "#e9ecf2", borderRadius: 12, padding: 3 }}>
           <button role="tab" aria-selected={!showArchive} onClick={() => setShowArchive(false)} style={seg(!showArchive)}><FileText size={15} />Attivi <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => !c.ceased).length}</span></button>
-          <button role="tab" aria-selected={showArchive} onClick={() => setShowArchive(true)} style={seg(showArchive)}><Archive size={15} />Archivio <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => c.ceased).length}</span></button>
+          <button role="tab" aria-selected={showArchive} onClick={() => setShowArchive(true)} style={seg(showArchive)}><Archive size={15} />Storico <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => c.ceased).length}</span></button>
         </div>
         <div style={{ position: "relative", flex: "1 1 220px", minWidth: 200 }} className="mobile-only">
           <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
@@ -82,8 +82,8 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
                         <div style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{c.object}</div>
                       </td>
                       {showOwner && <td><div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}><Avatar name={c.owner || "?"} size={26} /><span style={{ color: C.muted }}>{c.owner || "—"}</span></div></td>}
-                      <td style={{ whiteSpace: "nowrap" }}><div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}><span className="tabular" style={{ color: C.text }}>{fmtDate(c.end)}</span>{c.noticeDate && <span className="tabular" style={{ fontSize: 11.5, color: C.muted }}>Disdetta entro {fmtDate(c.noticeDate)}</span>}<DaysChip days={days} level={u} ceased={c.ceased} /></div></td>
-                      <td>{c.ceased ? <span style={{ color: C.muted }}>Cessato</span> : <RenewalBadge status={c.renewal} />}</td>
+                      <td style={{ whiteSpace: "nowrap" }}><div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}><span className="tabular" style={{ color: C.text }}>{fmtDate(c.end)}</span>{c.noticeDate && <span className="tabular" style={{ fontSize: 11.5, color: C.muted }}>Disdetta entro {fmtDate(c.noticeDate)}</span>}<DaysChip days={days} level={u} ceased={c.ceased && (closedLabel(c) ?? true)} /></div></td>
+                      <td>{c.ceased ? <span style={{ color: C.muted }}>{closedLabel(c)}</span> : expiredWithoutOutcome(c) ? <span style={{ color: C.red, fontWeight: 650 }}>Scaduto senza esito</span> : <RenewalBadge status={c.renewal} />}</td>
                       <td className="num" style={{ fontWeight: 650, color: C.text, whiteSpace: "nowrap" }}>{fmt(c.value, c.currency)}</td>
                       <td style={{ width: 36, color: c.fileName ? C.subtle : "transparent" }}>{c.fileName && <Paperclip size={15} aria-label="Ha un documento" />}</td>
                     </tr>
@@ -110,8 +110,8 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
                     <div className="tabular" style={{ ...sans, fontSize: 14, fontWeight: 700, flexShrink: 0, color: C.text }}>{fmt(c.value, c.currency)}</div>
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
-                    {c.ceased ? <span style={{ ...sans, fontSize: 11.5, color: C.gray, background: C.grayBg, borderRadius: 999, padding: "3px 10px", fontWeight: 600 }}>Cessato</span> : <RenewalBadge status={c.renewal} />}
-                    <span style={{ marginLeft: "auto" }}><DaysChip days={days} level={u} ceased={c.ceased} /></span>
+                    {c.ceased ? <span style={{ ...sans, fontSize: 11.5, color: C.gray, background: C.grayBg, borderRadius: 999, padding: "3px 10px", fontWeight: 600 }}>{closedLabel(c)}</span> : expiredWithoutOutcome(c) ? <span style={{ ...sans, fontSize: 11.5, color: C.red, background: C.redBg, borderRadius: 999, padding: "3px 10px", fontWeight: 650 }}>Scaduto senza esito</span> : <RenewalBadge status={c.renewal} />}
+                    <span style={{ marginLeft: "auto" }}><DaysChip days={days} level={u} ceased={c.ceased && (closedLabel(c) ?? true)} /></span>
                   </div>
                   {showOwner && <div style={{ ...sans, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.subtle, marginTop: 10 }}><Avatar name={c.owner || "?"} size={22} />{c.owner || "—"}<span style={{ marginLeft: "auto" }}>{c.noticeDate ? `Disdetta entro ${fmtDate(c.noticeDate)}` : `Scade il ${fmtDate(c.end)}`}</span></div>}
                 </Card>

@@ -1,6 +1,6 @@
 import type { AuditEntry, Contract, User } from "../types.ts";
 import { C, font, radius, sans, URGENCY_COLORS } from "../theme.ts";
-import { daysToDeadline, fmt, fmtDate, NOW, urgency } from "../lib/format.ts";
+import { NOW, closedLabel, daysToDeadline, expiredWithoutOutcome, fmt, fmtDate, urgency } from "../lib/format.ts";
 import { canDeleteContract, canEditContract } from "../permissions.ts";
 import { AuditTrail, Avatar, Card, DaysChip, Grid, RenewalBadge } from "../components/ui.tsx";
 import { AlertTriangle, ArrowLeft, Download, ExternalLink, FileText, Pencil, StickyNote, Trash2 } from "../components/icons.tsx";
@@ -10,7 +10,10 @@ const fact = (label: string, value: React.ReactNode) => (
   <div style={{ minWidth: 0 }}><div style={{ ...sans, fontSize: 11, color: "rgba(255,255,255,.55)", fontWeight: 600, marginBottom: 3 }}>{label}</div><div style={{ ...sans, fontSize: 14.5, fontWeight: 650, color: "#fff" }}>{value}</div></div>
 );
 
-export function ContractDetail({ contract, auditLog, currentUser, canOpenDocuments, onBack, onEdit, onDelete }: { contract: Contract; auditLog: AuditEntry[]; currentUser: User; canOpenDocuments: boolean; onBack: () => void; onEdit: () => void; onDelete: () => void }) {
+export function ContractDetail({ contract, contracts, auditLog, currentUser, canOpenDocuments, onBack, onEdit, onDelete, onOpen }: { contract: Contract; contracts: Contract[]; auditLog: AuditEntry[]; currentUser: User; canOpenDocuments: boolean; onBack: () => void; onEdit: () => void; onDelete: () => void; onOpen: (c: Contract) => void }) {
+  const prev = contract.replaces ? contracts.find(c => c.id === contract.replaces) : undefined;
+  const next = contract.replacedBy ? contracts.find(c => c.id === contract.replacedBy) : undefined;
+  const link = (c: Contract) => <button onClick={() => onOpen(c)} style={{ ...sans, background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", fontWeight: 650, fontSize: 13.5, textDecoration: "underline" }}>{c.supplier} · scad. {fmtDate(c.end)}</button>;
   const u = urgency(contract); const days = daysToDeadline(contract);
   const startMs = new Date(contract.start).getTime(), endMs = new Date(contract.end).getTime();
   const prog = contract.start && endMs > startMs ? Math.min(100, Math.max(0, ((NOW.getTime() - startMs) / (endMs - startMs)) * 100)) : 0;
@@ -34,7 +37,7 @@ export function ContractDetail({ contract, auditLog, currentUser, canOpenDocumen
             <div style={{ ...font, fontSize: 22, fontWeight: 700 }}>{contract.supplier}</div>
             <div style={{ ...sans, fontSize: 14, color: "rgba(255,255,255,.7)", marginTop: 3 }}>{contract.object}</div>
           </div>
-          <DaysChip days={days} level={u} ceased={contract.ceased} />
+          <DaysChip days={days} level={u} ceased={contract.ceased && (closedLabel(contract) ?? true)} />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 20, marginTop: 24 }}>
           {fact("Valore", <span className="tabular" style={{ ...font, fontSize: 26, fontWeight: 700 }}>{fmt(contract.value, contract.currency)}</span>)}
@@ -46,6 +49,14 @@ export function ContractDetail({ contract, auditLog, currentUser, canOpenDocumen
 
       <Grid min={380}>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0,1fr)" }}>
+          {expiredWithoutOutcome(contract) && <div role="alert" style={{ ...sans, background: C.redBg, color: C.red, borderRadius: radius.lg, padding: 14, fontSize: 13, lineHeight: 1.5 }}><b>Scaduto senza esito.</b> Registra rinnovo, proroga o cessazione dal task di rinnovo (modulo Task).</div>}
+          {(contract.ceased || prev) && (
+            <Card style={{ padding: "6px 18px" }}>
+              {contract.ceased && <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 0", ...sans, fontSize: 13 }}><span style={{ color: C.muted }}>Esito</span><span style={{ fontWeight: 650, textAlign: "right" }}>{closedLabel(contract)}{contract.closedAt ? ` il ${fmtDate(contract.closedAt)}` : ""}{contract.outcomeNote ? <div style={{ fontWeight: 400, color: C.muted, fontSize: 12.5 }}>{contract.outcomeNote}</div> : null}</span></div>}
+              {next && <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 0", borderTop: `1px solid ${C.borderLight}`, ...sans, fontSize: 13 }}><span style={{ color: C.muted }}>Sostituito da</span>{link(next)}</div>}
+              {prev && <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 0", borderTop: contract.ceased ? `1px solid ${C.borderLight}` : "none", ...sans, fontSize: 13 }}><span style={{ color: C.muted }}>Sostituisce</span>{link(prev)}</div>}
+            </Card>
+          )}
           {!contract.ceased && (
             <Card>
               <div style={{ display: "flex", justifyContent: "space-between", ...sans, fontSize: 12, color: C.muted, marginBottom: 8 }}><span>Durata del contratto</span><b className="tabular" style={{ color: C.text }}>{Math.round(prog)}% trascorso</b></div>

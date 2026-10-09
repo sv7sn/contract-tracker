@@ -23,12 +23,13 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
   const [polBusy, setPolBusy] = useState(false);
   const [sla, setSla] = useState("7");
   const [threshold, setThreshold] = useState("10000");
+  const [lead, setLead] = useState("90");
 
   const fail = useCallback((err: unknown) => {
     if (err instanceof ApiError && err.status === 401) { onSessionExpired(); return "Sessione scaduta"; }
     return err instanceof Error ? err.message : "Operazione non riuscita";
   }, [onSessionExpired]);
-  const adopt = (c: PortalConfig) => { setCfg(c); setSap(c.sap); setPol(policyToForm(c.reminders)); setSla(String(c.rda.slaDays)); setThreshold(String(c.rda.sourcingThreshold)); };
+  const adopt = (c: PortalConfig) => { setCfg(c); setSap(c.sap); setPol(policyToForm(c.reminders)); setSla(String(c.rda.slaDays)); setThreshold(String(c.rda.sourcingThreshold)); setLead(String(c.rda.renewalLeadDays)); };
   useEffect(() => { portalApi.config().then(adopt).catch(err => setError(fail(err))); }, [fail]);
 
   if (error) return <EmptyState icon={<AlertTriangle size={26} />} title="Impossibile caricare la configurazione" text={error} />;
@@ -49,6 +50,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
     try { adopt(await portalApi.saveConfig("reminders", "save", { enabled: pol.enabled, days: pol.days.split(/[,\s;]+/).filter(Boolean).map(Number), repeatDays: Number(pol.repeatDays), escalateAfter: Number(pol.escalateAfter) })); notify("Reminder salvati"); } catch (err) { notify(`⚠️ ${fail(err)}`); }
     setPolBusy(false);
   };
+  const saveLead = async () => { try { adopt(await portalApi.saveConfig("rda", "save", { renewalLeadDays: Number(lead) })); notify("Anticipo dei rinnovi salvato"); } catch (err) { notify(`⚠️ ${fail(err)}`); } };
   const saveThreshold = async () => { try { adopt(await portalApi.saveConfig("rda", "save", { sourcingThreshold: Number(threshold) })); notify("Soglia salvata"); } catch (err) { notify(`⚠️ ${fail(err)}`); } };
   const saveSla = async () => { try { adopt(await portalApi.saveConfig("rda", "save", { slaDays: Number(sla) })); notify("Giorni di lavorazione salvati"); } catch (err) { notify(`⚠️ ${fail(err)}`); } };
   const saveGroup = async (pgr: string, userId: string) => { try { adopt(await portalApi.saveConfig("pgr", "save", { pgr, userId: userId ? Number(userId) : null })); notify("Assegnazione salvata"); } catch (err) { notify(`⚠️ ${fail(err)}`); } };
@@ -128,7 +130,13 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
             <button onClick={saveSla} style={{ ...btnGhost, padding: "9px 14px", fontSize: 13 }}>Salva</button>
           </div>
         </Field>
-        <Field label="Soglia per il confronto con un altro fornitore (importo della RDA)" htmlFor="r-th">
+        <Field label="Task di rinnovo: quanti giorni prima della disdetta (o della scadenza) crearlo" htmlFor="r-lead">
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <input id="r-lead" type="number" min={15} max={365} value={lead} onChange={e => setLead(e.target.value)} style={{ ...iStyle, width: 110 }} />
+            <button onClick={saveLead} style={{ ...btnGhost, padding: "9px 14px", fontSize: 13 }}>Salva</button>
+          </div>
+        </Field>
+        <Field label="Soglia per il confronto con un altro fornitore (importo della RDA o del nuovo contratto)" htmlFor="r-th">
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
             <input id="r-th" type="number" min={0} step={500} value={threshold} onChange={e => setThreshold(e.target.value)} style={{ ...iStyle, width: 140 }} />
             <button onClick={saveThreshold} style={{ ...btnGhost, padding: "9px 14px", fontSize: 13 }}>Salva</button>

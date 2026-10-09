@@ -57,10 +57,11 @@ export function KpiView({ onSessionExpired }: { onSessionExpired: () => void }) 
         {r.byBuyer.length > 0 && <HBars title="RDA aperte per buyer" subtitle={`In ritardo: ${r.byBuyer.filter(b => b.overdue).map(b => `${b.name} ${b.overdue}`).join(", ") || "nessuna"}`} data={r.byBuyer.map(b => ({ label: b.name, n: b.open }))} />}
       </Section>
 
-      <Section title="Scelta del fornitore" text={`RDA sopra ${fmt(s.threshold)}: confronto con almeno un altro fornitore, oppure fornitura strategica, single source o eccezione approvata.`}>
+      <Section title="Scelta del fornitore" text={`RDA e nuovi contratti sopra ${fmt(s.threshold)}: confronto con almeno un altro fornitore, oppure fornitura strategica, single source o eccezione approvata. Il saving si calcola sul prezzo di riferimento, sulla media delle offerte o sulla negoziazione.`}>
         <Grid min={180} gap={12} fill>
           <StatCard label="RDA documentate" value={pct(srcPct)} sub={`${s.compliant90} su ${s.required90} chiuse sopra soglia`} color={srcPct === null || srcPct >= 90 ? C.green : C.red} icon={<Scale size={18} />} />
           <StatCard label="Aperte senza confronto" value={s.openMissing} sub="Da documentare prima della chiusura" color={C.yellow} icon={<AlertTriangle size={18} />} />
+          <StatCard label="Saving ultimi 12 mesi" value={fmt(s.saving12m)} sub={s.savingCount12m ? `${s.savingCount12m} pratiche${s.savingPct12m !== null ? ` · ${s.savingPct12m}% in media` : ""}` : "Nessun saving registrato"} color={C.green} icon={<CheckCircle2 size={18} />} />
           <StatCard label="Eccezioni da approvare" value={s.exceptionsPending} sub="In attesa del Manager" color={C.purple} icon={<Hourglass size={18} />} />
         </Grid>
         <HBars title="Come è stato scelto il fornitore" subtitle="RDA sopra soglia documentate negli ultimi 90 giorni" data={s.byMode} empty="Nessuna scelta documentata nel periodo" />
@@ -86,7 +87,7 @@ export function KpiView({ onSessionExpired }: { onSessionExpired: () => void }) 
           <StatCard label="Contratti attivi" value={c.active} sub={`${c.withNotice} con preavviso di disdetta`} color={C.blue} icon={<FileText size={18} />} />
           <StatCard label="Scadenze entro 90 giorni" value={c.keyNext90} sub="Scadenza o termine di disdetta" color={C.yellow} icon={<Clock size={18} />} />
           <StatCard label="Senza decisione del BO" value={c.withoutDecision} sub="Entro 60 giorni dal termine" color={c.withoutDecision ? C.red : C.green} icon={<AlertTriangle size={18} />} />
-          <StatCard label="Termini superati" value={c.missedDeadline} sub="Senza rinnovo o disdetta definiti" color={c.missedDeadline ? C.red : C.green} icon={<AlertTriangle size={18} />} />
+          <StatCard label="Scaduti senza esito" value={c.missedDeadline} sub="Contratti scaduti senza rinnovo, proroga o cessazione" color={c.missedDeadline ? C.red : C.green} icon={<AlertTriangle size={18} />} />
         </Grid>
       </Section>
     </div>
