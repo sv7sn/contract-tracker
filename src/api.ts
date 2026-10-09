@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type CommitResult, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type CommitResult, type ImportResult, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -81,8 +81,14 @@ export const portalApi = {
   monitor: () => request<MonitorData>(portal("doc-monitor")),
   remind: (supplierId: number, channel: "email" | "phone", note = "") => post<{ sent: number }>(portal("doc-remind"), { supplierId, channel, note }),
   runReminders: () => post<{ suppliers: number; emails: number; items: number; alerts: number }>(portal("reminders-run"), {}),
+  tasks: () => request<TaskList>(portal("tasks")),
+  taskSummary: () => request<TaskSummary>(portal("task-summary")),
+  task: (id: number) => request<{ task: TaskDetail }>(portal("task", `&id=${id}`)).then(r => r.task),
+  createTask: (input: { title: string; detail?: string; due?: string | null; priority?: string; assigneeId?: number }) => post<{ task: TaskDetail }>(portal("task-create"), input).then(r => r.task),
+  updateTask: (id: number, patch: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-update", `&id=${id}`), patch).then(r => r.task),
+  deleteTask: (id: number) => request<{ ok: true }>(portal("task", `&id=${id}`), { method: "DELETE" }),
   config: () => request<{ config: PortalConfig }>(portal("config")).then(r => r.config),
-  saveConfig: (entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
+  saveConfig: (entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders" | "rda" | "pgr", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
 };
 
 export const supplierDocUrl = (id: number, download = false) => `/api/portal?op=doc-download&id=${id}${download ? "&download=1" : ""}`;
@@ -97,4 +103,12 @@ export async function uploadSupplierDocument(file: File): Promise<string> {
   } catch (err) {
     throw new Error(err instanceof Error && err.message ? err.message.replace(/^Vercel Blob: /, "").slice(0, 200) : "Caricamento del documento non riuscito");
   }
+}
+
+/** Importa un file Excel di SAP (RDA aperte o ordini) così com'è: il server riconosce il tipo dal contenuto. */
+export async function importSapFile(file: File, force = false): Promise<ImportResult> {
+  const res = await fetch(`/api/portal?op=rda-import${force ? "&force=1" : ""}`, { method: "POST", headers: { "x-file-name": encodeURIComponent(file.name) }, body: file });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data?.error ?? `Errore ${res.status}`, data);
+  return data as ImportResult;
 }

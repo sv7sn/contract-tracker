@@ -4,7 +4,7 @@ import { COUNTRIES, countryName } from "../supplierRules.ts";
 import { ApiError, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, sans } from "../theme.ts";
 import { Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
-import { AlertTriangle, Bell, Building2, FileCheck2, Loader2, Pencil, Plus, Save, Settings, Sparkles, Trash2, Wallet, FileText, X } from "../components/icons.tsx";
+import { AlertTriangle, Bell, Building2, Inbox, FileCheck2, Loader2, Pencil, Plus, Save, Settings, Sparkles, Trash2, Wallet, FileText, X } from "../components/icons.tsx";
 import { Notice, Portal } from "../components/vendorUi.tsx";
 
 type Entity = "company" | "industry" | "payment_term";
@@ -21,12 +21,13 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
   const [docDraft, setDocDraft] = useState<{ type: DocTypeDef; rules: DocRule[]; isNew: boolean } | null>(null);
   const [pol, setPol] = useState<{ enabled: boolean; days: string; repeatDays: string; escalateAfter: string } | null>(null);
   const [polBusy, setPolBusy] = useState(false);
+  const [sla, setSla] = useState("7");
 
   const fail = useCallback((err: unknown) => {
     if (err instanceof ApiError && err.status === 401) { onSessionExpired(); return "Sessione scaduta"; }
     return err instanceof Error ? err.message : "Operazione non riuscita";
   }, [onSessionExpired]);
-  const adopt = (c: PortalConfig) => { setCfg(c); setSap(c.sap); setPol(policyToForm(c.reminders)); };
+  const adopt = (c: PortalConfig) => { setCfg(c); setSap(c.sap); setPol(policyToForm(c.reminders)); setSla(String(c.rda.slaDays)); };
   useEffect(() => { portalApi.config().then(adopt).catch(err => setError(fail(err))); }, [fail]);
 
   if (error) return <EmptyState icon={<AlertTriangle size={26} />} title="Impossibile caricare la configurazione" text={error} />;
@@ -47,6 +48,8 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
     try { adopt(await portalApi.saveConfig("reminders", "save", { enabled: pol.enabled, days: pol.days.split(/[,\s;]+/).filter(Boolean).map(Number), repeatDays: Number(pol.repeatDays), escalateAfter: Number(pol.escalateAfter) })); notify("Reminder salvati"); } catch (err) { notify(`⚠️ ${fail(err)}`); }
     setPolBusy(false);
   };
+  const saveSla = async () => { try { adopt(await portalApi.saveConfig("rda", "save", { slaDays: Number(sla) })); notify("Giorni di lavorazione salvati"); } catch (err) { notify(`⚠️ ${fail(err)}`); } };
+  const saveGroup = async (pgr: string, userId: string) => { try { adopt(await portalApi.saveConfig("pgr", "save", { pgr, userId: userId ? Number(userId) : null })); notify("Assegnazione salvata"); } catch (err) { notify(`⚠️ ${fail(err)}`); } };
   const removeDocType = async (t: DocTypeDef) => {
     if (!window.confirm(`Eliminare il documento "${t.label}"?`)) return;
     try { adopt(await portalApi.saveConfig("doc_type", "delete", { key: t.key })); notify("Documento eliminato"); } catch (err) { notify(`⚠️ ${fail(err)}`); }
@@ -112,6 +115,33 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
         {cfg.ai.configured
           ? <Notice kind="ok">Attivo (motore: <b>{cfg.ai.provider}</b>). Ogni documento caricato riceve un primo controllo: tipo, intestatario, partita IVA e scadenza. È un filtro: non approva e non rifiuta nulla.</Notice>
           : <Notice kind="info">Non attivo. Il controllo è predisposto: si attiva scegliendo il motore AI con le variabili <code>DOC_AI_PROVIDER</code> (es. <code>anthropic</code>) e la relativa chiave (<code>ANTHROPIC_API_KEY</code>) su Vercel. Prima di attivarlo verifica con l'azienda che i documenti possano essere inviati al servizio scelto.</Notice>}
+      </Card>
+
+      <Card>
+        <CardTitle icon={<Inbox size={16} />}>RDA da SAP e task</CardTitle>
+        <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-6px 0 12px", lineHeight: 1.55 }}>Ogni RDA aperta in SAP diventa un task, assegnato al buyer del suo gruppo di acquisto. Il task si chiude da solo quando la RDA diventa un ordine (PO). I gruppi compaiono qui dopo il primo import dei file di SAP, dalla pagina Task.</p>
+        <Field label="Giorni per lavorare una RDA (scadenza = data di rilascio + giorni)" htmlFor="r-sla">
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <input id="r-sla" type="number" min={1} max={90} value={sla} onChange={e => setSla(e.target.value)} style={{ ...iStyle, width: 110 }} />
+            <button onClick={saveSla} style={{ ...btnGhost, padding: "9px 14px", fontSize: 13 }}>Salva</button>
+          </div>
+        </Field>
+        <div style={{ ...sans, fontSize: 12, fontWeight: 650, color: C.muted, margin: "4px 0 8px" }}>Buyer per gruppo di acquisto</div>
+        {cfg.rda.groups.length === 0 ? <div style={{ ...sans, fontSize: 13, color: C.subtle, marginBottom: 12 }}>Nessun gruppo ancora: importa l'elenco delle RDA dalla pagina Task.</div> : cfg.rda.groups.map(g => (
+          <div key={g.pgr} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: `1px solid ${C.borderLight}`, flexWrap: "wrap" }}>
+            <div style={{ ...sans, flex: "0 0 70px", fontWeight: 700, color: C.text }}>{g.pgr}</div>
+            <select aria-label={`Buyer del gruppo ${g.pgr}`} value={g.userId ?? ""} onChange={e => saveGroup(g.pgr, e.target.value)} style={{ ...iStyle, width: "auto", flex: "1 1 200px", maxWidth: 320 }}>
+              <option value="">Nessun buyer (da assegnare)</option>{cfg.buyers.filter(b => b.active).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+            <div style={{ ...sans, fontSize: 12.5, color: C.muted }}>{g.openTasks} RDA aperte</div>
+          </div>
+        ))}
+        <div style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "14px 0 0", lineHeight: 1.6 }}>
+          <b>Importazione automatica:</b> {cfg.rda.ingestConfigured
+            ? <>attiva. Una regola sulla casella che riceve le mail di SAP può inviare ogni allegato a <code>/api/portal?op=rda-ingest</code> (POST, corpo = file, intestazione <code>Authorization: Bearer …</code> e <code>x-file-name</code>).</>
+            : <>non attiva. Per collegarla alle mail di SAP imposta la variabile <code>RDA_INGEST_SECRET</code> su Vercel; nel frattempo i file si caricano a mano dalla pagina Task.</>}
+        </div>
+        {cfg.rda.lastImports.length > 0 && <div style={{ ...sans, fontSize: 12, color: C.subtle, marginTop: 10 }}>Ultimi import: {cfg.rda.lastImports.map(i => `${i.kind === "pr" ? "RDA" : "Ordini"} ${new Date(i.at).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })} (${i.by})`).join(" · ")}</div>}
       </Card>
 
       <Card>

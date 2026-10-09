@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AppState, AuditEntry, CommitPayload, Contract, ContractData, NewUserInput, PlanStep, Role, User, View } from "./types.ts";
 import { api, ApiError } from "./api.ts";
 import { C, font, iStyle, ROLE_LABELS, sans, shadow } from "./theme.ts";
@@ -7,7 +7,7 @@ import { clearLocal, DEMO_PASSWORD, DEMO_USERS, demoState, loadLocal, saveLocal 
 import { makePlan, RENEWAL_BY_DECISION, reschedulePlan, stepTemplate } from "./lib/plan.ts";
 import { canCreateContract, canManageUsers, canViewTeam } from "./permissions.ts";
 import { Avatar, BrandMark } from "./components/ui.tsx";
-import { AlertTriangle, Bell, Building2, CalendarRange, CalendarClock, CheckCircle2, ChevronLeft, ClipboardCheck, FileText, LayoutDashboard, Loader2, Plus, Search, Settings, ShieldCheck, SlidersHorizontal, Users } from "./components/icons.tsx";
+import { AlertTriangle, CheckCircle2, ChevronLeft, House, LayoutGrid, Loader2, Plus, Search, Settings } from "./components/icons.tsx";
 import { InviteLanding } from "./components/InviteLanding.tsx";
 import { LoginScreen } from "./components/LoginScreen.tsx";
 import { AccountModal, BOFormModal, ContractForm } from "./components/Modals.tsx";
@@ -23,9 +23,12 @@ import { SupplierPortal } from "./views/SupplierPortal.tsx";
 import { VendorsView } from "./views/VendorsView.tsx";
 import { ConfigView } from "./views/ConfigView.tsx";
 import { ExpiryView } from "./views/ExpiryView.tsx";
+import { TasksView } from "./views/TasksView.tsx";
+import { HubView } from "./views/HubView.tsx";
+import { moduleOfView, modulesFor } from "./lib/modules.tsx";
 
 type Mode = "loading" | "api" | "local";
-const homeFor = (u: User): View => (u.role === "bo" ? "bo" : u.role === "supplier" ? "supplier" : u.role === "finance" ? "vendors" : "dashboard");
+const homeFor = (u: User, apiMode: boolean): View => (u.role === "bo" ? "bo" : u.role === "supplier" ? "supplier" : !apiMode ? "dashboard" : "hub");
 /** Ruoli che non lavorano sui contratti: non serve caricarli. */
 const hasContracts = (u: User) => u.role !== "supplier" && u.role !== "finance";
 const EMPTY: AppState = { contracts: [], plans: {}, auditLogs: {} };
@@ -46,6 +49,7 @@ export default function App() {
   const [boFormContract, setBOFormContract] = useState<Contract | null>(null);
   const [showAccount, setShowAccount] = useState(false);
   const [listSearch, setListSearch] = useState("");
+  const [showModules, setShowModules] = useState(false);
   const [inviteToken, setInviteToken] = useState<string | null>(() => new URLSearchParams(window.location.search).get("invite"));
 
   // Il dettaglio legge sempre la versione aggiornata del contratto (es. dopo una risposta BO).
@@ -83,7 +87,7 @@ export default function App() {
         return;
       }
       if (cancelled) return;
-      setCurrentUser(user); setView(homeFor(user));
+      setCurrentUser(user); setView(homeFor(user, true));
       await loadAll(user);
     })();
     return () => { cancelled = true; };
@@ -106,12 +110,12 @@ export default function App() {
     if (mode === "local") {
       const user = DEMO_USERS.find(u => u.email === email.trim().toLowerCase());
       if (!user || password !== DEMO_PASSWORD) return "Credenziali non valide";
-      setCurrentUser(user); setView(homeFor(user));
+      setCurrentUser(user); setView(homeFor(user, false));
       return null;
     }
     try {
       const { user } = await api.login(email, password);
-      setCurrentUser(user); setView(homeFor(user)); setSetupRequired(false);
+      setCurrentUser(user); setView(homeFor(user, true)); setSetupRequired(false);
       await loadAll(user);
       return null;
     } catch (err) { return err instanceof ApiError ? err.message : "Impossibile contattare il server"; }
@@ -286,49 +290,28 @@ export default function App() {
   );
 
   // ─── Navigazione per ruolo ─────────────────────────────────
-  const vendorNav = mode === "api" ? [{ key: "vendors" as const, icon: <Building2 size={19} />, label: "Fornitori" }, { key: "expiries" as const, icon: <CalendarClock size={19} />, label: "Scadenze" }] : [];
-  const navByRole: Record<Role, { key: View; icon: ReactNode; label: string }[]> = {
-    manager: [
-      { key: "dashboard", icon: <LayoutDashboard size={19} />, label: "Panoramica" },
-      { key: "list",      icon: <FileText size={19} />,        label: "Contratti" },
-      { key: "planning",  icon: <CalendarRange size={19} />,   label: "Piano" },
-      { key: "team",      icon: <Users size={19} />,           label: "Team" },
-      { key: "notifiche", icon: <Bell size={19} />,            label: "Avvisi" },
-      ...vendorNav,
-      ...(mode === "api" ? [{ key: "config" as const, icon: <SlidersHorizontal size={19} />, label: "Configurazione" }] : []),
-      ...(mode === "api" && canManageUsers(currentUser) ? [{ key: "users" as const, icon: <ShieldCheck size={19} />, label: "Utenti" }] : []),
-    ],
-    buyer: [
-      { key: "dashboard", icon: <LayoutDashboard size={19} />, label: "Panoramica" },
-      { key: "list",      icon: <FileText size={19} />,        label: "Contratti" },
-      { key: "planning",  icon: <CalendarRange size={19} />,   label: "Piano" },
-      { key: "notifiche", icon: <Bell size={19} />,            label: "Avvisi" },
-      ...vendorNav,
-    ],
-    finance: [{ key: "vendors", icon: <Building2 size={19} />, label: "Fornitori" }, { key: "expiries", icon: <CalendarClock size={19} />, label: "Scadenze" }],
-    supplier: [],
-    bo: [
-      { key: "bo",   icon: <ClipboardCheck size={19} />, label: "Richieste" },
-      { key: "list", icon: <FileText size={19} />,       label: "Contratti" },
-    ],
-  };
-  const navItems = navByRole[currentUser.role];
-  const titles: Record<View, string> = { dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", vendors: "Fornitori", expiries: "Scadenze documenti", config: "Configurazione", supplier: "Area fornitore", detail: selected?.supplier ?? "" };
+  const modules = modulesFor(currentUser, mode === "api");
+  const hubAvailable = mode === "api" && currentUser.role !== "bo";
+  const curModule = moduleOfView(view);
+  const activeModule = modules.find(m => m.key === curModule);
+  const navItems = activeModule?.pages ?? [];
+  const inContracts = curModule === "contracts";
+  const titles: Record<View, string> = { dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", vendors: "Fornitori", expiries: "Scadenze documenti", tasks: "Task", hub: "Home", config: "Configurazione", supplier: "Area fornitore", detail: selected?.supplier ?? "" };
+  const eyebrow = curModule === "hub" ? "Procurement Lab" : activeModule?.label ?? ROLE_LABELS[currentUser.role];
   const activeNav = view === "detail" ? "list" : view;
-  const navBtn = (n: typeof navItems[number], sidebar: boolean) => {
-    const on = activeNav === n.key;
-    return sidebar ? (
-      <button key={n.key} onClick={() => setView(n.key)} aria-current={on ? "page" : undefined} style={{ ...sans, position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 12px", marginBottom: 3, border: "none", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: on ? 650 : 500, background: on ? "rgba(255,255,255,.1)" : "transparent", color: on ? "#fff" : "rgba(255,255,255,.66)", textAlign: "left" }}>
-        {on && <span aria-hidden style={{ position: "absolute", left: -14, top: 8, bottom: 8, width: 4, borderRadius: "0 4px 4px 0", background: C.accent }} />}
-        <span style={{ display: "flex", color: on ? "#fff" : "rgba(255,255,255,.55)" }}>{n.icon}</span>{n.label}
-      </button>
-    ) : (
-      <button key={n.key} onClick={() => setView(n.key)} aria-current={on ? "page" : undefined} style={{ flex: "1 0 66px", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: on ? C.accent : C.subtle, padding: "2px 0" }}>
-        {n.icon}
-        <span style={{ ...sans, fontSize: 10, color: on ? C.accent : C.muted, fontWeight: on ? 650 : 500 }}>{n.label}</span>
-      </button>
-    );
-  };
+  const goModule = (m: { pages: { key: View }[] }) => { setView(m.pages[0].key); setShowModules(false); };
+  const sideBtn = (label: string, icon: React.ReactNode, on: boolean, click: () => void, sub = false) => (
+    <button key={label} onClick={click} aria-current={on ? "page" : undefined} style={{ ...sans, position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: sub ? "8px 12px 8px 14px" : "10px 12px", marginBottom: 3, border: "none", borderRadius: 10, cursor: "pointer", fontSize: sub ? 13.5 : 14, fontWeight: on ? 650 : 500, background: on ? "rgba(255,255,255,.1)" : "transparent", color: on ? "#fff" : "rgba(255,255,255,.66)", textAlign: "left" }}>
+      {on && <span aria-hidden style={{ position: "absolute", left: -14, top: 8, bottom: 8, width: 4, borderRadius: "0 4px 4px 0", background: C.accent }} />}
+      <span style={{ display: "flex", color: on ? "#fff" : "rgba(255,255,255,.55)" }}>{icon}</span>{label}
+    </button>
+  );
+  const tabBtn = (label: string, icon: React.ReactNode, on: boolean, click: () => void) => (
+    <button key={label} onClick={click} aria-current={on ? "page" : undefined} style={{ flex: "1 0 66px", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: on ? C.accent : C.subtle, padding: "2px 0" }}>
+      {icon}
+      <span style={{ ...sans, fontSize: 10, color: on ? C.accent : C.muted, fontWeight: on ? 650 : 500 }}>{label}</span>
+    </button>
+  );
 
   return (
     <div className="app-shell" style={{ ...sans, color: C.text }}>
@@ -338,8 +321,17 @@ export default function App() {
           <BrandMark size={38} />
           <div><div style={{ ...font, fontSize: 16, fontWeight: 700, color: "#fff" }}>Procurement Lab</div><div style={{ fontSize: 11, color: "rgba(255,255,255,.45)" }}>Procurement indiretto</div></div>
         </div>
-        <div style={{ fontSize: 10.5, fontWeight: 650, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.35)", padding: "0 12px 8px" }}>Menu</div>
-        <nav>{navItems.map(n => navBtn(n, true))}</nav>
+        {(hubAvailable || modules.length > 1) && (<>
+          <div style={{ fontSize: 10.5, fontWeight: 650, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.35)", padding: "0 12px 8px" }}>Moduli</div>
+          <nav aria-label="Moduli" style={{ marginBottom: 14 }}>
+            {hubAvailable && sideBtn("Home", <House size={19} />, curModule === "hub", () => setView("hub"))}
+            {modules.map(m => sideBtn(m.label, m.icon(19), curModule === m.key, () => goModule(m)))}
+          </nav>
+        </>)}
+        {navItems.length > 1 && (<>
+          <div style={{ fontSize: 10.5, fontWeight: 650, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.35)", padding: "6px 12px 8px", borderTop: "1px solid rgba(255,255,255,.08)" }}>{activeModule?.label}</div>
+          <nav aria-label="Pagine del modulo">{navItems.map(n => sideBtn(n.label, n.icon, activeNav === n.key, () => setView(n.key), true))}</nav>
+        </>)}
         <div style={{ flex: 1 }} />
         <button onClick={() => setShowAccount(true)} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, background: "rgba(255,255,255,.06)", cursor: "pointer", textAlign: "left", width: "100%" }}>
           <Avatar name={currentUser.name} size={36} />
@@ -353,17 +345,17 @@ export default function App() {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {view === "detail" && <button className="topbar-back" onClick={() => setView("list")} aria-label="Torna alla lista" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}><ChevronLeft size={22} /></button>}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="topbar-eyebrow">{ROLE_LABELS[currentUser.role]}</div>
+              <div className="topbar-eyebrow">{eyebrow}</div>
               <div className="topbar-title">{titles[view]}</div>
             </div>
-            {hasContracts(currentUser) && currentUser.role !== "bo" && (
+            {inContracts && hasContracts(currentUser) && currentUser.role !== "bo" && (
               <div className="topbar-search" style={{ position: "relative", width: 300 }}>
                 <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
                 <input value={listSearch} onChange={e => { setListSearch(e.target.value); if (view !== "list") setView("list"); }} placeholder="Cerca fornitore, oggetto, owner…" aria-label="Cerca contratti" style={{ ...iStyle, padding: "9px 12px 9px 36px", borderRadius: 10, background: "#fff" }} />
               </div>
             )}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {canCreateContract(currentUser) && (
+              {inContracts && canCreateContract(currentUser) && (
                 <button onClick={openNew} aria-label="Nuovo contratto" style={{ ...sans, display: "flex", alignItems: "center", gap: 6, background: C.accent, border: "none", borderRadius: 10, color: "#fff", cursor: "pointer", fontSize: 13, padding: "8px 12px", fontWeight: 650, flexShrink: 0, boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={17} /><span className="desktop-label">Nuovo contratto</span></button>
               )}
               <button className="mobile-only" onClick={() => setShowAccount(true)} aria-label="Account" style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 0 }}>
@@ -387,6 +379,8 @@ export default function App() {
           {view === "bo" && currentUser.role === "bo" && <BOView contracts={contracts} plans={plans} currentUser={currentUser} onOpenBOForm={setBOFormContract} />}
           {view === "notifiche" && currentUser.role !== "bo" && <AlertsView contracts={contracts} users={users} />}
           {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} onPurge={handlePurge} />}
+          {view === "hub" && hubAvailable && <HubView user={currentUser} modules={modules} contracts={contracts} plans={plans} onOpen={setView} />}
+          {view === "tasks" && mode === "api" && (currentUser.role === "manager" || currentUser.role === "buyer") && <TasksView currentUser={currentUser} contracts={contracts} plans={plans} onCompleteStep={handleCompleteStep} onSendBO={handleSendBO} onOpenContract={openDetail} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "vendors" && mode === "api" && <VendorsView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "expiries" && mode === "api" && <ExpiryView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "config" && mode === "api" && currentUser.role === "manager" && <ConfigView notify={showToast} onSessionExpired={sessionExpired} />}
@@ -396,7 +390,23 @@ export default function App() {
 
       {view === "list" && canCreateContract(currentUser) && <button className="fab" onClick={openNew} aria-label="Nuovo contratto"><Plus size={26} /></button>}
 
-      {view !== "detail" && <nav className="bottom-nav" aria-label="Navigazione">{navItems.map(n => navBtn(n, false))}</nav>}
+      {view !== "detail" && (
+        <nav className="bottom-nav" aria-label="Navigazione">
+          {curModule === "hub" ? modules.map(m => tabBtn(m.label, m.icon(19), false, () => goModule(m))) : navItems.map(n => tabBtn(n.label, n.icon, activeNav === n.key, () => setView(n.key)))}
+          {(hubAvailable || modules.length > 1) && curModule !== "hub" && tabBtn("Moduli", <LayoutGrid size={19} />, false, () => setShowModules(true))}
+        </nav>
+      )}
+      {showModules && (
+        <div className="sheet-overlay" role="dialog" aria-modal="true" aria-label="Moduli" onClick={e => { if (e.target === e.currentTarget) setShowModules(false); }}>
+          <div className="sheet" style={{ maxWidth: 420 }}>
+            <div style={{ ...font, fontSize: 17, fontWeight: 700, marginBottom: 12 }}>Vai a</div>
+            <div style={{ display: "grid", gap: 8 }}>
+              {hubAvailable && <button onClick={() => { setView("hub"); setShowModules(false); }} style={{ ...sans, display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, border: `1px solid ${C.border}`, background: "#fff", cursor: "pointer", fontSize: 14.5, fontWeight: 600, textAlign: "left" }}><House size={20} />Home</button>}
+              {modules.map(m => <button key={m.key} onClick={() => goModule(m)} style={{ ...sans, display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, border: `1px solid ${curModule === m.key ? C.accent : C.border}`, background: curModule === m.key ? C.accentLight : "#fff", cursor: "pointer", fontSize: 14.5, fontWeight: 600, textAlign: "left" }}>{m.icon(20)}{m.label}</button>)}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showForm && <ContractForm initial={editingContract} currentUser={currentUser} users={users} canUpload={mode === "api"} onSave={handleSave} onClose={() => { setShowForm(false); setEditingContract(null); }} />}
       {boFormContract && <BOFormModal contract={boFormContract} currentUser={currentUser} onSubmit={handleBOResponse} onClose={() => setBOFormContract(null)} />}

@@ -38,6 +38,16 @@ Il Buyer invita un fornitore (Fornitori → Invita fornitore): il fornitore rice
 - **Reminder automatici**: Vercel Cron esegue ogni mattina `/api/portal?op=cron-reminders` (file `vercel.json`); serve la variabile `CRON_SECRET`. Giorni di preavviso, ripetizione e soglia "non risponde" sono configurabili. Senza provider email (`RESEND_API_KEY`, `MAIL_FROM`) i messaggi sono solo registrati.
 - **Controllo AI dei documenti**: predisposto ma spento di default. Con `DOC_AI_PROVIDER=anthropic` e `ANTHROPIC_API_KEY` ogni file caricato (PDF o immagine) riceve un primo controllo su tipo, intestatario, partita IVA e scadenza. Segnala, non approva né rifiuta. Il motore è in `api/_docai.ts` e si può sostituire.
 
+## Moduli, Home e Task
+
+L'app è divisa in moduli (menu laterale; su telefono il pulsante *Moduli*): **Contratti**, **Fornitori**, **Task** e **Amministrazione**, più una **Home** con i numeri principali di ciascuno. Ogni ruolo vede solo i moduli che gli competono.
+
+Il modulo **Task** riunisce, per ogni persona, le RDA da SAP, le attività dei piani di rinnovo dei contratti e i task creati a mano.
+
+- **RDA da SAP**: ogni mattina SAP invia due file Excel, l'elenco delle RDA aperte (`OPEN_PR`) e gli ordini degli ultimi 7 giorni (`PO_LAST_7D`). Si caricano dalla pagina Task (il tipo di file si riconosce dalle colonne) oppure arrivano in automatico a `/api/portal?op=rda-ingest` (POST con il file nel corpo, `Authorization: Bearer $RDA_INGEST_SECRET`, intestazione `x-file-name`).
+- Ogni RDA diventa un task assegnato al buyer del suo **gruppo di acquisto** (abbinamento in *Configurazione*); la scadenza è la data di rilascio più i giorni di lavorazione configurati.
+- **Chiusura automatica**: quando la RDA non risulta più nell'elenco di quelle aperte, il task si chiude con "PO creato" se l'ordine compare nel file degli ordini, altrimenti con "non più aperta in SAP". Se la RDA riappare, il task si riapre. Un file con molte meno RDA del precedente viene bloccato finché non si conferma.
+
 ## Architettura
 
 ```
