@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DuplicateMatch, Lifecycle, InviteInput, PortalConfig, Supplier, SupplierStatus, SupplierSummary, User, VendorAction } from "../types.ts";
 import { ApiError, portalApi, vendorExportUrl } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
-import { fmtDate } from "../lib/format.ts";
+import { fmt, fmtDate } from "../lib/format.ts";
 import { countryName } from "../supplierRules.ts";
 import { Avatar, AuditTrail, Card, CardTitle, EmptyState, Field, Grid, StatCard } from "../components/ui.tsx";
-import { CheckCircle2, Clock, Copy, FileCheck2, Hourglass, Loader2, Mail, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Users, Ban, AlertTriangle } from "../components/icons.tsx";
+import { CheckCircle2, Clock, Copy, FileCheck2, Hourglass, Loader2, Mail, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Users, Ban, AlertTriangle, FileText } from "../components/icons.tsx";
 import { AiResult, VendorFlags, CloseButton, DocLink, KV, Notice, ReasonDialog, StatusBadge, ValidityChip , Portal } from "../components/vendorUi.tsx";
 import { CHECK_STYLE, fmtSize, STATUS_STYLE, supplierTimeline } from "../lib/vendors.ts";
 import { Summary } from "./SupplierPortal.tsx";
@@ -418,6 +418,19 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
                     {!s.anonymizedAt && (s.lifecycle !== "active" || s.status !== "registered") && <button onClick={() => setDialog("anonymize")} style={btn(false, true)}>Anonimizza</button>}
                   </div>
                 )}
+              </Card>
+            )}
+            {s.contracts && (
+              <Card>
+                <CardTitle icon={<FileText size={16} />}>Contratti</CardTitle>
+                {s.contracts.length === 0 ? <div style={{ ...sans, fontSize: 13, color: C.subtle }}>Nessun contratto collegato a questo fornitore.</div> : s.contracts.map((c, i) => (
+                  <div key={c.id} style={{ ...sans, display: "flex", gap: 10, padding: "8px 0", borderTop: i ? `1px solid ${C.borderLight}` : "none", fontSize: 13, flexWrap: "wrap", alignItems: "baseline" }}>
+                    <span style={{ flex: "1 1 200px", fontWeight: 600, color: c.status === "active" ? C.text : C.muted }}>{c.object}</span>
+                    <span className="tabular" style={{ color: C.muted }}>{fmt(c.value, c.currency)}</span>
+                    <span className="tabular" style={{ color: C.muted }}>scad. {fmtDate(c.end)}</span>
+                    <span style={{ fontSize: 11.5, fontWeight: 650, borderRadius: 999, padding: "2px 9px", background: c.status === "active" ? C.greenBg : C.grayBg, color: c.status === "active" ? C.green : C.gray }}>{c.status === "active" ? "Attivo" : ({ renewed: "Rinnovato", replaced: "Sostituito", ceased: "Cessato", extended: "Prorogato" } as Record<string, string>)[c.outcome] ?? "Chiuso"}</span>
+                  </div>
+                ))}
               </Card>
             )}
             <AuditTrail entries={supplierTimeline(s)} />

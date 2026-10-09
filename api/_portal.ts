@@ -82,6 +82,11 @@ export async function getVendor(user: User, id: number): Promise<Supplier> {
   const ok = (await getPool().query(`select 1 from suppliers s where s.id = $1 and ${visibleWhere(user)}`, [id])).rows.length > 0;
   const s = ok ? await loadFull(getPool(), id) : undefined;
   if (!s) throw new HttpError(404, "Fornitore non trovato");
+  if (user.role === "manager" || user.role === "buyer") {
+    const own = user.role === "buyer" ? "and lower(owner) = lower($2)" : "";
+    s.contracts = (await getPool().query(`select id, object, end_date, notice_date, value, currency, status, outcome, owner from contracts where supplier_id = $1 ${own} order by status, end_date desc`, user.role === "buyer" ? [id, user.name] : [id])).rows
+      .map(r => ({ id: r.id, object: r.object, end: r.end_date, noticeDate: r.notice_date, value: Number(r.value), currency: r.currency, status: r.status, outcome: r.outcome, owner: r.owner }));
+  }
   return s;
 }
 

@@ -18,6 +18,8 @@ export interface Contract {
   status?: ContractStatus; outcome?: ContractOutcome | ""; outcomeNote?: string; closedAt?: string | null;
   /** Catena dei contratti: quello che questo sostituisce e quello che lo sostituisce. */
   replaces?: number | null; replacedBy?: number | null;
+  /** Fornitore in anagrafica (portale fornitori), se collegato. */
+  supplierId?: number | null;
   /** Nome del file mostrato all'utente. */
   fileName: string | null;
   /** Percorso del documento nell'archivio privato; null se il file non è stato salvato. */
@@ -107,6 +109,8 @@ export interface Supplier {
   anonymizedAt?: string | null;
   /** Solo per il fornitore: testo dell'informativa privacy da accettare. */
   privacyNotice?: string;
+  /** Solo per Manager e Buyer: contratti collegati al fornitore (attivi e storico). */
+  contracts?: { id: number; object: string; end: string; noticeDate: string; value: number; currency: string; status: string; outcome: string; owner: string }[];
   documents: SupplierDocument[]; events: SupplierEvent[];
   /** Documenti applicabili a questo fornitore, con l'indicazione di quelli obbligatori. */
   docTypes: ResolvedDocType[];
@@ -173,7 +177,9 @@ export type TaskPriority = "low" | "normal" | "high";
 export interface TaskPo { po: string; supplierName: string; docDate: string | null }
 export interface RdaMeta { pgr?: string; requestedBy?: string; createdBy?: string; value?: number; currency?: string; lines?: number; releaseDate?: string | null; delivDate?: string | null; plant?: string; firstSeen?: string;
   /** Solo task di rinnovo: dati del contratto di origine al momento della creazione. */
-  supplier?: string; object?: string; keyDate?: string; end?: string; noticeDate?: string }
+  supplier?: string; object?: string; keyDate?: string; end?: string; noticeDate?: string;
+  /** Valore del contratto in scadenza, dopo che l'esito ha registrato il nuovo valore. */
+  previousValue?: number }
 /** Come è stato scelto il fornitore di una RDA sopra soglia. */
 export type SourcingMode = "comparison" | "strategic" | "single_source" | "exception";
 export interface SourcingQuote { supplier: string; amount: number; chosen: boolean }

@@ -373,7 +373,7 @@ function SourcingCard({ t, threshold, isManager, fail, onSaved }: { t: TaskDetai
   const [quotes, setQuotes] = useState<{ supplier: string; amount: string; chosen: boolean }[]>((s?.quotes.length ? s.quotes : EMPTY_QUOTES).map(q => ({ supplier: q.supplier, amount: q.amount ? String(q.amount) : "", chosen: q.chosen })));
   const [justification, setJustification] = useState(s?.justification ?? "");
   // Saving: prezzo di riferimento (per i rinnovi, il valore del contratto in scadenza) e importo finale negoziato.
-  const [baseline, setBaseline] = useState(s?.baseline ? String(s.baseline) : t.source === "contract" && t.meta.value ? String(t.meta.value) : "");
+  const [baseline, setBaseline] = useState(s?.baseline ? String(s.baseline) : t.source === "contract" && (t.meta.previousValue ?? t.meta.value) ? String(t.meta.previousValue ?? t.meta.value) : "");
   const [finalAmount, setFinalAmount] = useState(s?.finalAmount ? String(s.finalAmount) : "");
   const num = (v: string) => (v.trim() ? Number(v.replace(",", ".")) : null);
   const preview = computeSaving({ quotes: mode === "comparison" ? quotes.map(q => ({ supplier: q.supplier, amount: Number(q.amount.replace(",", ".")) || 0, chosen: q.chosen })) : [], baseline: num(baseline), finalAmount: num(finalAmount) });

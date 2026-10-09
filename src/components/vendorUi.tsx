@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import type { AiCheck, Lifecycle, Qualification, SupplierStatus } from "../types.ts";
+import type { AiCheck, Lifecycle, Qualification, SupplierStatus, SupplierSummary } from "../types.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, sans } from "../theme.ts";
 import { docValidity } from "../supplierRules.ts";
 import { fmtDate } from "../lib/format.ts";
@@ -102,6 +102,26 @@ export function VendorFlags({ lifecycle, qualification, duplicate }: { lifecycle
       {qualification === "lapsed" && pill("Qualifica scaduta", C.red, C.redBg)}
       {qualification === "expiring" && pill("Qualifica in scadenza", C.yellow, C.yellowBg)}
       {duplicate && pill("Possibile doppione", C.purple, C.purpleBg)}
+    </>
+  );
+}
+
+/** Campo fornitore collegato all'anagrafica: suggerisce i fornitori registrati e mostra qualifica e stato di quello scelto. */
+export function SupplierPicker({ id, value, supplierId, vendors, onChange, error }: { id: string; value: string; supplierId: number | null | undefined; vendors: SupplierSummary[] | null; onChange: (name: string, supplierId: number | null) => void; error?: boolean }) {
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  const pick = (name: string) => { const v = vendors?.find(x => norm(x.legalName || x.name) === norm(name)); onChange(name, v ? v.id : null); };
+  const v = supplierId ? vendors?.find(x => x.id === supplierId) : undefined;
+  const hint = !vendors ? null : !value.trim() ? null : !v
+    ? { c: C.yellow, t: "Non presente in anagrafica fornitori: invitalo dal modulo Fornitori per la qualifica" }
+    : v.lifecycle !== "active" ? { c: C.red, t: `Fornitore ${LIFECYCLE_STYLE[v.lifecycle].label.toLowerCase()} in anagrafica` }
+    : v.status !== "registered" ? { c: C.yellow, t: `In anagrafica, registrazione non completata (${STATUS_STYLE[v.status].label.toLowerCase()})` }
+    : v.qualification === "lapsed" ? { c: C.red, t: `Registrato${v.sapCode ? ` (SAP ${v.sapCode})` : ""}, ma con qualifica scaduta` }
+    : { c: C.green, t: `Registrato${v.sapCode ? ` (SAP ${v.sapCode})` : ""}${v.qualification === "expiring" ? ", documenti in scadenza" : ", qualifica valida"}` };
+  return (
+    <>
+      <input id={id} list={`${id}-list`} value={value} onChange={e => pick(e.target.value)} placeholder="Es. Acme Srl" autoComplete="off" style={{ ...iStyle, borderColor: error ? C.red : C.border }} />
+      <datalist id={`${id}-list`}>{(vendors ?? []).filter(x => x.status !== "invited").map(x => <option key={x.id} value={x.legalName || x.name}>{x.sapCode ? `SAP ${x.sapCode}` : STATUS_STYLE[x.status].label}</option>)}</datalist>
+      {hint && <div style={{ ...sans, fontSize: 11.5, color: hint.c, marginTop: 4, lineHeight: 1.4 }}>{hint.t}</div>}
     </>
   );
 }
