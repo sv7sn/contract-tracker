@@ -10,6 +10,7 @@ import { canInviteSuppliers } from "./_permissions.js";
 import { visibleWhere } from "./_access.js";
 import { docConfig, loadCatalog, loadPolicy, saveDocType, savePolicy } from "./_docs.js";
 import { loadRdaConfig, saveRda } from "./_tasks.js";
+import { loadPrivacy, savePrivacy } from "./_privacy.js";
 import { bankKey, complianceChecks, diffData, duplicateIds, findDuplicates, qualificationOf, runExternalChecks, type StoredCompliance } from "./_governance.js";
 
 const bad = (msg: string): never => { throw new HttpError(400, msg); };
@@ -28,7 +29,7 @@ function mapSupplier(r: Row): Base {
     referenceBuyerId: r.reference_buyer_id, referenceBuyerName: r.reference_buyer_name ?? "", status: r.status, data: r.data ?? {},
     paymentTerms: r.payment_terms, sapCode: r.sap_code, sapAccountGroup: r.sap_account_group, rejectionReason: r.rejection_reason, isUpdate: r.is_update,
     invitedAt: iso(r.created_at)!, expiresAt: iso(r.token_expires), submittedAt: iso(r.submitted_at), updatedAt: iso(r.updated_at)!,
-    lifecycle: r.lifecycle ?? "active", lifecycleReason: r.lifecycle_reason ?? "", approvedAt: iso(r.approved_at),
+    lifecycle: r.lifecycle ?? "active", lifecycleReason: r.lifecycle_reason ?? "", approvedAt: iso(r.approved_at), anonymizedAt: iso(r.anonymized_at),
   };
 }
 
@@ -99,7 +100,7 @@ export async function loadConfig(): Promise<PortalConfig> {
   const industryCodes: IndustryCode[] = i.rows.map(r => ({ code: r.code, name: r.name, buyerIds: ib.rows.filter(x => x.industry_code === r.code).map(x => x.user_id) }));
   const paymentTerms: PaymentTerm[] = pt.rows.map(r => ({ code: r.code, label: r.label }));
   const cat = await loadCatalog(db);
-  return { companies, industryCodes, paymentTerms, sap: st.rows[0]?.value as SapSettings, buyers: b.rows, ...docConfig(cat, await loadPolicy(db)), rda: await loadRdaConfig(db) };
+  return { companies, industryCodes, paymentTerms, sap: st.rows[0]?.value as SapSettings, buyers: b.rows, ...docConfig(cat, await loadPolicy(db)), rda: await loadRdaConfig(db), privacy: await loadPrivacy(db) };
 }
 
 const CODE_RE = /^[A-Za-z0-9_.-]{1,20}$/;
@@ -110,6 +111,7 @@ export async function saveConfig(entity: string, action: string, item: Row): Pro
   if (entity === "rda" || entity === "pgr") return saveRda(entity, item);
   if (entity === "doc_type") return saveDocType(action, item);
   if (entity === "reminders") return savePolicy(item);
+  if (entity === "privacy") return savePrivacy(item);
   if (entity === "sap") {
     const cur = (await db.query("select value from settings where key = 'sap'")).rows[0]?.value as SapSettings;
     const rec: Record<string, string> = {};
@@ -220,11 +222,11 @@ export async function deleteInvite(actor: User, id: number): Promise<void> {
 }
 
 // ─── Accesso del fornitore tramite invito ────────────────────
-export async function inviteInfo(token: string): Promise<{ name: string; email: string; companies: string[] }> {
+export async function inviteInfo(token: string): Promise<{ name: string; email: string; companies: string[]; privacyNotice: string }> {
   const r = (await getPool().query("select name, email, company_codes from suppliers where token_hash = $1 and status = 'invited' and token_expires > now()", [sha(token || "-")])).rows[0];
   if (!r) throw new HttpError(404, "Invito non valido o scaduto: chiedi al tuo referente di inviarne uno nuovo");
   const companies = (await getPool().query("select name from buying_companies where code = any($1) order by name", [r.company_codes])).rows.map(x => x.name);
-  return { name: r.name, email: r.email, companies };
+  return { name: r.name, email: r.email, companies, privacyNotice: (await loadPrivacy(getPool())).notice };
 }
 
 export async function activateInvite(token: string, password: string): Promise<User> {
@@ -253,7 +255,7 @@ async function ownSupplierRow(db: Queryable, user: User, lock = false): Promise<
 }
 export async function getMySupplier(user: User): Promise<Supplier> {
   const r = await ownSupplierRow(getPool(), user);
-  return (await loadFull(getPool(), r.id, true))!;
+  return { ...(await loadFull(getPool(), r.id, true))!, privacyNotice: (await loadPrivacy(getPool())).notice };
 }
 
 function sanitizeData(input: unknown): SupplierData {

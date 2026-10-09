@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type CommitResult, type ImportResult, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type ImportResult, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -61,7 +61,7 @@ export const documentUrl = (contractId: number, download = false) => `/api/docum
 // ─── Portale fornitori ───────────────────────────────────────
 const portal = (op: string, extra = "") => `/api/portal?op=${op}${extra}`;
 export const portalApi = {
-  inviteInfo: (token: string) => request<{ name: string; email: string; companies: string[] }>(portal("invite-info", `&token=${encodeURIComponent(token)}`)),
+  inviteInfo: (token: string) => request<{ name: string; email: string; companies: string[]; privacyNotice: string }>(portal("invite-info", `&token=${encodeURIComponent(token)}`)),
   activate: (token: string, password: string) => post<{ user: User }>(portal("activate"), { token, password }),
   // Area del fornitore
   myself: () => request<{ supplier: Supplier }>(portal("supplier-me")).then(r => r.supplier),
@@ -70,6 +70,8 @@ export const portalApi = {
   addDocument: (doc: { type: string; fileName: string; filePath: string; size: number; validUntil: string | null }) => post<{ supplier: Supplier; docId: number }>(portal("supplier-doc-add"), doc),
   removeDocument: (id: number) => request<{ supplier: Supplier }>(portal("supplier-doc", `&id=${id}`), { method: "DELETE" }).then(r => r.supplier),
   // Staff
+  configAudit: () => request<{ entries: ConfigAuditEntry[] }>(portal("config-audit")).then(r => r.entries),
+  anonymize: (id: number, reason: string) => post<{ supplier: Supplier }>(portal("vendor-anonymize", `&id=${id}`), { reason }).then(r => r.supplier),
   vendors: () => request<{ vendors: SupplierSummary[] }>(portal("vendors")).then(r => r.vendors),
   vendor: (id: number) => request<{ supplier: Supplier }>(portal("vendor", `&id=${id}`)).then(r => r.supplier),
   invite: (input: InviteInput & { confirmDuplicates?: boolean }) => post<{ supplier: Supplier; link: string }>(portal("vendor-invite"), input),
@@ -91,9 +93,11 @@ export const portalApi = {
   decideSourcing: (id: number, approve: boolean, note: string) => post<{ task: TaskDetail }>(portal("task-sourcing-approve", `&id=${id}`), { approve, note }).then(r => r.task),
   deleteTask: (id: number) => request<{ ok: true }>(portal("task", `&id=${id}`), { method: "DELETE" }),
   config: () => request<{ config: PortalConfig }>(portal("config")).then(r => r.config),
-  saveConfig: (entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders" | "rda" | "pgr", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
+  saveConfig: (entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders" | "rda" | "pgr" | "privacy", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
 };
 
+export const vendorExportUrl = (id: number) => `/api/portal?op=vendor-export&id=${id}`;
+export const myDataExportUrl = "/api/portal?op=supplier-export";
 export const supplierDocUrl = (id: number, download = false) => `/api/portal?op=doc-download&id=${id}${download ? "&download=1" : ""}`;
 
 /** Carica un documento di qualifica nell'archivio privato e restituisce il percorso salvato. */

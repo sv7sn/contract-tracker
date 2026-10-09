@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { ResolvedDocType, Supplier, SupplierData, SupplierDocument } from "../types.ts";
-import { ApiError, portalApi, uploadSupplierDocument } from "../api.ts";
+import { ApiError, myDataExportUrl, portalApi, uploadSupplierDocument } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmtDate } from "../lib/format.ts";
 import { COUNTRIES, countryName, CURRENCIES, DOC_EXTENSIONS, MAX_DOC_BYTES, missingRequired, REGION_REQUIRED, validateDeclarations, validateSupplierData, WITHHOLDING_TYPES } from "../supplierRules.ts";
@@ -359,7 +359,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
                 Dichiaro che l'azienda, i suoi titolari e amministratori non sono soggetti a sanzioni internazionali (UE, ONU, USA, UK) né a provvedimenti interdittivi o di esclusione dai contratti pubblici.
               </DeclCheck>
               <DeclCheck checked={!!decl.privacyAccepted} onChange={v => setDecl({ privacyAccepted: v })} error={err("declarations.privacyAccepted")}>
-                Ho preso visione dell'informativa privacy: i dati di contatto e i documenti caricati sono trattati solo per la qualifica e la gestione del rapporto di fornitura, conservati per la durata del rapporto e degli obblighi di legge, e posso chiederne in ogni momento accesso, rettifica o cancellazione al Buyer di riferimento.
+                Ho preso visione dell'informativa privacy: {s.privacyNotice}
               </DeclCheck>
             </div>
           )}
@@ -395,6 +395,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
       <Card>
         <CardTitle icon={<Building2 size={16} />} action={amending && <button onClick={() => { setEditing(true); setStep(0); }} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", fontSize: 12.5 }}><Pencil size={14} />Modifica i dati</button>}>I tuoi dati</CardTitle>
         <Summary s={s} data={s.data} />
+        <div style={{ ...sans, fontSize: 12, color: C.subtle, marginTop: 14 }}><a href={myDataExportUrl} style={{ color: C.muted }}>Scarica una copia dei tuoi dati</a> (privacy: diritto di accesso)</div>
       </Card>
       <Card style={{ marginTop: 14 }}>
         <CardTitle icon={<FileCheck2 size={16} />}>Documenti di qualifica</CardTitle>

@@ -15,7 +15,7 @@ const RULES: [string, (p: string) => boolean][] = [["Almeno 10 caratteri", p => 
 
 /** Pagina di benvenuto aperta dal link d'invito ricevuto via email. */
 export function InviteLanding({ token, onActivated, onCancel }: { token: string; onActivated: (user: User) => void; onCancel: () => void }) {
-  const [info, setInfo] = useState<{ name: string; email: string; companies: string[] } | null>(null);
+  const [info, setInfo] = useState<{ name: string; email: string; companies: string[]; privacyNotice: string } | null>(null);
   const [invalid, setInvalid] = useState<string | null>(null);
   const [pw, setPw] = useState(""); const [pw2, setPw2] = useState(""); const [show, setShow] = useState(false);
   const [error, setError] = useState<string | null>(null); const [busy, setBusy] = useState(false);
@@ -82,6 +82,7 @@ export function InviteLanding({ token, onActivated, onCancel }: { token: string;
               <button type="submit" disabled={busy} style={{ ...sans, width: "100%", height: 46, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: C.accent, border: "none", borderRadius: 11, color: "#fff", fontWeight: 650, fontSize: 15, cursor: busy ? "default" : "pointer", opacity: busy ? 0.8 : 1, boxShadow: "0 2px 6px rgba(200,82,42,.4)" }}>
                 {busy ? <><Loader2 className="spin" size={18} />Creazione account…</> : <><ShieldCheck size={18} />Crea il mio account</>}
               </button>
+              {info.privacyNotice && <details style={{ ...sans, fontSize: 12, color: C.muted, marginTop: 14, lineHeight: 1.5 }}><summary style={{ cursor: "pointer", color: C.subtle }}>Informativa privacy</summary><p style={{ margin: "6px 0 0" }}>{info.privacyNotice}</p></details>}
               <p style={{ ...sans, fontSize: 12, color: C.subtle, margin: "14px 0 0", textAlign: "center" }}>Hai già un account? <button type="button" onClick={onCancel} style={{ background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", font: "inherit", textDecoration: "underline" }}>Accedi</button></p>
             </>
           )}

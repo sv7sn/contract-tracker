@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DuplicateMatch, Lifecycle, InviteInput, PortalConfig, Supplier, SupplierStatus, SupplierSummary, User, VendorAction } from "../types.ts";
-import { ApiError, portalApi } from "../api.ts";
+import { ApiError, portalApi, vendorExportUrl } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmtDate } from "../lib/format.ts";
 import { countryName } from "../supplierRules.ts";
@@ -206,7 +206,7 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
   const [terms, setTerms] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<"reject" | "revision" | "block" | "deactivate" | "exclude" | "reactivate" | "sanctions" | null>(null);
+  const [dialog, setDialog] = useState<"reject" | "revision" | "block" | "deactivate" | "exclude" | "reactivate" | "sanctions" | "anonymize" | null>(null);
   const [copied, setCopied] = useState(false);
   // Conferme richieste dai controlli: doppioni (Buyer), verifica del conto e valutazione dei controlli (Finance).
   const [dupOk, setDupOk] = useState(false); const [dupReason, setDupReason] = useState("");
@@ -280,6 +280,7 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
             )}
 
             {s.rejectionReason && (s.status === "pending_revision" || s.status === "rejected") && <Notice kind={s.status === "rejected" ? "error" : "warn"}><b>{s.status === "rejected" ? "Motivo del rifiuto" : "Modifiche richieste"}:</b> {s.rejectionReason}</Notice>}
+            {s.anonymizedAt && <Notice kind="info"><b>Dati personali anonimizzati il {fmtDate(s.anonymizedAt)}.</b> Restano solo ragione sociale, partita IVA e IBAN.</Notice>}
             {s.lifecycle !== "active" && <Notice kind="error"><b>{s.lifecycle === "blocked" ? "Fornitore bloccato" : s.lifecycle === "inactive" ? "Fornitore disattivato" : "Fornitore escluso"}.</b> {s.lifecycleReason} {s.sapCode ? "Ricorda di bloccarlo anche in SAP." : ""}</Notice>}
             {s.qualification === "lapsed" && <Notice kind="error"><b>Qualifica scaduta:</b> almeno un documento obbligatorio è scaduto o mancante. Il fornitore riceve i reminder; puoi sollecitarlo dalla pagina Scadenze.</Notice>}
             {s.isUpdate && s.status === "pending" && <Notice kind="info">Il fornitore, già registrato in SAP{s.sapCode ? ` (${s.sapCode})` : ""}, ha modificato dati o documenti: serve una nuova verifica.</Notice>}
@@ -408,8 +409,15 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
                   {s.lifecycle === "active" && <button onClick={() => setDialog("block")} style={btn(false)}>Blocca</button>}
                   {currentUser.role === "manager" && s.lifecycle !== "inactive" && <button onClick={() => setDialog("deactivate")} style={btn(false)}>Disattiva</button>}
                   {currentUser.role === "manager" && s.lifecycle !== "excluded" && <button onClick={() => setDialog("exclude")} style={btn(false, true)}>Escludi</button>}
-                  {currentUser.role === "manager" && s.lifecycle !== "active" && <button onClick={() => setDialog("reactivate")} style={btn(true)}>Riattiva</button>}
+                  {currentUser.role === "manager" && s.lifecycle !== "active" && !s.anonymizedAt && <button onClick={() => setDialog("reactivate")} style={btn(true)}>Riattiva</button>}
                 </div>
+                {currentUser.role === "manager" && (
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.borderLight}`, alignItems: "center" }}>
+                    <span style={{ ...sans, fontSize: 12, color: C.muted, flex: "1 1 200px" }}>Privacy: esporta tutti i dati del fornitore o, se non è più attivo, cancellane i dati personali.</span>
+                    <a href={vendorExportUrl(s.id)} style={{ ...btn(false), textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Esporta dati</a>
+                    {!s.anonymizedAt && (s.lifecycle !== "active" || s.status !== "registered") && <button onClick={() => setDialog("anonymize")} style={btn(false, true)}>Anonimizza</button>}
+                  </div>
+                )}
               </Card>
             )}
             <AuditTrail entries={supplierTimeline(s)} />
@@ -427,8 +435,12 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
           exclude: ["Escludi il fornitore", "Esclusione definitiva: non accede, non riceve reminder e non può essere reinvitato senza un Manager.", "Escludi", true, "exclude"],
           reactivate: ["Riattiva il fornitore", "Il fornitore torna operativo.", "Riattiva", false, "reactivate"],
           sanctions: ["Verifica manuale delle sanzioni", "Indica la fonte consultata (es. lista consolidata UE, OFAC) e l'esito.", "Registra verifica", false, "sanctions_manual"],
+          anonymize: ["Anonimizza i dati personali", "Vengono cancellati contatti, indirizzo, documenti e account del fornitore. Restano ragione sociale, partita IVA e IBAN per il controllo dei doppioni. L'operazione non si può annullare.", "Anonimizza", true, "reject"],
         }[dialog] as [string, string, string, boolean, VendorAction];
-        return <ReasonDialog title={cfg[0]} text={cfg[1]} confirmLabel={cfg[2]} danger={cfg[3]} onConfirm={async reason => { const e = await run(dialog, cfg[4], { reason }); if (!e) setDialog(null); return e; }} onClose={() => setDialog(null)} />;
+        const confirm = dialog === "anonymize"
+          ? async (reason: string) => { try { setS(await portalApi.anonymize(s.id, reason)); onChanged(); notify("Dati personali anonimizzati"); setDialog(null); return null; } catch (err) { return fail(err); } }
+          : async (reason: string) => { const e = await run(dialog, cfg[4], { reason }); if (!e) setDialog(null); return e; };
+        return <ReasonDialog title={cfg[0]} text={cfg[1]} confirmLabel={cfg[2]} danger={cfg[3]} onConfirm={confirm} onClose={() => setDialog(null)} />;
       })()}
     </div>
   );
