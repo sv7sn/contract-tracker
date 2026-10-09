@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Contract, PlanStep, SourcingMode, SourcingQuote, Task, TaskDetail, TaskList, User } from "../types.ts";
+import type { Contract, ContractOutcome, PlanStep, Saving, SourcingMode, SourcingQuote, Task, TaskDetail, TaskList, User } from "../types.ts";
+import { computeSaving } from "../lib/saving.ts";
+import { OutcomeCard, PraticaCard, RenewalCard } from "./TaskPratica.tsx";
 import { ApiError, importSapFile, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmt, fmtDate, isoDate, NOW } from "../lib/format.ts";
@@ -22,9 +24,10 @@ interface Item {
 
 const TODAY = isoDate(NOW);
 const daysFrom = (d: string) => Math.round((new Date(d).getTime() - new Date(TODAY).getTime()) / 864e5);
-const ORIGIN_LABEL = { contract: "Contratto", rda: "RDA", manual: "Manuale" } as const;
+const ORIGIN_LABEL = { contract: "Rinnovo", rda: "RDA", manual: "Manuale" } as const;
+const OUTCOME_LABEL: Record<ContractOutcome, string> = { renewed: "Rinnovato", replaced: "Nuovo contratto", extended: "Prorogato", ceased: "Cessato" };
 const ORIGIN_COLOR = { contract: [C.blue, C.blueBg], rda: [C.purple, C.purpleBg], manual: [C.gray, C.grayBg] } as const;
-const DONE_TEXT: Record<string, string> = { po_created: "PO creato", removed_from_sap: "Non più aperta in SAP", manual: "Completato a mano" };
+const DONE_TEXT: Record<string, string> = { po_created: "PO creato", removed_from_sap: "Non più aperta in SAP", manual: "Completato a mano", outcome: "Pratica chiusa" };
 const PRIO: Record<string, string> = { high: "Alta", normal: "Normale", low: "Bassa" };
 const SOURCING_LABEL: Record<SourcingMode, string> = { comparison: "Confronto tra offerte", strategic: "Fornitura strategica", single_source: "Single source", exception: "Eccezione" };
 /** RDA sopra soglia senza scelta del fornitore documentata (o con eccezione non ancora approvata). */
@@ -66,41 +69,29 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
     return () => { off = true; };
   }, [fail]);
 
-  // Attività dei piani di rinnovo: quelle scadute o in scadenza nei prossimi 30 giorni, a carico del Buyer.
-  const contractItems = useMemo<Item[]>(() => {
-    const out: Item[] = [];
-    for (const c of contracts) {
-      if (c.ceased) continue;
-      for (const s of plans[c.id] ?? []) {
-        const t = stepTemplate(s.stepId);
-        if (!t || s.status === "done" || t.actor === "system" && s.stepId !== "bo_notify") continue;
-        if (daysFrom(s.scheduledDate) > 30) continue;
-        out.push({ key: `c:${c.id}:${s.stepId}`, origin: "contract", title: `${t.label} · ${c.supplier}`, sub: c.object, due: s.scheduledDate, assignee: c.owner || "—", assigneeId: null,
-          status: t.actor === "bo" || s.status === "pending_bo" ? "waiting" : "open", priority: "normal", doneAt: null, contract: c, step: s });
-      }
-    }
-    return out;
-  }, [contracts, plans]);
-
-  const items = useMemo<Item[]>(() => {
-    const server = (data?.tasks ?? []).map((t): Item => ({
-      key: `t:${t.id}`, origin: t.source, title: t.title, sub: t.source === "rda" ? [t.meta.requestedBy && `Richiedente ${t.meta.requestedBy}`, t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""].filter(Boolean).join(" · ") : t.detail,
-      due: t.due, assignee: t.assigneeName || "Da assegnare", assigneeId: t.assigneeId, status: t.status, priority: t.priority, doneAt: t.doneAt, task: t,
-    }));
-    return [...server, ...contractItems];
-  }, [data, contractItems]);
+  // Un task di rinnovo per contratto: la prossima attività del suo piano diventa l'azione rapida in elenco.
+  const items = useMemo<Item[]>(() => (data?.tasks ?? []).map((t): Item => {
+    const c = t.contractId ? contracts.find(x => x.id === t.contractId) : undefined;
+    const step = c && !t.outcome && t.status === "open" ? (plans[c.id] ?? []).find(s => s.status !== "done" && s.stepId !== "expiry") : undefined;
+    const sub = t.source === "rda" ? [t.meta.requestedBy && `Richiedente ${t.meta.requestedBy}`, t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""].filter(Boolean).join(" · ")
+      : t.source === "contract" ? [t.meta.object, t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : "", t.meta.noticeDate ? `disdetta entro ${fmtDate(t.meta.noticeDate)}` : t.meta.end ? `scadenza ${fmtDate(t.meta.end)}` : ""].filter(Boolean).join(" · ") : t.detail;
+    return {
+      key: `t:${t.id}`, origin: t.source, title: t.title, sub, due: t.due, assignee: t.assigneeName || "Da assegnare", assigneeId: t.assigneeId,
+      status: t.status === "open" && step?.status === "pending_bo" ? "waiting" : t.status, priority: t.priority, doneAt: t.doneAt, task: t, contract: c, step,
+    };
+  }), [data, contracts, plans]);
 
   const recentDone = (it: Item) => it.status === "done" && !!it.doneAt && Date.now() - new Date(it.doneAt).getTime() < 7 * 864e5;
   const counts = useMemo(() => ({
     open: items.filter(i => i.status !== "done").length, late: items.filter(overdue).length,
     soon: items.filter(i => i.status !== "done" && i.due && daysFrom(i.due) >= 0 && daysFrom(i.due) <= 7).length,
-    done: items.filter(recentDone).length, sourcing: items.filter(i => i.status !== "done" && sourcingGap(i.task)).length, approvals: items.filter(i => i.task?.sourcing?.approval === "pending").length, unassigned: items.filter(i => i.origin !== "contract" && i.status !== "done" && i.assigneeId === null).length,
+    done: items.filter(recentDone).length, sourcing: items.filter(i => i.status !== "done" && sourcingGap(i.task)).length, approvals: items.filter(i => i.task?.sourcing?.approval === "pending").length, unassigned: items.filter(i => i.status !== "done" && i.assigneeId === null).length,
   }), [items]);
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter(i => (origin === "all" || i.origin === origin) && (status === "all" || (status === "sourcing" ? sourcingGap(i.task) : status === "open" ? i.status !== "done" : i.status === "done"))
-      && (who === "all" || (who === "none" ? i.origin !== "contract" && i.assigneeId === null : String(i.assigneeId) === who)) && (!q || `${i.title} ${i.sub} ${i.assignee}`.toLowerCase().includes(q)))
+      && (who === "all" || (who === "none" ? i.assigneeId === null : String(i.assigneeId) === who)) && (!q || `${i.title} ${i.sub} ${i.assignee}`.toLowerCase().includes(q)))
       .sort((a, b) => Number(overdue(b)) - Number(overdue(a)) || (a.due ?? "9999").localeCompare(b.due ?? "9999"));
   }, [items, origin, status, who, search]);
 
@@ -218,7 +209,8 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
       </>)}
 
       {creating && <Portal><NewTaskDialog isManager={isManager} buyers={buyers} currentUser={currentUser} fail={fail} onClose={() => setCreating(false)} onCreated={async () => { setCreating(false); notify("Task creato"); await reload(); }} /></Portal>}
-      {openId !== null && <Portal><TaskSheet id={openId} threshold={threshold} isManager={isManager} buyers={buyers} fail={fail} notify={notify} onClose={() => setOpenId(null)} onChanged={reload} /></Portal>}
+      {openId !== null && <Portal><TaskSheet id={openId} threshold={threshold} isManager={isManager} buyers={buyers} fail={fail} notify={notify} onClose={() => setOpenId(null)} onChanged={reload}
+        contracts={contracts} plans={plans} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onOpenContract={c => { setOpenId(null); onOpenContract(c); }} /></Portal>}
     </div>
   );
 }
@@ -230,20 +222,21 @@ function sourcingChip(i: Item) {
 }
 
 function statusChip(i: Item) {
-  if (i.status === "done") return chip(i.task?.doneReason ? DONE_TEXT[i.task.doneReason] ?? "Chiuso" : "Chiuso", C.green, C.greenBg);
+  if (i.status === "done") return chip(i.task?.outcome ? OUTCOME_LABEL[i.task.outcome] : i.task?.doneReason ? DONE_TEXT[i.task.doneReason] ?? "Chiuso" : "Chiuso", C.green, C.greenBg);
+  if (i.task?.outcome) return chip(i.task.poNumbers.length || i.task.noPoReason ? "Da completare" : "Firmato · attesa PO", C.blue, C.blueBg);
   if (i.status === "waiting") return chip("In attesa del BO", C.gray, C.grayBg);
   if (overdue(i)) return chip("In ritardo", C.red, C.redBg);
-  if (i.origin !== "contract" && i.assigneeId === null) return chip("Da assegnare", C.purple, C.purpleBg);
+  if (i.assigneeId === null) return chip("Da assegnare", C.purple, C.purpleBg);
   return chip("Aperto", C.blue, C.blueBg);
 }
 
 /** Azione rapida dei task che arrivano dal piano di un contratto. */
 function contractAction(i: Item, done: (c: number, s: string) => void, sendBO: (c: number) => void, open: (c: Contract) => void) {
-  if (i.origin !== "contract" || !i.contract || !i.step) return null;
+  if (i.origin !== "contract" || !i.contract || !i.step || i.status === "done") return null;
   const small = { ...btnGhost, padding: "6px 10px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5 } as const;
   if (i.step.stepId === "bo_notify") return <button onClick={() => sendBO(i.contract!.id)} style={small}><Send size={13} />Invia al BO</button>;
   if (i.status === "waiting") return <button onClick={() => open(i.contract!)} style={small}><FileText size={13} />Apri contratto</button>;
-  return <button onClick={() => done(i.contract!.id, i.step!.stepId)} style={small}><Check size={13} />Segna fatto</button>;
+  return <button onClick={() => done(i.contract!.id, i.step!.stepId)} style={small} title="Segna come fatta"><Check size={13} />{stepTemplate(i.step.stepId).label}</button>;
 }
 
 function NewTaskDialog({ isManager, buyers, currentUser, fail, onClose, onCreated }: { isManager: boolean; buyers: { id: number; name: string }[]; currentUser: User; fail: (e: unknown) => string; onClose: () => void; onCreated: () => void }) {
@@ -275,7 +268,8 @@ function NewTaskDialog({ isManager, buyers, currentUser, fail, onClose, onCreate
   );
 }
 
-function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, onChanged }: { id: number; threshold: number; isManager: boolean; buyers: { id: number; name: string }[]; fail: (e: unknown) => string; notify: (m: string) => void; onClose: () => void; onChanged: () => void }) {
+function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, onChanged, contracts, plans, onCompleteStep, onSendBO, onOpenContract }: { id: number; threshold: number; isManager: boolean; buyers: { id: number; name: string }[]; fail: (e: unknown) => string; notify: (m: string) => void; onClose: () => void; onChanged: () => void;
+  contracts: Contract[]; plans: Record<number, PlanStep[]>; onCompleteStep: (contractId: number, stepId: string) => void; onSendBO: (contractId: number) => void; onOpenContract: (c: Contract) => void }) {
   const [t, setT] = useState<TaskDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -296,6 +290,7 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
     try { await portalApi.deleteTask(id); notify("Task eliminato"); onChanged(); onClose(); } catch (err) { setError(fail(err)); }
   };
   const rda = t?.source === "rda";
+  const renewal = t?.source === "contract";
   const total = (t?.lines ?? []).reduce((a, l) => a + l.value, 0);
   const age = t?.meta.releaseDate ? Math.round((Date.now() - new Date(t.meta.releaseDate).getTime()) / 864e5) : null;
 
@@ -305,7 +300,7 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ ...font, fontSize: 18, fontWeight: 700, color: C.text, overflowWrap: "anywhere" }}>{t?.title ?? "…"}</div>
-            {t && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>{chip(rda ? "RDA" : "Manuale", ORIGIN_COLOR[t.source][0], ORIGIN_COLOR[t.source][1])}{t.status === "done" ? chip(DONE_TEXT[t.doneReason] ?? "Chiuso", C.green, C.greenBg) : chip("Aperto", C.blue, C.blueBg)}</div>}
+            {t && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>{chip(ORIGIN_LABEL[t.source], ORIGIN_COLOR[t.source][0], ORIGIN_COLOR[t.source][1])}{t.status === "done" ? chip(t.outcome ? OUTCOME_LABEL[t.outcome] : DONE_TEXT[t.doneReason] ?? "Chiuso", C.green, C.greenBg) : chip(t.outcome ? `${OUTCOME_LABEL[t.outcome]} · da completare` : "Aperto", C.blue, C.blueBg)}</div>}
           </div>
           <CloseButton onClick={onClose} />
         </div>
@@ -319,7 +314,7 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
             <Card>
               <KV rows={[
                 ...(rda ? [["Numero RDA", t.sourceKey ?? ""], ["Gruppo acquisti", t.meta.pgr ?? ""], ["Richiedente", t.meta.requestedBy ?? ""], ["Importo", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Rilasciata il", t.meta.releaseDate ? `${fmtDate(t.meta.releaseDate)}${age !== null ? ` (da ${age} gg)` : ""}` : ""], ["Consegna richiesta", t.meta.delivDate ? fmtDate(t.meta.delivDate) : ""]] as [string, string][] : []),
-                ["Scadenza", t.due ? fmtDate(t.due) : ""], ["Assegnato a", t.assigneeName || "Da assegnare"], ...(!rda ? [["Priorità", PRIO[t.priority]], ["Creato da", t.createdBy]] as [string, string][] : []),
+                [renewal ? "Da gestire entro" : "Scadenza", t.due ? fmtDate(t.due) : ""], ["Assegnato a", t.assigneeName || "Da assegnare"], ...(!rda && !renewal ? [["Priorità", PRIO[t.priority]], ["Creato da", t.createdBy]] as [string, string][] : []),
               ]} />
               {!rda && t.detail && <div style={{ ...sans, fontSize: 13, color: C.muted, marginTop: 12, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{t.detail}</div>}
             </Card>
@@ -337,7 +332,10 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
               </Card>
             )}
 
-            {rda && (t.sourcingRequired || t.sourcing) && <SourcingCard t={t} threshold={threshold} isManager={isManager} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
+            {renewal && <RenewalCard t={t} contracts={contracts} plan={t.contractId ? plans[t.contractId] ?? [] : []} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onOpenContract={onOpenContract} />}
+            {renewal && <OutcomeCard t={t} contracts={contracts} fail={fail} onOpenContract={onOpenContract} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
+            {(rda || renewal) && <PraticaCard t={t} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
+            {(rda || renewal) && (t.sourcingRequired || t.sourcing) && <SourcingCard t={t} threshold={threshold} isManager={isManager} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
 
             {t.pos.length > 0 && (
               <Card>
@@ -353,7 +351,8 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
                 </select>
               )}
               <div style={{ flex: 1 }} />
-              {t.status === "open" && <button onClick={() => patch({ status: "done" }, "Task completato")} disabled={busy} style={{ ...btnPrimary, padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 7 }}>{busy ? <Loader2 className="spin" size={15} /> : <Check size={16} />}{rda ? "Segna come gestita" : "Completa"}</button>}
+              {renewal && t.status === "open" && <span style={{ ...sans, fontSize: 12.5, color: C.muted, flex: "1 1 260px" }}>La pratica si chiude da sola quando sono completi esito, confronto (se serve) e PO.</span>}
+              {t.status === "open" && !renewal && <button onClick={() => patch({ status: "done" }, "Task completato")} disabled={busy} style={{ ...btnPrimary, padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 7 }}>{busy ? <Loader2 className="spin" size={15} /> : <Check size={16} />}{rda ? "Segna come gestita" : "Completa"}</button>}
               {t.status === "done" && (t.source === "manual" || t.doneReason === "manual") && <button onClick={() => patch({ status: "open" }, "Task riaperto")} disabled={busy} style={{ ...btnGhost, padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 7 }}><RotateCcw size={15} />Riapri</button>}
               {t.source === "manual" && <button onClick={remove} style={{ ...btnGhost, padding: "10px 14px", color: C.red, borderColor: "#f0c9c9", display: "inline-flex", alignItems: "center", gap: 6 }}><Trash2 size={15} />Elimina</button>}
             </div>
@@ -373,6 +372,11 @@ function SourcingCard({ t, threshold, isManager, fail, onSaved }: { t: TaskDetai
   const [mode, setMode] = useState<SourcingMode>(s?.mode ?? "comparison");
   const [quotes, setQuotes] = useState<{ supplier: string; amount: string; chosen: boolean }[]>((s?.quotes.length ? s.quotes : EMPTY_QUOTES).map(q => ({ supplier: q.supplier, amount: q.amount ? String(q.amount) : "", chosen: q.chosen })));
   const [justification, setJustification] = useState(s?.justification ?? "");
+  // Saving: prezzo di riferimento (per i rinnovi, il valore del contratto in scadenza) e importo finale negoziato.
+  const [baseline, setBaseline] = useState(s?.baseline ? String(s.baseline) : t.source === "contract" && t.meta.value ? String(t.meta.value) : "");
+  const [finalAmount, setFinalAmount] = useState(s?.finalAmount ? String(s.finalAmount) : "");
+  const num = (v: string) => (v.trim() ? Number(v.replace(",", ".")) : null);
+  const preview = computeSaving({ quotes: mode === "comparison" ? quotes.map(q => ({ supplier: q.supplier, amount: Number(q.amount.replace(",", ".")) || 0, chosen: q.chosen })) : [], baseline: num(baseline), finalAmount: num(finalAmount) });
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -381,7 +385,7 @@ function SourcingCard({ t, threshold, isManager, fail, onSaved }: { t: TaskDetai
   const save = async () => {
     setBusy(true); setErr(null);
     try {
-      const x = await portalApi.saveSourcing(t.id, { mode, justification, quotes: mode === "comparison" ? quotes.map(q => ({ supplier: q.supplier, amount: Number(q.amount.replace(",", ".")), chosen: q.chosen })) : [] });
+      const x = await portalApi.saveSourcing(t.id, { mode, justification, baseline: num(baseline), finalAmount: num(finalAmount), quotes: mode === "comparison" ? quotes.map(q => ({ supplier: q.supplier, amount: Number(q.amount.replace(",", ".")), chosen: q.chosen })) : [] });
       setEditing(false); onSaved(x, mode === "exception" && x.sourcing?.approval === "pending" ? "Eccezione inviata al Manager" : "Scelta del fornitore registrata");
     } catch (e) { setErr(fail(e)); }
     setBusy(false);
@@ -412,6 +416,7 @@ function SourcingCard({ t, threshold, isManager, fail, onSaved }: { t: TaskDetai
             </div>
           )}
           {s.justification && <div style={{ ...sans, fontSize: 13, color: C.muted, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{s.justification}</div>}
+          {t.saving && <SavingBox saving={t.saving} cur={cur} />}
           {s.approval === "rejected" && s.approvalNote && <Notice kind="error"><b>Motivo del rifiuto:</b> {s.approvalNote}. Registra un confronto tra offerte o un'altra motivazione.</Notice>}
           {isManager && s.approval === "pending" && (
             <div style={{ display: "grid", gap: 8, marginTop: 4 }}>
@@ -445,6 +450,11 @@ function SourcingCard({ t, threshold, isManager, fail, onSaved }: { t: TaskDetai
               {quotes.length < 10 && <button type="button" onClick={() => setQuotes(qs => [...qs, { supplier: "", amount: "", chosen: false }])} style={{ ...btnGhost, justifySelf: "start", padding: "6px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}><Plus size={14} />Aggiungi offerta</button>}
             </div>
           )}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 200px), 1fr))", columnGap: 12 }}>
+            <Field label={t.source === "contract" ? "Prezzo attuale (contratto in scadenza)" : "Prezzo di riferimento (opzionale)"} htmlFor={`sb-${t.id}`}><input id={`sb-${t.id}`} value={baseline} onChange={e => setBaseline(e.target.value)} inputMode="decimal" placeholder="Es. prezzo storico o budget" style={iStyle} /></Field>
+            <Field label="Importo finale negoziato (opzionale)" htmlFor={`sf-${t.id}`}><input id={`sf-${t.id}`} value={finalAmount} onChange={e => setFinalAmount(e.target.value)} inputMode="decimal" placeholder={mode === "comparison" ? "Se diverso dall'offerta scelta" : "Importo concordato"} style={iStyle} /></Field>
+          </div>
+          {preview && <SavingBox saving={preview} cur={cur} />}
           <Field label={mode === "comparison" ? "Note (obbligatorie se non scegli l'offerta più bassa)" : mode === "exception" ? "Motivo dell'eccezione" : mode === "strategic" ? "Perché la fornitura è strategica" : "Perché c'è un solo fornitore possibile"} req={mode !== "comparison"} htmlFor={`sj-${t.id}`}>
             <textarea id={`sj-${t.id}`} value={justification} onChange={e => setJustification(e.target.value)} rows={3} style={{ ...iStyle, resize: "vertical" }} />
           </Field>
@@ -457,5 +467,19 @@ function SourcingCard({ t, threshold, isManager, fail, onSaved }: { t: TaskDetai
       )}
       {err && <div style={{ marginTop: 10 }}><Notice kind="error">{err}</Notice></div>}
     </Card>
+  );
+}
+
+/** Riepilogo del saving: base di calcolo principale e dettaglio delle altre basi disponibili. */
+function SavingBox({ saving, cur }: { saving: Saving; cur: string }) {
+  const basis = { baseline: "rispetto al prezzo di riferimento", average: "rispetto alla media delle altre offerte", negotiation: "dalla negoziazione" }[saving.basis];
+  const pos = saving.amount >= 0;
+  return (
+    <div style={{ ...sans, background: pos ? C.greenBg : C.redBg, borderRadius: 10, padding: "10px 12px", fontSize: 13, lineHeight: 1.6, marginBottom: 12 }}>
+      <div><b style={{ color: pos ? C.green : C.red }}>{pos ? "Saving" : "Maggior costo"} {fmt(Math.abs(saving.amount), cur)} ({Math.abs(saving.pct)}%)</b> <span style={{ color: C.muted }}>{basis} · importo finale {fmt(saving.finalAmount, cur)}</span></div>
+      <div style={{ color: C.muted, fontSize: 12 }}>
+        {[saving.vsBaseline !== null && `vs riferimento ${fmt(saving.vsBaseline, cur)}`, saving.vsAverage !== null && `vs media offerte ${fmt(saving.vsAverage, cur)}`, saving.negotiation !== null && `negoziazione ${fmt(saving.negotiation, cur)}`].filter(Boolean).join(" · ")}
+      </div>
+    </div>
   );
 }

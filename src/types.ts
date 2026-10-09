@@ -14,12 +14,19 @@ export interface Contract {
   noticeDays: number | null;
   /** Data limite per inviare la disdetta ("" se non c'è preavviso): se presente il piano si conta da qui. */
   noticeDate: string;
+  /** Ciclo di vita (gestito dal task di rinnovo, non dal form): attivo oppure chiuso con un esito. */
+  status?: ContractStatus; outcome?: ContractOutcome | ""; outcomeNote?: string; closedAt?: string | null;
+  /** Catena dei contratti: quello che questo sostituisce e quello che lo sostituisce. */
+  replaces?: number | null; replacedBy?: number | null;
   /** Nome del file mostrato all'utente. */
   fileName: string | null;
   /** Percorso del documento nell'archivio privato; null se il file non è stato salvato. */
   filePath: string | null;
 }
 export type ContractData = Omit<Contract, "id">;
+export type ContractStatus = "active" | "closed";
+/** renewed = rinnovato/rinegoziato con lo stesso fornitore; replaced = sostituito (gara o altro fornitore); extended = prorogato; ceased = cessato. */
+export type ContractOutcome = "renewed" | "replaced" | "extended" | "ceased";
 export interface PlanStep {
   contractId: number; stepId: string; scheduledDate: string; originalDate: string; status: StepStatus;
   completedAt: string | null; completedBy: string | null; boDecision: string | null; boNotes: string;
@@ -164,29 +171,40 @@ export type VendorAction = "approve" | "reject" | "request_revision" | "set_paym
 export type TaskSource = "contract" | "rda" | "manual";
 export type TaskPriority = "low" | "normal" | "high";
 export interface TaskPo { po: string; supplierName: string; docDate: string | null }
-export interface RdaMeta { pgr?: string; requestedBy?: string; createdBy?: string; value?: number; currency?: string; lines?: number; releaseDate?: string | null; delivDate?: string | null; plant?: string; firstSeen?: string }
+export interface RdaMeta { pgr?: string; requestedBy?: string; createdBy?: string; value?: number; currency?: string; lines?: number; releaseDate?: string | null; delivDate?: string | null; plant?: string; firstSeen?: string;
+  /** Solo task di rinnovo: dati del contratto di origine al momento della creazione. */
+  supplier?: string; object?: string; keyDate?: string; end?: string; noticeDate?: string }
 /** Come è stato scelto il fornitore di una RDA sopra soglia. */
 export type SourcingMode = "comparison" | "strategic" | "single_source" | "exception";
 export interface SourcingQuote { supplier: string; amount: number; chosen: boolean }
+/** Saving: rispetto al prezzo di riferimento (es. contratto precedente), alla media delle offerte e alla prima offerta del fornitore scelto. */
+export interface Saving { finalAmount: number; vsBaseline: number | null; vsAverage: number | null; negotiation: number | null; amount: number; pct: number; basis: "baseline" | "average" | "negotiation" }
 export interface Sourcing {
   mode: SourcingMode; quotes: SourcingQuote[]; justification: string; recordedBy: string; recordedAt: string;
   /** Solo per le eccezioni: approvazione del Manager. */
   approval: "pending" | "approved" | "rejected" | null; approvedBy: string; approvedAt: string | null; approvalNote: string;
+  /** Prezzo di riferimento (es. valore del contratto precedente) e importo finale negoziato con il fornitore scelto. */
+  baseline?: number | null; finalAmount?: number | null;
 }
 /** na = sotto soglia; missing = serve e manca; pending = eccezione in attesa del Manager; ok = documentata. */
 export type SourcingStatus = "na" | "missing" | "pending" | "ok";
 export interface Task {
-  id: number; source: "rda" | "manual"; sourceKey: string | null; title: string; detail: string; due: string | null; priority: TaskPriority;
+  id: number; source: "rda" | "manual" | "contract"; sourceKey: string | null; title: string; detail: string; due: string | null; priority: TaskPriority;
   assigneeId: number | null; assigneeName: string; status: "open" | "done"; doneAt: string | null; doneReason: string; doneBy: string;
   meta: RdaMeta; pos: TaskPo[]; createdBy: string; createdAt: string; updatedAt: string;
-  sourcing: Sourcing | null; sourcingRequired: boolean; sourcingStatus: SourcingStatus;
+  sourcing: Sourcing | null; sourcingRequired: boolean; sourcingStatus: SourcingStatus; saving: Saving | null;
+  /** Pratica: contratto di origine (task di rinnovo), esito, nuovo contratto, RDA, PO e documenti. */
+  contractId: number | null; outcome: ContractOutcome | ""; newContractId: number | null;
+  rdaNumbers: string[]; poNumbers: string[]; noPoReason: string; documents: TaskDocument[];
 }
+export type TaskDocKind = "offer" | "contract" | "addendum" | "termination" | "other";
+export interface TaskDocument { id: number; kind: TaskDocKind; fileName: string; size: number; uploadedBy: string; uploadedAt: string }
 export interface TaskLine { item: string; shortText: string; qty: number; unit: string; price: number; per: number; currency: string; delivDate: string | null; costCenter: string; glAccount: string; value: number }
 export interface TaskDetail extends Task { lines: TaskLine[] }
 export interface TaskList { tasks: Task[]; sapUpdatedAt: { pr: string | null; po: string | null } }
 export interface ImportResult { kind: "pr" | "po"; fileName: string; rows: number; prs: number; created: number; updated: number; reopened: number; closedPo: number; closedGone: number; linked: number }
 export interface RdaGroup { pgr: string; userId: number | null; note: string; openTasks: number }
-export interface RdaConfig { slaDays: number; sourcingThreshold: number; groups: RdaGroup[]; ingestConfigured: boolean; lastImports: { kind: string; fileName: string; rows: number; at: string; by: string }[] }
+export interface RdaConfig { slaDays: number; sourcingThreshold: number; renewalLeadDays: number; groups: RdaGroup[]; ingestConfigured: boolean; lastImports: { kind: string; fileName: string; rows: number; at: string; by: string }[] }
 export interface TaskSummary { open: number; overdue: number; dueSoon: number; unassigned: number; sourcingMissing: number; exceptionsPending: number }
 
 /** Indicatori di processo (pagina Indicatori, solo Manager). */
@@ -197,7 +215,9 @@ export interface Kpis {
     open: number; overdue: number; slaDays: number; aging: KpiCount[]; closed90: number; withinSla90: number | null; medianCycleDays: number | null;
     monthly: { month: string; closed: number; medianDays: number | null }[]; byBuyer: { name: string; open: number; overdue: number }[];
   };
-  sourcing: { threshold: number; required90: number; compliant90: number; byMode: KpiCount[]; openMissing: number; exceptionsPending: number };
+  sourcing: { threshold: number; required90: number; compliant90: number; byMode: KpiCount[]; openMissing: number; exceptionsPending: number;
+    /** Saving delle pratiche chiuse negli ultimi 12 mesi (EUR). */
+    saving12m: number; savingCount12m: number; savingPct12m: number | null };
   onboarding: { inProgress: KpiCount[]; registered12m: number; medianDaysToRegister: number | null; stuckAtBuyer: number; stuckAtFinance: number };
   qualification: { valid: number; expiring: number; lapsed: number; blocked: number };
   contracts: { active: number; keyNext90: number; withNotice: number; withoutDecision: number; missedDeadline: number };

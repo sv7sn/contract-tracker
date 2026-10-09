@@ -9,7 +9,7 @@ import { listConfigAudit, logConfigChange } from "./_audit.js";
 import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
 import { computeKpis } from "./_kpi.js";
 import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
-import { createManualTask, decideSourcingException, deleteManualTask, getTask, importSapFile, listTasks, saveSourcing, taskSummary, updateTask } from "./_tasks.js";
+import { addTaskDocument, createManualTask, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, setTaskLinks, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
 import {
@@ -147,6 +147,22 @@ async function handle(request: Request): Promise<Response> {
       if (op === "task-update" && method === "POST") return json({ task: await updateTask(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-sourcing" && method === "POST") return json({ task: await saveSourcing(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-sourcing-approve" && method === "POST") return json({ task: await decideSourcingException(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-outcome" && method === "POST") return json({ task: await setRenewalOutcome(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-links" && method === "POST") return json({ task: await setTaskLinks(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-doc" && method === "POST") return json({ task: await addTaskDocument(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-doc" && method === "DELETE") {
+        const { task, staleFile } = await deleteTaskDocument(user, idOf(url), Number(url.searchParams.get("doc")));
+        if (staleFile) await deleteDocuments([staleFile]);
+        return json({ task });
+      }
+      if (op === "task-doc-download" && method === "GET") {
+        const doc = await taskDocumentPath(user, idOf(url));
+        const blob = await openDocument(doc.filePath);
+        if (!blob) throw new HttpError(404, "Documento non trovato");
+        const ext = doc.fileName.toLowerCase().split(".").pop() ?? "";
+        const type = ext === "pdf" ? "application/pdf" : "application/octet-stream";
+        return new Response(blob.stream, { headers: { "Content-Type": type, "Content-Disposition": `${type === "application/pdf" ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(doc.fileName.replace(/[\r\n"\\/]/g, "_"))}`, "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store" } });
+      }
       if (op === "task" && method === "DELETE") { await deleteManualTask(user, idOf(url)); return json({ ok: true }); }
       if (op === "rda-import" && method === "POST") {
         const name = decodeURIComponent(request.headers.get("x-file-name") ?? "") || "file.xls";

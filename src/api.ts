@@ -93,11 +93,16 @@ export const portalApi = {
   updateTask: (id: number, patch: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-update", `&id=${id}`), patch).then(r => r.task),
   saveSourcing: (id: number, input: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-sourcing", `&id=${id}`), input).then(r => r.task),
   decideSourcing: (id: number, approve: boolean, note: string) => post<{ task: TaskDetail }>(portal("task-sourcing-approve", `&id=${id}`), { approve, note }).then(r => r.task),
+  setOutcome: (id: number, input: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-outcome", `&id=${id}`), input).then(r => r.task),
+  setTaskLinks: (id: number, input: { poNumbers?: string[]; rdaNumbers?: string[]; noPoReason?: string }) => post<{ task: TaskDetail }>(portal("task-links", `&id=${id}`), input).then(r => r.task),
+  addTaskDoc: (id: number, doc: { kind: string; fileName: string; filePath: string; size: number }) => post<{ task: TaskDetail }>(portal("task-doc", `&id=${id}`), doc).then(r => r.task),
+  removeTaskDoc: (id: number, docId: number) => request<{ task: TaskDetail }>(portal("task-doc", `&id=${id}&doc=${docId}`), { method: "DELETE" }).then(r => r.task),
   deleteTask: (id: number) => request<{ ok: true }>(portal("task", `&id=${id}`), { method: "DELETE" }),
   config: () => request<{ config: PortalConfig }>(portal("config")).then(r => r.config),
   saveConfig: (entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders" | "rda" | "pgr" | "privacy", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
 };
 
+export const taskDocUrl = (docId: number) => `/api/portal?op=task-doc-download&id=${docId}`;
 export const vendorExportUrl = (id: number) => `/api/portal?op=vendor-export&id=${id}`;
 export const myDataExportUrl = "/api/portal?op=supplier-export";
 export const supplierDocUrl = (id: number, download = false) => `/api/portal?op=doc-download&id=${id}${download ? "&download=1" : ""}`;

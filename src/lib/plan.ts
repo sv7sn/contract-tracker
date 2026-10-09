@@ -1,16 +1,9 @@
-import type { Contract, MonthLoad, PlanStep, Plans, StepTemplate, Suggestion } from "../types.ts";
+import type { Contract, MonthLoad, PlanStep, Plans, Suggestion } from "../types.ts";
 import { C } from "../theme.ts";
-import { addDays, fmtDate, fmtMonth, isoDate, monthKey, NOW } from "./format.ts";
+import { fmtMonth, monthKey, NOW } from "./format.ts";
+import { PLANNING_STEPS } from "../../api/_plan-rules.ts";
+export { makePlan, PLANNING_STEPS, reschedulePlan } from "../../api/_plan-rules.ts";
 
-export const PLANNING_STEPS: StepTemplate[] = [
-  { id: "analysis",    daysBeforeEnd: 90, icon: "analysis", label: "Analisi spend",           actor: "buyer"  },
-  { id: "bo_notify",   daysBeforeEnd: 75, icon: "bo_notify",  label: "Notifica Business Owner", actor: "system" },
-  { id: "bo_response", daysBeforeEnd: 60, icon: "bo_response",  label: "Risposta Business Owner", actor: "bo"     },
-  { id: "action",      daysBeforeEnd: 45, icon: "action",  label: "Avvio azione",            actor: "buyer"  },
-  { id: "negotiation", daysBeforeEnd: 30, icon: "negotiation",  label: "Negoziazione",            actor: "buyer"  },
-  { id: "signature",   daysBeforeEnd: 15, icon: "signature",  label: "Firma / formalizzazione", actor: "buyer"  },
-  { id: "expiry",      daysBeforeEnd: 0,  icon: "expiry",  label: "Scadenza",                actor: "system" },
-];
 export const stepTemplate = (id: string) => PLANNING_STEPS.find(s => s.id === id)!;
 /** Etichetta dell'attività: con il preavviso l'ultima tappa è il termine per la disdetta, non la scadenza. */
 export const stepLabel = (id: string, c?: { noticeDate: string } | null) => id === "expiry" && c?.noticeDate ? "Termine disdetta" : stepTemplate(id).label;
@@ -30,22 +23,6 @@ export const RENEWAL_BY_DECISION: Record<string, string> = {
 };
 
 export const WORKLOAD_THRESHOLD = 3;
-
-export function makePlan(contractId: number, end: string, offsetDays = 0): PlanStep[] {
-  return PLANNING_STEPS.map(s => {
-    const scheduled = addDays(end, -(s.daysBeforeEnd + offsetDays));
-    const isPast = scheduled < NOW;
-    return { contractId, stepId: s.id, scheduledDate: isoDate(scheduled), originalDate: isoDate(scheduled), status: isPast ? (s.id === "bo_response" ? "pending_bo" : "done") : "upcoming", completedAt: isPast && s.id !== "bo_response" ? fmtDate(scheduled) : null, completedBy: isPast && s.id !== "bo_response" ? (s.actor === "system" ? "Sistema" : "Buyer") : null, boDecision: null, boNotes: "", boRespondedAt: null, modified: false, modifiedReason: "" };
-  });
-}
-
-// Ricalcola le date del piano su una nuova scadenza mantenendo lo stato delle attività già avviate/completate.
-export function reschedulePlan(oldPlan: PlanStep[], contractId: number, end: string): PlanStep[] {
-  return makePlan(contractId, end).map(ns => {
-    const old = oldPlan.find(s => s.stepId === ns.stepId);
-    return old && old.status !== "upcoming" ? { ...old, scheduledDate: ns.scheduledDate, originalDate: ns.originalDate, modified: false, modifiedReason: "" } : ns;
-  });
-}
 
 export function planProgress(plan: PlanStep[]) { return plan.length ? Math.round((plan.filter(s => s.status === "done").length / plan.length) * 100) : 0; }
 
