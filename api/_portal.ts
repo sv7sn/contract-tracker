@@ -5,8 +5,10 @@ import { HttpError } from "./_http.js";
 import { hashPassword } from "./_crypto.js";
 import { sendMail, type Lang } from "./_notify.js";
 import { buildVendorPayload, assertReadyForSap, sendToSap } from "./_sap.js";
-import { accountGroup, COUNTRIES, docType, docTypesFor, MAX_DOC_BYTES, missingDocuments, SUPPLIER_FILE_PATH_RE, validateSupplierData, validatePassword, validEmail, DOC_EXTENSIONS, normalizeIban } from "./_supplier-rules.js";
+import { accountGroup, COUNTRIES, MAX_DOC_BYTES, missingRequired, resolveDocTypes, SUPPLIER_FILE_PATH_RE, validateSupplierData, validatePassword, validEmail, DOC_EXTENSIONS, normalizeIban } from "./_supplier-rules.js";
 import { canInviteSuppliers } from "./_permissions.js";
+import { visibleWhere } from "./_access.js";
+import { docConfig, loadCatalog, loadPolicy, saveDocType, savePolicy } from "./_docs.js";
 
 const bad = (msg: string): never => { throw new HttpError(400, msg); };
 const INVITE_DAYS = Number(process.env.INVITE_DAYS) > 0 ? Number(process.env.INVITE_DAYS) : 14;
@@ -17,22 +19,13 @@ const str = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0
 // ─── Lettura ─────────────────────────────────────────────────
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-function mapSupplier(r: Row): Omit<Supplier, "documents" | "events"> {
+function mapSupplier(r: Row): Omit<Supplier, "documents" | "events" | "docTypes"> {
   return {
     id: r.id, email: r.email, name: r.name, companyCodes: r.company_codes, industryCode: r.industry_code, customerCode: r.customer_code,
     referenceBuyerId: r.reference_buyer_id, referenceBuyerName: r.reference_buyer_name ?? "", status: r.status, data: r.data ?? {},
     paymentTerms: r.payment_terms, sapCode: r.sap_code, sapAccountGroup: r.sap_account_group, rejectionReason: r.rejection_reason, isUpdate: r.is_update,
     invitedAt: iso(r.created_at)!, expiresAt: iso(r.token_expires), submittedAt: iso(r.submitted_at), updatedAt: iso(r.updated_at)!,
   };
-}
-
-/** Quali fornitori può vedere ciascun ruolo interno (l'id è un intero preso dal database: sicuro da inserire). */
-function visibleWhere(user: User): string {
-  const id = Number(user.id);
-  if (user.role === "manager") return "true";
-  if (user.role === "buyer") return `(s.reference_buyer_id = ${id} or s.industry_code in (select industry_code from industry_buyers where user_id = ${id}))`;
-  if (user.role === "finance") return "s.status in ('pending','pending_revision','approved','rejected','registered')";
-  return "false";
 }
 
 const SELECT = "select s.*, rb.name as reference_buyer_name from suppliers s left join users rb on rb.id = s.reference_buyer_id";
@@ -48,11 +41,16 @@ async function loadFull(db: Queryable, id: number, forSupplier = false): Promise
   if (!r) return undefined;
   const docs = (await db.query("select * from supplier_documents where supplier_id = $1 order by uploaded_at", [id])).rows;
   const ev = (await db.query(`select * from supplier_events where supplier_id = $1 ${forSupplier ? "and public" : ""} order by id`, [id])).rows;
-  const documents: SupplierDocument[] = docs.map(d => ({ id: d.id, type: d.type, fileName: d.file_name, size: d.size, validUntil: d.valid_until ? new Date(d.valid_until).toISOString().slice(0, 10) : null, uploadedAt: iso(d.uploaded_at)!, uploadedBy: d.uploaded_by }));
+  const cat = await loadCatalog(db);
+  const labels = new Map(cat.types.map(t => [t.key, t.label]));
+  const documents: SupplierDocument[] = docs.map(d => ({ id: d.id, type: d.type, typeLabel: labels.get(d.type) ?? d.type, ai: d.ai_result ? { ...d.ai_result, status: d.ai_status } : null, fileName: d.file_name, size: d.size, validUntil: d.valid_until ? new Date(d.valid_until).toISOString().slice(0, 10) : null, uploadedAt: iso(d.uploaded_at)!, uploadedBy: d.uploaded_by }));
   const events: SupplierEvent[] = ev.map(e => ({ at: iso(e.at)!, actor: e.actor, action: e.action, detail: e.detail }));
   const s = mapSupplier(r);
+  // Documenti applicabili (paese e codice merceologico) più quelli già caricati di tipi non più richiesti.
+  const resolved = resolveDocTypes(cat.types, cat.rules, s.data.address?.country, s.industryCode);
+  const docTypes = [...resolved, ...cat.types.filter(t => !resolved.some(x => x.key === t.key) && docs.some(d => d.type === t.key)).map(t => ({ ...t, required: false }))];
   // Il fornitore non vede dati interni (condizioni di pagamento, buyer di riferimento).
-  return { ...s, ...(forSupplier ? { paymentTerms: null, referenceBuyerName: "" } : {}), documents, events };
+  return { ...s, ...(forSupplier ? { paymentTerms: null, referenceBuyerName: "" } : {}), documents, events, docTypes };
 }
 
 export async function getVendor(user: User, id: number): Promise<Supplier> {
@@ -77,7 +75,8 @@ export async function loadConfig(): Promise<PortalConfig> {
   const companies: BuyingCompany[] = c.rows.map(r => ({ code: r.code, name: r.name, sapCompanyCode: r.sap_company_code, purchOrg: r.purch_org }));
   const industryCodes: IndustryCode[] = i.rows.map(r => ({ code: r.code, name: r.name, buyerIds: ib.rows.filter(x => x.industry_code === r.code).map(x => x.user_id) }));
   const paymentTerms: PaymentTerm[] = pt.rows.map(r => ({ code: r.code, label: r.label }));
-  return { companies, industryCodes, paymentTerms, sap: st.rows[0]?.value as SapSettings, buyers: b.rows };
+  const cat = await loadCatalog(db);
+  return { companies, industryCodes, paymentTerms, sap: st.rows[0]?.value as SapSettings, buyers: b.rows, ...docConfig(cat, await loadPolicy(db)) };
 }
 
 const CODE_RE = /^[A-Za-z0-9_.-]{1,20}$/;
@@ -85,6 +84,8 @@ export async function saveConfig(entity: string, action: string, item: Row): Pro
   const db = getPool();
   const code = str(item?.code, 20);
   const del = action === "delete";
+  if (entity === "doc_type") return saveDocType(action, item);
+  if (entity === "reminders") return savePolicy(item);
   if (entity === "sap") {
     const cur = (await db.query("select value from settings where key = 'sap'")).rows[0]?.value as SapSettings;
     const rec: Record<string, string> = {};
@@ -212,6 +213,8 @@ export async function activateInvite(token: string, password: string): Promise<U
 
 // ─── Area del fornitore ──────────────────────────────────────
 const EDITABLE: SupplierStatus[] = ["draft", "pending_revision", "rejected", "registered"];
+/** Un fornitore già registrato che ha avviato un aggiornamento può continuare a completarlo (altri documenti, altri dati) finché il Buyer non decide. */
+const canEdit = (r: Row) => EDITABLE.includes(r.status) || (r.status === "pending" && r.is_update === true);
 
 async function ownSupplierRow(db: Queryable, user: User, lock = false): Promise<Row> {
   const r = (await db.query(`${SELECT} where s.user_id = $1 ${lock ? "for update of s" : ""}`, [user.id])).rows[0];
@@ -256,7 +259,7 @@ async function reopenIfRegistered(db: Queryable, r: Row, actor: string, what: st
 export async function saveMyData(user: User, input: unknown, origin?: string): Promise<Supplier> {
   await inTransaction(async db => {
     const r = await ownSupplierRow(db, user, true);
-    if (!EDITABLE.includes(r.status)) throw new HttpError(409, "La registrazione è in verifica: non si può modificare finché Buyer e Finance non decidono");
+    if (!canEdit(r)) throw new HttpError(409, "La registrazione è in verifica: non si può modificare finché Buyer e Finance non decidono");
     const merged = merge(r.data ?? {}, sanitizeData(input));
     if (stable(merged) === stable(r.data ?? {})) return;
     await db.query("update suppliers set data = $1, updated_at = now() where id = $2", [JSON.stringify(merged), r.id]);
@@ -273,7 +276,8 @@ export async function submitMyRegistration(user: User, origin: string): Promise<
     const errors = validateSupplierData(data);
     if (data.acceptedTerms !== true) errors["acceptedTerms"] = "Devi accettare i termini e le condizioni";
     const docs = (await db.query("select type, valid_until from supplier_documents where supplier_id = $1", [r.id])).rows.map(d => ({ type: d.type, validUntil: d.valid_until ? new Date(d.valid_until).toISOString().slice(0, 10) : null }));
-    const missing = missingDocuments(docs, data.address?.country);
+    const cat = await loadCatalog(db);
+    const missing = missingRequired(resolveDocTypes(cat.types, cat.rules, data.address?.country, r.industry_code), docs);
     if (Object.keys(errors).length || missing.length) throw new HttpError(422, "Completa i dati richiesti prima di inviare", { fieldErrors: errors, missingDocuments: missing });
     await db.query("update suppliers set status = 'pending', is_update = $2, submitted_at = now(), updated_at = now(), rejection_reason = '' where id = $1", [r.id, !!r.sap_code]);
     await addEvent(db, r.id, user.name, r.sap_code ? "Aggiornamento inviato" : "Registrazione inviata", "In attesa della verifica del Buyer", true);
@@ -283,10 +287,9 @@ export async function submitMyRegistration(user: User, origin: string): Promise<
 }
 
 export interface DocInput { type: string; fileName: string; filePath: string; size: number; validUntil: string | null }
-export async function addMyDocument(user: User, input: unknown, origin?: string): Promise<{ supplier: Supplier; staleFiles: string[] }> {
+export async function addMyDocument(user: User, input: unknown, origin?: string): Promise<{ supplier: Supplier; staleFiles: string[]; docId: number }> {
   const i = (input ?? {}) as Partial<DocInput>;
-  const type = docType(str(i.type, 40));
-  if (!type) return bad("Tipo di documento non valido");
+  const typeKey = str(i.type, 40);
   const fileName = str(i.fileName, 200), filePath = str(i.filePath, 300);
   const ext = fileName.toLowerCase().split(".").pop() ?? "";
   if (!DOC_EXTENSIONS.includes(ext)) bad("Formato non supportato: usa PDF, Word, PowerPoint o immagini");
@@ -295,33 +298,43 @@ export async function addMyDocument(user: User, input: unknown, origin?: string)
   if (!Number.isFinite(size) || size <= 0 || size > MAX_DOC_BYTES) bad(`Il file deve pesare al massimo ${MAX_DOC_BYTES / 1024 / 1024} MB`);
   const validUntil = i.validUntil ? (/^\d{4}-\d{2}-\d{2}$/.test(i.validUntil) ? i.validUntil : bad("Data di validità non valida")) : null;
   const stale: string[] = [];
+  let docId = 0;
   await inTransaction(async db => {
     const r = await ownSupplierRow(db, user, true);
-    if (!EDITABLE.includes(r.status)) throw new HttpError(409, "La registrazione è in verifica: non si possono cambiare i documenti");
-    if (!docTypesFor(r.data?.address?.country).some(d => d.key === type.key)) bad("Questo documento non è previsto per il tuo paese");
+    if (!canEdit(r)) throw new HttpError(409, "La registrazione è in verifica: non si possono cambiare i documenti");
+    const cat = await loadCatalog(db);
+    const type = resolveDocTypes(cat.types, cat.rules, r.data?.address?.country, r.industry_code).find(t => t.key === typeKey);
+    if (!type) return bad("Questo documento non è richiesto per la tua azienda");
+    if (type.expires && !validUntil) return bad("Indica la data di scadenza del documento");
     if ((await db.query("select count(*)::int as n from supplier_documents where supplier_id = $1", [r.id])).rows[0].n >= 30) bad("Troppi documenti caricati");
     if (!type.multiple) { const old = await db.query("delete from supplier_documents where supplier_id = $1 and type = $2 returning file_path", [r.id, type.key]); stale.push(...old.rows.map(x => x.file_path)); }
-    await db.query("insert into supplier_documents (supplier_id, type, file_name, file_path, size, valid_until, uploaded_by) values ($1,$2,$3,$4,$5,$6,$7)", [r.id, type.key, fileName, filePath, size, validUntil, user.name]);
+    docId = (await db.query("insert into supplier_documents (supplier_id, type, file_name, file_path, size, valid_until, uploaded_by) values ($1,$2,$3,$4,$5,$6,$7) returning id", [r.id, type.key, fileName, filePath, size, validUntil, user.name])).rows[0].id;
     await addEvent(db, r.id, user.name, "Documento caricato", `${type.label}: ${fileName}`, false);
     await touch(db, r.id);
     await reopenIfRegistered(db, r, user.name, `Nuovo documento (${type.label})`, origin);
   });
-  return { supplier: await getMySupplier(user), staleFiles: stale };
+  return { supplier: await getMySupplier(user), staleFiles: stale, docId };
 }
 
 export async function deleteMyDocument(user: User, docId: number, origin?: string): Promise<{ supplier: Supplier; staleFiles: string[] }> {
   const stale: string[] = [];
   await inTransaction(async db => {
     const r = await ownSupplierRow(db, user, true);
-    if (!EDITABLE.includes(r.status)) throw new HttpError(409, "La registrazione è in verifica: non si possono cambiare i documenti");
+    if (!canEdit(r)) throw new HttpError(409, "La registrazione è in verifica: non si possono cambiare i documenti");
     const d = (await db.query("delete from supplier_documents where id = $1 and supplier_id = $2 returning file_path, type, file_name", [docId, r.id])).rows[0];
     if (!d) throw new HttpError(404, "Documento non trovato");
     stale.push(d.file_path);
-    await addEvent(db, r.id, user.name, "Documento rimosso", `${docType(d.type)?.label ?? d.type}: ${d.file_name}`, false);
+    await addEvent(db, r.id, user.name, "Documento rimosso", `${(await db.query("select label from doc_types where key = $1", [d.type])).rows[0]?.label ?? d.type}: ${d.file_name}`, false);
     await touch(db, r.id);
     await reopenIfRegistered(db, r, user.name, "Documento rimosso", origin);
   });
   return { supplier: await getMySupplier(user), staleFiles: stale };
+}
+
+export async function documentOwner(docId: number): Promise<number> {
+  const r = (await getPool().query("select supplier_id from supplier_documents where id = $1", [docId])).rows[0];
+  if (!r) throw new HttpError(404, "Documento non trovato");
+  return r.supplier_id;
 }
 
 /** Il fornitore può scaricare solo i propri documenti; lo staff solo quelli dei fornitori che può vedere. */

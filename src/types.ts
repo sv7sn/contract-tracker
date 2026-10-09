@@ -64,7 +64,20 @@ export interface SupplierData {
   acceptedTerms?: boolean;
 }
 
-export interface SupplierDocument { id: number; type: string; fileName: string; size: number; validUntil: string | null; uploadedAt: string; uploadedBy: string }
+export interface DocTypeDef { key: string; label: string; help: string; expires: boolean; multiple: boolean }
+export type DocScope = "all" | "country" | "industry";
+export interface DocRule { docType: string; scope: DocScope; value: string; level: "required" | "optional" }
+/** Tipo di documento così come si applica a un fornitore (paese e codice merceologico già considerati). */
+export interface ResolvedDocType extends DocTypeDef { required: boolean }
+
+export type AiStatus = "ok" | "warning" | "problem" | "skipped";
+/** Esito del controllo automatico di un documento: è un primo filtro, la decisione resta al Buyer. */
+export interface AiCheck {
+  status: AiStatus; summary: string; issues: string[]; provider: string; checkedAt: string;
+  extracted: { documentType?: string; holderName?: string; vatCode?: string; issueDate?: string | null; validUntil?: string | null };
+}
+
+export interface SupplierDocument { id: number; type: string; typeLabel: string; fileName: string; size: number; validUntil: string | null; uploadedAt: string; uploadedBy: string; ai: AiCheck | null }
 export interface SupplierEvent { at: string; actor: string; action: string; detail: string }
 
 export interface Supplier {
@@ -78,8 +91,10 @@ export interface Supplier {
   /** Solo per lo staff e solo finché l'invito non è stato usato. */
   inviteLink?: string;
   documents: SupplierDocument[]; events: SupplierEvent[];
+  /** Documenti applicabili a questo fornitore, con l'indicazione di quelli obbligatori. */
+  docTypes: ResolvedDocType[];
 }
-export type SupplierSummary = Omit<Supplier, "documents" | "events" | "data"> & { country: string; legalName: string; documentCount: number };
+export type SupplierSummary = Omit<Supplier, "documents" | "events" | "data" | "docTypes"> & { country: string; legalName: string; documentCount: number };
 
 export interface BuyingCompany { code: string; name: string; sapCompanyCode: string; purchOrg: string }
 export interface IndustryCode { code: string; name: string; buyerIds: number[] }
@@ -88,7 +103,29 @@ export interface SapSettings {
   tradingPartner: string; sortKey: string; cashManagementGroup: string; releaseGroup: string;
   reconciliationAccounts: Record<string, string>;
 }
-export interface PortalConfig { companies: BuyingCompany[]; industryCodes: IndustryCode[]; paymentTerms: PaymentTerm[]; sap: SapSettings; buyers: { id: number; name: string; active: boolean }[] }
+export interface ReminderPolicy {
+  enabled: boolean;
+  /** Giorni prima della scadenza in cui parte un reminder (es. 60, 30, 15). */
+  days: number[];
+  /** Ogni quanti giorni ripetere il sollecito per documenti scaduti o mancanti. */
+  repeatDays: number;
+  /** Dopo quanti solleciti senza risposta il fornitore risulta "non risponde". */
+  escalateAfter: number;
+}
+export interface PortalConfig {
+  companies: BuyingCompany[]; industryCodes: IndustryCode[]; paymentTerms: PaymentTerm[]; sap: SapSettings; buyers: { id: number; name: string; active: boolean }[];
+  docTypes: DocTypeDef[]; docRules: DocRule[]; reminders: ReminderPolicy;
+  emailConfigured: boolean; ai: { provider: string; configured: boolean };
+}
+
+export type MonitorState = "expired" | "expiring" | "missing" | "valid";
+export interface MonitorItem {
+  key: string; supplierId: number; supplierName: string; buyerName: string;
+  docType: string; docLabel: string; docId: number | null; fileName: string; validUntil: string | null; daysLeft: number | null;
+  state: MonitorState; required: boolean;
+  reminders: number; lastReminderAt: string | null; lastChannel: string | null; unresponsive: boolean; ai: AiStatus | null;
+}
+export interface MonitorData { items: MonitorItem[]; policy: ReminderPolicy; emailConfigured: boolean; lastRunAt: string | null }
 
 export interface InviteInput { email: string; name: string; companyCodes: string[]; industryCode: string; customerCode?: string; referenceBuyerId: number }
 export type VendorAction = "approve" | "reject" | "request_revision" | "set_payment_terms" | "change_status";

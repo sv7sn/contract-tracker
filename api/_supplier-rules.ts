@@ -1,5 +1,5 @@
 // Regole di business sull'anagrafica fornitore, condivise tra server (che le fa rispettare) e interfaccia (che le mostra subito).
-import type { SupplierData } from "../src/types.ts";
+import type { DocRule, DocTypeDef, ResolvedDocType, SupplierData } from "../src/types.ts";
 
 export const COUNTRIES: { code: string; name: string }[] = [
   ["IT", "Italia"], ["DE", "Germania"], ["FR", "Francia"], ["ES", "Spagna"], ["PT", "Portogallo"], ["NL", "Paesi Bassi"], ["BE", "Belgio"], ["AT", "Austria"],
@@ -19,25 +19,50 @@ export const WITHHOLDING_TYPES = [
 ];
 
 // ─── Documenti di qualifica ──────────────────────────────────
-export interface DocType { key: string; label: string; help: string; required: boolean; countries?: string[]; expires: boolean; multiple?: boolean }
-
-/** Catalogo dei documenti. `required` vale per i paesi indicati (o per tutti, se `countries` manca). */
-export const DOC_TYPES: DocType[] = [
-  { key: "bank_letter", label: "Lettera della banca", help: "Lettera della banca che certifica l'intestazione e le coordinate del conto.", required: true, expires: false },
-  { key: "chamber_certificate", label: "Visura camerale / certificato di iscrizione", help: "Documento ufficiale di iscrizione dell'azienda, emesso negli ultimi 6 mesi.", required: true, expires: true },
-  { key: "durc", label: "DURC (regolarità contributiva)", help: "Documento Unico di Regolarità Contributiva in corso di validità.", required: true, countries: ["IT"], expires: true },
-  { key: "company_presentation", label: "Presentazione aziendale", help: "Presentazione, brochure o catalogo (facoltativo).", required: false, expires: false },
-  { key: "quality_certificates", label: "Certificazioni (ISO 9001, 14001, 45001…)", help: "Certificazioni di qualità, ambiente e sicurezza, con data di scadenza.", required: false, expires: true, multiple: true },
-  { key: "insurance", label: "Polizza assicurativa (RC)", help: "Polizza di responsabilità civile, con data di scadenza.", required: false, expires: true },
-  { key: "code_of_conduct", label: "Codice di condotta fornitori firmato", help: "Codice di condotta sottoscritto dal legale rappresentante.", required: true, expires: false },
-  { key: "receita_federal", label: "Certificato Receita Federal", help: "Cartão CNPJ rilasciato dalla Receita Federal.", required: true, countries: ["BR"], expires: true },
-  { key: "jucerja", label: "Certificato JUCERJA (o della Junta Comercial dello Stato)", help: "Certidão simplificada della Junta Comercial.", required: true, countries: ["BR"], expires: true },
-  { key: "bank_contract", label: "Contratto bancario", help: "Contratto o dichiarazione della banca per verificare i dati bancari.", required: true, countries: ["BR"], expires: false },
+/** Documenti predefiniti: gli amministratori li possono cambiare dalla pagina Configurazione. */
+export const DEFAULT_DOC_TYPES: DocTypeDef[] = [
+  { key: "bank_letter", label: "Lettera della banca", help: "Lettera della banca che certifica l'intestazione e le coordinate del conto.", expires: false, multiple: false },
+  { key: "chamber_certificate", label: "Visura camerale / certificato di iscrizione", help: "Documento ufficiale di iscrizione dell'azienda, emesso negli ultimi 6 mesi.", expires: true, multiple: false },
+  { key: "durc", label: "DURC (regolarità contributiva)", help: "Documento Unico di Regolarità Contributiva in corso di validità.", expires: true, multiple: false },
+  { key: "company_presentation", label: "Presentazione aziendale", help: "Presentazione, brochure o catalogo (facoltativo).", expires: false, multiple: false },
+  { key: "quality_certificates", label: "Altre certificazioni (ISO 14001, 45001…)", help: "Altre certificazioni di qualità, ambiente e sicurezza, con data di scadenza.", expires: true, multiple: true },
+  { key: "iso_9001", label: "Certificazione ISO 9001 (qualità)", help: "Certificato di conformità ISO 9001 in corso di validità.", expires: true, multiple: false },
+  { key: "iso_17025", label: "Accreditamento ISO/IEC 17025 (laboratori)", help: "Accreditamento del laboratorio di prova o taratura.", expires: true, multiple: false },
+  { key: "iso_27001", label: "Certificazione ISO/IEC 27001 (sicurezza delle informazioni)", help: "Certificato di conformità ISO/IEC 27001 in corso di validità.", expires: true, multiple: false },
+  { key: "insurance", label: "Polizza assicurativa (RC)", help: "Polizza di responsabilità civile, con data di scadenza.", expires: true, multiple: false },
+  { key: "code_of_conduct", label: "Codice di condotta fornitori firmato", help: "Codice di condotta sottoscritto dal legale rappresentante.", expires: false, multiple: false },
+  { key: "receita_federal", label: "Certificato Receita Federal", help: "Cartão CNPJ rilasciato dalla Receita Federal.", expires: true, multiple: false },
+  { key: "jucerja", label: "Certificato JUCERJA (o della Junta Comercial dello Stato)", help: "Certidão simplificada della Junta Comercial.", expires: true, multiple: false },
+  { key: "bank_contract", label: "Contratto bancario", help: "Contratto o dichiarazione della banca per verificare i dati bancari.", expires: false, multiple: false },
 ];
-export const docType = (key: string) => DOC_TYPES.find(d => d.key === key);
-/** Documenti da mostrare per un paese (esclude quelli specifici di altri paesi). */
-export const docTypesFor = (country?: string) => DOC_TYPES.filter(d => !d.countries || (!!country && d.countries.includes(country)));
-export const requiredDocTypes = (country?: string) => docTypesFor(country).filter(d => d.required);
+/** Regole predefinite. Le ISO non hanno regole: si attivano per codice merceologico dalla Configurazione. */
+export const DEFAULT_DOC_RULES: DocRule[] = [
+  { docType: "bank_letter", scope: "all", value: "", level: "required" },
+  { docType: "chamber_certificate", scope: "all", value: "", level: "required" },
+  { docType: "code_of_conduct", scope: "all", value: "", level: "required" },
+  { docType: "company_presentation", scope: "all", value: "", level: "optional" },
+  { docType: "quality_certificates", scope: "all", value: "", level: "optional" },
+  { docType: "insurance", scope: "all", value: "", level: "optional" },
+  { docType: "durc", scope: "country", value: "IT", level: "required" },
+  { docType: "receita_federal", scope: "country", value: "BR", level: "required" },
+  { docType: "jucerja", scope: "country", value: "BR", level: "required" },
+  { docType: "bank_contract", scope: "country", value: "BR", level: "required" },
+];
+
+/** Documenti da chiedere a un fornitore: quelli con almeno una regola valida per il suo paese o codice merceologico (obbligatorio se una regola lo è). */
+export function resolveDocTypes(types: DocTypeDef[], rules: DocRule[], country?: string, industry?: string): ResolvedDocType[] {
+  const out: ResolvedDocType[] = [];
+  for (const t of types) {
+    const hit = rules.filter(r => r.docType === t.key && (r.scope === "all" || (r.scope === "country" && !!country && r.value === country) || (r.scope === "industry" && !!industry && r.value === industry)));
+    if (hit.length) out.push({ ...t, required: hit.some(r => r.level === "required") });
+  }
+  return out;
+}
+
+/** Documenti obbligatori che mancano (quelli scaduti contano come mancanti). */
+export function missingRequired(resolved: ResolvedDocType[], docs: { type: string; validUntil: string | null }[]): string[] {
+  return resolved.filter(t => t.required && !docs.some(d => d.type === t.key && docValidity(d.validUntil) !== "expired")).map(t => t.key);
+}
 
 export const MAX_DOC_BYTES = 10 * 1024 * 1024;
 export const DOC_EXTENSIONS = ["pdf", "doc", "docx", "ppt", "pptx", "jpg", "jpeg", "png"];
@@ -141,11 +166,6 @@ export function validateSupplierData(d: SupplierData): Record<string, string> {
   if (!validEmail(k.adminEmail)) e["contacts.adminEmail"] = "Email non valida";
   if (!validPhone(k.phone)) e["contacts.phone"] = "Numero non valido (usa il formato internazionale, es. +39 02 1234567)";
   return e;
-}
-
-/** Documenti obbligatori che mancano (considerando anche quelli scaduti come mancanti). */
-export function missingDocuments(docs: { type: string; validUntil: string | null }[], country?: string): string[] {
-  return requiredDocTypes(country).filter(t => !docs.some(d => d.type === t.key && docValidity(d.validUntil) !== "expired")).map(t => t.key);
 }
 
 /** Gruppo conti SAP: assunzione da confermare con Finance (IT senza ritenuta ITD1, con ritenuta ITW1, estero ITF3, Brasile BRD6). */
