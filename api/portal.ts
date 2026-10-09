@@ -5,6 +5,8 @@ import { checkStoredDocument } from "./_docai.js";
 import { monitorData, remindSupplier, runReminders } from "./_docs.js";
 import { ensureSchema, getPool } from "./_db.js";
 import { runExternalChecks } from "./_governance.js";
+import { listConfigAudit, logConfigChange } from "./_audit.js";
+import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
 import { createManualTask, decideSourcingException, deleteManualTask, getTask, importSapFile, listTasks, saveSourcing, taskSummary, updateTask } from "./_tasks.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
@@ -25,6 +27,7 @@ function originOf(request: Request) {
 }
 const noStore = { "Cache-Control": "no-store" };
 const json = (data: unknown, init?: ResponseInit) => Response.json(data, { ...init, headers: { ...noStore, ...(init?.headers ?? {}) } });
+const download = (data: unknown, name: string) => new Response(JSON.stringify(data, null, 2), { headers: { ...noStore, "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${name}"` } });
 const idOf = (url: URL) => {
   const id = Number(url.searchParams.get("id"));
   if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, "Identificativo non valido");
@@ -51,7 +54,10 @@ async function handle(request: Request): Promise<Response> {
       const secret = process.env.CRON_SECRET;
       if (!secret) throw new HttpError(503, "CRON_SECRET non configurato");
       if (request.headers.get("authorization") !== `Bearer ${secret}`) throw new HttpError(401, "Non autorizzato");
-      return json(await runReminders(originOf(request)));
+      const reminders = await runReminders(originOf(request));
+      const { staleFiles, ...retention } = await runRetention();
+      await deleteDocuments(staleFiles);
+      return json({ ...reminders, retention });
     }
 
     // ── Ingresso automatico dei file SAP (es. da una regola sulla casella che riceve le mail di SAP) ──
@@ -68,6 +74,7 @@ async function handle(request: Request): Promise<Response> {
       const user = await requireRole(request, ["supplier"]);
       const origin = originOf(request);
       if (op === "supplier-me" && method === "GET") return json({ supplier: await getMySupplier(user) });
+      if (op === "supplier-export" && method === "GET") return download(await exportSupplier(getPool(), (await getMySupplier(user)).id), "i-miei-dati.json");
       if (op === "supplier-save" && method === "POST") return json({ supplier: await saveMyData(user, await readJson(request), origin) });
       if (op === "supplier-submit" && method === "POST") return json({ supplier: await submitMyRegistration(user, origin) });
       if (op === "supplier-upload-token" && method === "POST") {
@@ -170,8 +177,28 @@ async function handle(request: Request): Promise<Response> {
     if (op === "config-save" && method === "POST") {
       if (!canConfigurePortal(user)) throw new HttpError(403, "Operazione non consentita");
       const body = (await readJson(request)) as { entity?: unknown; action?: unknown; item?: unknown };
-      await saveConfig(String(body.entity ?? ""), String(body.action ?? ""), (body.item ?? {}) as Record<string, unknown>);
-      return json({ config: await loadConfig() });
+      const entity = String(body.entity ?? ""), action = String(body.action ?? ""), item = (body.item ?? {}) as Record<string, unknown>;
+      const before = await loadConfig();
+      await saveConfig(entity, action, item);
+      const after = await loadConfig();
+      // Ogni modifica alle regole resta tracciata: chi, quando, valori prima e dopo.
+      await logConfigChange(user, entity, action, item, before, after);
+      return json({ config: after });
+    }
+    if (op === "config-audit" && method === "GET") {
+      if (!canConfigurePortal(user)) throw new HttpError(403, "Operazione non consentita");
+      return json({ entries: await listConfigAudit() });
+    }
+    if (op === "vendor-export" && method === "GET") {
+      if (user.role !== "manager") throw new HttpError(403, "Solo il Manager esporta i dati di un fornitore");
+      const id = idOf(url); await getVendor(user, id);
+      return download(await exportSupplier(getPool(), id), `fornitore-${id}.json`);
+    }
+    if (op === "vendor-anonymize" && method === "POST") {
+      const id = idOf(url); await getVendor(user, id);
+      const body = (await readJson(request)) as { reason?: unknown };
+      await deleteDocuments(await anonymizeSupplier(user, id, typeof body.reason === "string" ? body.reason : ""));
+      return json({ supplier: await getVendor(user, id) });
     }
     if (op === "vendor-invite" && method === "POST") {
       if (!canInviteSuppliers(user)) throw new HttpError(403, "Operazione non consentita");

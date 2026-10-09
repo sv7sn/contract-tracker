@@ -96,6 +96,10 @@ export interface Supplier {
   invitedAt: string; expiresAt: string | null; submittedAt: string | null; updatedAt: string;
   /** Solo per lo staff e solo finché l'invito non è stato usato. */
   inviteLink?: string;
+  /** Data di anonimizzazione dei dati personali (privacy), se avvenuta. */
+  anonymizedAt?: string | null;
+  /** Solo per il fornitore: testo dell'informativa privacy da accettare. */
+  privacyNotice?: string;
   documents: SupplierDocument[]; events: SupplierEvent[];
   /** Documenti applicabili a questo fornitore, con l'indicazione di quelli obbligatori. */
   docTypes: ResolvedDocType[];
@@ -132,11 +136,13 @@ export interface ReminderPolicy {
   /** Dopo quanti solleciti senza risposta il fornitore risulta "non risponde". */
   escalateAfter: number;
 }
+export interface PrivacySettings { notice: string; inviteDays: number; retentionMonths: number }
+export interface ConfigAuditEntry { id: number; at: string; actor: string; area: string; areaLabel: string; action: string; subject: string; detail: string }
 export interface PortalConfig {
   companies: BuyingCompany[]; industryCodes: IndustryCode[]; paymentTerms: PaymentTerm[]; sap: SapSettings; buyers: { id: number; name: string; active: boolean }[];
   docTypes: DocTypeDef[]; docRules: DocRule[]; reminders: ReminderPolicy;
   emailConfigured: boolean; ai: { provider: string; configured: boolean };
-  rda: RdaConfig;
+  rda: RdaConfig; privacy: PrivacySettings;
 }
 
 export type MonitorState = "expired" | "expiring" | "missing" | "valid";

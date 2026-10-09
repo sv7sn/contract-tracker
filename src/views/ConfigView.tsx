@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import type { DocRule, DocTypeDef, PortalConfig, ReminderPolicy, SapSettings } from "../types.ts";
+import type { ConfigAuditEntry, DocRule, DocTypeDef, PortalConfig, ReminderPolicy, SapSettings } from "../types.ts";
 import { COUNTRIES, countryName } from "../supplierRules.ts";
 import { ApiError, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, sans } from "../theme.ts";
 import { Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
-import { AlertTriangle, Bell, Building2, Inbox, FileCheck2, Loader2, Pencil, Plus, Save, Settings, Sparkles, Trash2, Wallet, FileText, X } from "../components/icons.tsx";
+import { AlertTriangle, Bell, Building2, History, Lock, Inbox, FileCheck2, Loader2, Pencil, Plus, Save, Settings, Sparkles, Trash2, Wallet, FileText, X } from "../components/icons.tsx";
 import { Notice, Portal } from "../components/vendorUi.tsx";
 
 type Entity = "company" | "industry" | "payment_term";
@@ -170,6 +170,9 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
         <button onClick={saveSap} disabled={busy} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}Salva parametri SAP</button>
       </Card>
 
+      <PrivacyCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
+      <AuditCard cfg={cfg} fail={fail} />
+
       {docDraft && <Portal><DocTypeDialog draft={docDraft} cfg={cfg} fail={fail} onClose={() => setDocDraft(null)} onSaved={c => { adopt(c); setDocDraft(null); notify("Salvato"); }} /></Portal>}
       {draft && <Portal><ItemDialog draft={draft} cfg={cfg} fail={fail} onClose={() => setDraft(null)} onSaved={c => { adopt(c); setDraft(null); notify("Salvato"); }} /></Portal>}
     </div>
@@ -258,5 +261,56 @@ function DocTypeDialog({ draft, cfg, fail, onClose, onSaved }: { draft: { type: 
         </div>
       </form>
     </div>
+  );
+}
+
+/** Informativa privacy mostrata ai fornitori e tempi di conservazione dei dati. */
+function PrivacyCard({ cfg, fail, notify, onSaved }: { cfg: PortalConfig; fail: (e: unknown) => string; notify: (m: string) => void; onSaved: (c: PortalConfig) => void }) {
+  const [form, setForm] = useState({ notice: cfg.privacy.notice, inviteDays: String(cfg.privacy.inviteDays), retentionMonths: String(cfg.privacy.retentionMonths) });
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    try { onSaved(await portalApi.saveConfig("privacy", "save", { notice: form.notice, inviteDays: Number(form.inviteDays), retentionMonths: Number(form.retentionMonths) })); notify("Impostazioni privacy salvate"); }
+    catch (err) { notify(`⚠️ ${fail(err)}`); }
+    setBusy(false);
+  };
+  return (
+    <Card>
+      <CardTitle icon={<Lock size={16} />}>Privacy</CardTitle>
+      <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-6px 0 12px", lineHeight: 1.55 }}>Il fornitore vede l'informativa all'invito e la accetta prima di inviare la registrazione. Ogni notte gli inviti mai attivati vengono eliminati e i fornitori non più attivi (disattivati, esclusi, rifiutati o mai completati) vengono anonimizzati dopo il periodo di conservazione.</p>
+      <Field label="Testo dell'informativa privacy" htmlFor="p-notice"><textarea id="p-notice" rows={4} value={form.notice} onChange={e => setForm({ ...form, notice: e.target.value })} style={{ ...iStyle, resize: "vertical" }} /></Field>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", columnGap: 14 }}>
+        <Field label="Elimina gli inviti non attivati dopo (giorni)" htmlFor="p-inv"><input id="p-inv" type="number" min={7} max={730} value={form.inviteDays} onChange={e => setForm({ ...form, inviteDays: e.target.value })} style={iStyle} /></Field>
+        <Field label="Anonimizza i fornitori non attivi dopo (mesi)" htmlFor="p-ret"><input id="p-ret" type="number" min={1} max={240} value={form.retentionMonths} onChange={e => setForm({ ...form, retentionMonths: e.target.value })} style={iStyle} /></Field>
+      </div>
+      <button onClick={save} disabled={busy} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}Salva</button>
+    </Card>
+  );
+}
+
+/** Registro delle modifiche alle regole: chi ha cambiato cosa e quando. */
+function AuditCard({ cfg, fail }: { cfg: PortalConfig; fail: (e: unknown) => string }) {
+  const [entries, setEntries] = useState<ConfigAuditEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [all, setAll] = useState(false);
+  // Si ricarica a ogni salvataggio della configurazione (nuovo oggetto cfg).
+  useEffect(() => { let off = false; portalApi.configAudit().then(e => { if (!off) { setEntries(e); setError(null); } }).catch(err => { if (!off) setError(fail(err)); }); return () => { off = true; }; }, [cfg, fail]);
+  const shown = (entries ?? []).slice(0, all ? 200 : 12);
+  return (
+    <Card>
+      <CardTitle icon={<History size={16} />}>Registro modifiche alle regole</CardTitle>
+      {error && <Notice kind="error">{error}</Notice>}
+      {entries && entries.length === 0 && <div style={{ ...sans, fontSize: 13, color: C.subtle }}>Nessuna modifica registrata.</div>}
+      {shown.map(e => (
+        <div key={e.id} style={{ ...sans, display: "flex", gap: 12, padding: "8px 0", borderTop: `1px solid ${C.borderLight}`, fontSize: 13, flexWrap: "wrap" }}>
+          <div style={{ width: 120, flexShrink: 0, color: C.subtle, fontSize: 12 }} className="tabular">{new Date(e.at).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" })}</div>
+          <div style={{ flex: "1 1 260px", minWidth: 0 }}>
+            <div><b>{e.areaLabel}</b>{e.subject ? ` · ${e.subject}` : ""} <span style={{ color: C.subtle }}>— {e.actor}</span></div>
+            <div style={{ color: C.muted, fontSize: 12.5, overflowWrap: "anywhere" }}>{e.detail}</div>
+          </div>
+        </div>
+      ))}
+      {entries && entries.length > 12 && <button onClick={() => setAll(v => !v)} style={{ ...btnGhost, marginTop: 8, padding: "7px 12px", fontSize: 12.5 }}>{all ? "Mostra meno" : `Mostra tutte (${entries.length})`}</button>}
+    </Card>
   );
 }

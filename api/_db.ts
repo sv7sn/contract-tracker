@@ -158,6 +158,11 @@ alter table suppliers add column if not exists approved_data jsonb;
 alter table suppliers add column if not exists approved_at timestamptz;
 alter table suppliers add column if not exists compliance jsonb;
 alter table suppliers add column if not exists dup_confirmed integer[] not null default '{}';
+alter table suppliers add column if not exists anonymized_at timestamptz;
+create table if not exists config_audit (
+  id serial primary key, at timestamptz not null default now(), actor text not null, area text not null, action text not null,
+  subject text not null default '', detail text not null default '', before jsonb, after jsonb
+);
 update suppliers set approved_data = data, approved_at = updated_at where status = 'registered' and approved_data is null;
 create table if not exists login_attempts (email text not null, at timestamptz not null default now());
 create index if not exists login_attempts_idx on login_attempts (email, at);
