@@ -269,6 +269,19 @@ export default function App() {
     <><InviteLanding token={inviteToken} onCancel={leaveInvite} onActivated={user => { leaveInvite(); setCurrentUser(user); setView("supplier"); showToast("Account creato: completa la registrazione"); }} />{toastEl}</>
   );
 
+  // Link d'invito aperto da un browser dove è già collegato qualcuno (es. il Manager che prova l'invito): senza questo avviso si vedrebbe l'app normale.
+  if (currentUser && inviteToken && mode === "api") return (
+    <div className="login-panel" style={{ minHeight: "100vh" }}>
+      <div style={{ width: "100%", maxWidth: 430, background: "#fff", borderRadius: 20, padding: 32, boxShadow: "0 24px 60px rgba(16,24,43,.18)", border: `1px solid ${C.border}`, ...sans }}>
+        <div style={{ textAlign: "center", marginBottom: 16 }}><BrandMark size={48} /></div>
+        <h1 style={{ ...font, fontSize: 21, margin: "0 0 8px", color: C.text, textAlign: "center" }}>Hai aperto un invito per fornitori</h1>
+        <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6, margin: "0 0 20px", textAlign: "center" }}>In questo browser sei già collegato come <b>{currentUser.name}</b> ({ROLE_LABELS[currentUser.role]}). Per vedere l'invito come lo vede il fornitore devi uscire da questo account, oppure aprire il link in una finestra in incognito.</p>
+        <button onClick={() => { handleLogout(); }} style={{ width: "100%", height: 46, background: C.accent, border: "none", borderRadius: 11, color: "#fff", fontWeight: 650, fontSize: 15, cursor: "pointer", marginBottom: 10 }}>Esci e apri l'invito</button>
+        <button onClick={leaveInvite} style={{ width: "100%", height: 44, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 11, color: C.text, fontWeight: 600, fontSize: 14, cursor: "pointer" }}>Continua come {currentUser.name.split(" ")[0]}</button>
+      </div>
+    </div>
+  );
+
   if (!currentUser) return <><LoginScreen mode={mode} setupRequired={setupRequired} onLogin={handleLogin} onResetDemo={mode === "local" ? handleResetDemo : undefined} />{toastEl}</>;
 
   // I fornitori hanno un'area dedicata, senza menu né dati interni.
