@@ -154,6 +154,7 @@ alter table contracts add column if not exists outcome_note text not null defaul
 alter table contracts add column if not exists closed_at timestamptz;
 alter table contracts add column if not exists replaces integer references contracts(id) on delete set null;
 alter table contracts add column if not exists replaced_by integer references contracts(id) on delete set null;
+alter table contracts add column if not exists supplier_id integer references suppliers(id) on delete set null;
 update contracts set status = 'closed', outcome = 'ceased', closed_at = coalesce(closed_at, now()) where ceased and status = 'active' and outcome = '';
 create table if not exists rda_lines (
   id serial primary key, pr text not null, item text not null default '0', pgr text not null default '', short_text text not null default '',
@@ -254,6 +255,7 @@ function cleanContract(c: unknown): ContractInput {
     start: str(r.start, 10), end: r.end as string, owner: str(r.owner, 100), boEmail: str(r.boEmail, 200).toLowerCase(),
     renewal: str(r.renewal, 100) || "Non definito", type: str(r.type, 100), notes: str(r.notes, 4000),
     ceased: r.ceased === true, fileName: nstr(r.fileName), noticeDays, noticeDate: noticeDate as string,
+    supplierId: Number.isInteger(r.supplierId) && (r.supplierId as number) > 0 ? r.supplierId as number : null,
     filePath: r.filePath == null ? null : typeof r.filePath === "string" && FILE_PATH_RE.test(r.filePath) ? r.filePath : bad("Documento non valido"),
   };
 }
@@ -403,6 +405,7 @@ function rowToContract(r: Record<string, unknown>): Contract {
     noticeDays: r.notice_days as number | null, noticeDate: (r.notice_date as string) ?? "",
     status: (r.status as Contract["status"]) ?? "active", outcome: (r.outcome as Contract["outcome"]) ?? "", outcomeNote: (r.outcome_note as string) ?? "",
     closedAt: r.closed_at ? new Date(r.closed_at as string).toISOString() : null, replaces: (r.replaces as number | null) ?? null, replacedBy: (r.replaced_by as number | null) ?? null,
+    supplierId: (r.supplier_id as number | null) ?? null,
   };
 }
 function rowToStep(r: Record<string, unknown>): PlanStep {
@@ -418,8 +421,17 @@ const STEP_ORDER = ["analysis", "bo_notify", "bo_response", "action", "negotiati
 const STEP_ORDER_SQL = `case step_id ${STEP_ORDER.map((id, i) => `when '${id}' then ${i}`).join(" ")} else 99 end`;
 
 /** Restituisce solo i contratti che l'utente può vedere, con i relativi piani e storico. */
+/** Collega all'anagrafica fornitori i contratti con la stessa ragione sociale (ignorando punteggiatura e maiuscole). */
+export async function linkContractSuppliers(db: Queryable): Promise<void> {
+  await db.query(`update contracts c set supplier_id = s.id from suppliers s
+    where c.supplier_id is null and s.anonymized_at is null and s.status <> 'invited'
+      and lower(regexp_replace(c.supplier, '[^[:alnum:]]', '', 'g')) = lower(regexp_replace(coalesce(nullif(s.data->'company'->>'legalName', ''), s.name), '[^[:alnum:]]', '', 'g'))
+      and length(regexp_replace(c.supplier, '[^[:alnum:]]', '', 'g')) >= 3`);
+}
+
 export async function loadState(user: User): Promise<AppState> {
   const db = getPool();
+  await linkContractSuppliers(db);
   const contracts = (await db.query("select * from contracts order by id")).rows.map(rowToContract).filter(c => canViewContract(user, c));
   const state: AppState = { contracts, plans: {}, auditLogs: {} };
   if (!contracts.length) return state;
@@ -447,16 +459,17 @@ async function fetchPlan(db: Queryable, id: number): Promise<PlanStep[]> {
 }
 
 async function upsertContract(db: Queryable, c: ContractInput): Promise<number> {
-  const cols = [c.supplier, c.object, c.category, c.country, c.value, c.currency, c.start, c.end, c.owner, c.boEmail, c.renewal, c.type, c.notes, c.ceased, c.fileName, c.filePath, c.noticeDays, c.noticeDate];
+  const cols = [c.supplier, c.object, c.category, c.country, c.value, c.currency, c.start, c.end, c.owner, c.boEmail, c.renewal, c.type, c.notes, c.ceased, c.fileName, c.filePath, c.noticeDays, c.noticeDate, c.supplierId ?? null];
+  if (c.supplierId && !(await db.query("select 1 from suppliers where id = $1", [c.supplierId])).rows.length) bad("Fornitore non trovato in anagrafica");
   if (c.id === undefined) {
     const r = await db.query(
-      `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path, notice_days, notice_date)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) returning id`, cols);
+      `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path, notice_days, notice_date, supplier_id)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) returning id`, cols);
     return r.rows[0].id;
   }
   const r = await db.query(
     `update contracts set supplier=$1, object=$2, category=$3, country=$4, value=$5, currency=$6, start_date=$7, end_date=$8,
-       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15, file_path=$16, notice_days=$17, notice_date=$18 where id=$19`, [...cols, c.id]);
+       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15, file_path=$16, notice_days=$17, notice_date=$18, supplier_id=$19 where id=$20`, [...cols, c.id]);
   if (!r.rowCount) throw new HttpError(404, "Contratto non trovato");
   return c.id;
 }
@@ -506,8 +519,9 @@ const STEP_FIELDS = ["scheduledDate", "originalDate", "status", "completedAt", "
 /** Un Business Owner può solo registrare la propria decisione: cambia lo stato di rinnovo e la sola attività "bo_response". */
 function assertBoOnlyChanges(existing: Contract, existingPlan: PlanStep[], contract?: ContractInput, plan?: PlanStep[]) {
   if (contract) {
-    for (const k of Object.keys(existing) as (keyof Contract)[]) {
-      if (k !== "renewal" && contract[k] !== existing[k]) throw forbidden();
+    // Solo i campi modificabili dal form (stato ed esito li gestisce il task di rinnovo).
+    for (const k of Object.keys(contract) as (keyof ContractInput)[]) {
+      if (k !== "renewal" && k !== "id" && contract[k] !== (existing as ContractInput)[k]) throw forbidden();
     }
   }
   if (plan) {

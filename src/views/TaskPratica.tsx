@@ -1,12 +1,12 @@
-import { useRef, useState, type ReactNode } from "react";
-import type { Contract, ContractOutcome, PlanStep, TaskDetail, TaskDocKind } from "../types.ts";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { Contract, ContractOutcome, PlanStep, SupplierSummary, TaskDetail, TaskDocKind } from "../types.ts";
 import { checkDocument, portalApi, taskDocUrl, uploadDocument } from "../api.ts";
 import { btnGhost, btnPrimary, C, iStyle, sans } from "../theme.ts";
 import { fmt, fmtDate } from "../lib/format.ts";
 import { stepLabel, stepTemplate } from "../lib/plan.ts";
 import { Card, CardTitle, Field } from "../components/ui.tsx";
 import { Check, CheckCircle2, Clock, FileText, Loader2, Paperclip, Send, Trash2, Upload } from "../components/icons.tsx";
-import { KV, Notice } from "../components/vendorUi.tsx";
+import { KV, Notice, SupplierPicker } from "../components/vendorUi.tsx";
 
 // Una pratica d'acquisto (RDA o rinnovo di contratto) mette insieme: RDA, confronto tra fornitori, offerta/contratto, fornitore e PO.
 
@@ -40,7 +40,7 @@ export function RenewalCard({ t, contracts, plan, onCompleteStep, onSendBO, onOp
   return (
     <Card>
       <CardTitle icon={<FileText size={16} />} action={c && <button onClick={() => onOpenContract(c)} style={small}>Apri contratto</button>}>Contratto in scadenza</CardTitle>
-      <KV rows={[["Fornitore", t.meta.supplier ?? c?.supplier ?? ""], ["Oggetto", t.meta.object ?? c?.object ?? ""], ["Valore", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Scadenza", t.meta.end ? fmtDate(t.meta.end) : ""], ["Disdetta entro", t.meta.noticeDate ? fmtDate(t.meta.noticeDate) : "Nessun preavviso"], ["Business Owner", c?.boEmail || "—"]]} />
+      <KV rows={[["Fornitore", t.meta.supplier ?? c?.supplier ?? ""], ["Oggetto", t.meta.object ?? c?.object ?? ""], ["Valore", (t.meta.previousValue ?? t.meta.value) ? fmt((t.meta.previousValue ?? t.meta.value)!, t.meta.currency ?? "EUR") : ""], ...(t.meta.previousValue !== undefined ? [["Nuovo valore", fmt(t.meta.value ?? 0, t.meta.currency ?? "EUR")] as [string, string]] : []), ["Scadenza", t.meta.end ? fmtDate(t.meta.end) : ""], ["Disdetta entro", t.meta.noticeDate ? fmtDate(t.meta.noticeDate) : "Nessun preavviso"], ["Business Owner", c?.boEmail || "—"]]} />
       {plan.length > 0 && !t.outcome && (
         <div style={{ marginTop: 14, display: "grid", gap: 2 }}>
           <div style={{ ...sans, fontSize: 12, fontWeight: 650, color: C.muted, marginBottom: 4 }}>Fasi</div>
@@ -70,6 +70,9 @@ export function OutcomeCard({ t, contracts, fail, onSaved, onOpenContract }: { t
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [supplierId, setSupplierId] = useState<number | null>(contracts.find(c => c.id === t.contractId)?.supplierId ?? null);
+  const [vendors, setVendors] = useState<SupplierSummary[] | null>(null);
+  useEffect(() => { let off = false; portalApi.vendors().then(v => { if (!off) setVendors(v); }).catch(() => undefined); return () => { off = true; }; }, []);
   const up = (k: keyof typeof f) => (e: { target: { value: string } }) => setF(x => ({ ...x, [k]: e.target.value }));
 
   if (t.outcome) {
@@ -92,7 +95,7 @@ export function OutcomeCard({ t, contracts, fail, onSaved, onOpenContract }: { t
     try {
       const doc = file ? await upload(file) : undefined;
       const body: Record<string, unknown> = { outcome: mode, note: f.note };
-      if (mode === "renewed" || mode === "replaced") body.contract = { supplier: f.supplier, object: f.object, value: Number(f.value.replace(",", ".")), start: f.start, end: f.end, noticeDays: f.noticeDays || null, currency: t.meta.currency ?? "EUR", ...(doc ?? {}) };
+      if (mode === "renewed" || mode === "replaced") body.contract = { supplier: f.supplier, object: f.object, value: Number(f.value.replace(",", ".")), supplierId, start: f.start, end: f.end, noticeDays: f.noticeDays || null, currency: t.meta.currency ?? "EUR", ...(doc ?? {}) };
       if (mode === "extended") { body.end = f.end; body.document = doc; }
       if (mode === "ceased") { body.sentDate = f.sentDate; body.document = doc; }
       const x = await portalApi.setOutcome(t.id, body);
@@ -114,7 +117,7 @@ export function OutcomeCard({ t, contracts, fail, onSaved, onOpenContract }: { t
       </div>
       {(mode === "renewed" || mode === "replaced") && (<>
         <div style={two}>
-          <Field label="Fornitore" req htmlFor="o-sup"><input id="o-sup" value={f.supplier} onChange={up("supplier")} style={iStyle} /></Field>
+          <Field label="Fornitore" req htmlFor="o-sup"><SupplierPicker id="o-sup" value={f.supplier} supplierId={supplierId} vendors={vendors} onChange={(name, sid) => { setF(x => ({ ...x, supplier: name })); setSupplierId(sid); }} /></Field>
           <Field label="Oggetto" req htmlFor="o-obj"><input id="o-obj" value={f.object} onChange={up("object")} style={iStyle} /></Field>
           <Field label={`Valore (${t.meta.currency ?? "EUR"})`} req htmlFor="o-val"><input id="o-val" value={f.value} onChange={up("value")} inputMode="decimal" style={iStyle} /></Field>
           <Field label="Inizio" htmlFor="o-start"><input id="o-start" type="date" value={f.start} onChange={up("start")} style={iStyle} /></Field>

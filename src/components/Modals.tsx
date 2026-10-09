@@ -1,11 +1,12 @@
-import { useRef, useState } from "react";
-import type { Contract, ContractData, NewUserInput, PlanStep, Role, StepTemplate, User } from "../types.ts";
+import { useEffect, useRef, useState } from "react";
+import type { Contract, ContractData, NewUserInput, PlanStep, Role, StepTemplate, SupplierSummary, User } from "../types.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, ROLE_LABELS, sans, STAFF_ROLES } from "../theme.ts";
 import { fmt, fmtDate } from "../lib/format.ts";
 import { BO_COLORS, BO_DECISIONS } from "../lib/plan.ts";
 import { Avatar, Field, RoleBadge, StepIcon } from "./ui.tsx";
 import { Check, CheckCircle2, FileText, KeyRound, Loader2, Paperclip, Pencil, Plus, Save, Send, UserRound, X, AlertCircle } from "./icons.tsx";
-import { api, ApiError, checkDocument, uploadDocument } from "../api.ts";
+import { api, ApiError, checkDocument, portalApi, uploadDocument } from "../api.ts";
+import { SupplierPicker } from "./vendorUi.tsx";
 
 // ─── Risposta del Business Owner ─────────────────────────────
 export function BOFormModal({ contract, currentUser, onSubmit, onClose }: { contract: Contract; currentUser: User; onSubmit: (id: number, r: { decision: string; notes: string }) => void; onClose: () => void }) {
@@ -95,6 +96,9 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
   const [form, setForm] = useState<FormState>(initial || { supplier: "", object: "", category: "", country: "Italia", value: "", currency: "EUR", start: "", end: "", owner: isBuyer ? currentUser.name : "", boEmail: "", renewal: "Non definito", type: "Servizi", notes: "", ceased: false, fileName: null, filePath: null, noticeDays: null, noticeDate: "" });
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
+  // Anagrafica fornitori (solo con il server): per collegare il contratto al fornitore registrato.
+  const [vendors, setVendors] = useState<SupplierSummary[] | null>(null);
+  useEffect(() => { let off = false; portalApi.vendors().then(v => { if (!off) setVendors(v); }).catch(() => undefined); return () => { off = true; }; }, []);
   // `file` è presente solo per un documento scelto ora (da caricare); `path` per uno già salvato.
   const [attachedFile, setAttachedFile] = useState<{ name: string; file?: File; path?: string | null } | null>(initial?.fileName ? { name: initial.fileName, path: initial.filePath } : null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -144,7 +148,7 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
           <button onClick={onClose} aria-label="Chiudi" style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, display: "flex", padding: 4 }}><X size={22} /></button>
         </div>
         <div style={two}>
-          <Field label="Fornitore" req error={errors.supplier} htmlFor="f-supplier">{fi("supplier", "Es. Acme Srl")}</Field>
+          <Field label="Fornitore" req error={errors.supplier} htmlFor="f-supplier"><SupplierPicker id="f-supplier" value={form.supplier} supplierId={form.supplierId} vendors={vendors} error={!!errors.supplier} onChange={(name, sid) => setForm(f => ({ ...f, supplier: name, supplierId: sid }))} /></Field>
           <Field label="Oggetto" req error={errors.object} htmlFor="f-object">{fi("object", "Es. Fornitura logistica")}</Field>
         </div>
         <div style={two}><Field label="Categoria" htmlFor="f-category">{sel("category", CATEGORIES)}</Field><Field label="Tipo" htmlFor="f-type">{sel("type", TYPES)}</Field></div>
