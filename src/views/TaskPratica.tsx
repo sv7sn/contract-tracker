@@ -18,7 +18,7 @@ const OUTCOMES: { key: ContractOutcome; label: string; text: string }[] = [
   { key: "extended", label: "Proroga", text: "Stesso contratto, nuova scadenza con addendum" },
   { key: "ceased", label: "Cessazione", text: "Disdetta inviata, il contratto termina" },
 ];
-const OUTCOME_DONE: Record<ContractOutcome, string> = { renewed: "Rinnovato", replaced: "Sostituito da un nuovo contratto", extended: "Prorogato", ceased: "Cessato" };
+const OUTCOME_DONE: Record<ContractOutcome | "new_contract", string> = { renewed: "Rinnovato", replaced: "Sostituito da un nuovo contratto", extended: "Prorogato", ceased: "Cessato", new_contract: "Contratto firmato registrato" };
 
 /** Sceglie e carica un documento (PDF, DOC, DOCX) nell'archivio privato. */
 function FilePick({ label, file, onFile }: { label: string; file: File | null; onFile: (f: File | null) => void }) {
@@ -65,12 +65,13 @@ export function RenewalCard({ t, contracts, plan, onCompleteStep, onSendBO, onOp
 
 /** Esito del rinnovo: nuovo contratto, proroga o cessazione. Aggiorna il contratto e lo storico. */
 export function OutcomeCard({ t, contracts, fail, onSaved, onOpenContract }: { t: TaskDetail; contracts: Contract[]; fail: (e: unknown) => string; onSaved: Saved; onOpenContract: (c: Contract) => void }) {
+  const purchase = t.source === "manual";
   const [mode, setMode] = useState<ContractOutcome | null>(null);
   const [f, setF] = useState({ supplier: t.meta.supplier ?? "", object: t.meta.object ?? "", value: t.meta.value ? String(t.meta.value) : "", start: t.meta.end ? new Date(new Date(`${t.meta.end}T00:00:00Z`).getTime() + 864e5).toISOString().slice(0, 10) : "", end: "", noticeDays: "", sentDate: "", note: "" });
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [supplierId, setSupplierId] = useState<number | null>(contracts.find(c => c.id === t.contractId)?.supplierId ?? null);
+  const [supplierId, setSupplierId] = useState<number | null>(contracts.find(c => c.id === t.contractId)?.supplierId ?? t.meta.supplierId ?? null);
   const [vendors, setVendors] = useState<SupplierSummary[] | null>(null);
   useEffect(() => { let off = false; portalApi.vendors().then(v => { if (!off) setVendors(v); }).catch(() => undefined); return () => { off = true; }; }, []);
   const up = (k: keyof typeof f) => (e: { target: { value: string } }) => setF(x => ({ ...x, [k]: e.target.value }));
@@ -79,7 +80,7 @@ export function OutcomeCard({ t, contracts, fail, onSaved, onOpenContract }: { t
     const nc = t.newContractId ? contracts.find(c => c.id === t.newContractId) : undefined;
     return (
       <Card>
-        <CardTitle icon={<CheckCircle2 size={16} />}>Esito del rinnovo</CardTitle>
+        <CardTitle icon={<CheckCircle2 size={16} />}>{purchase ? "Contratto" : "Esito del rinnovo"}</CardTitle>
         <div style={{ ...sans, fontSize: 13.5, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <b>{OUTCOME_DONE[t.outcome]}</b>
           {nc && <button onClick={() => onOpenContract(nc)} style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }}>Apri il nuovo contratto ({nc.supplier}, scad. {fmtDate(nc.end)})</button>}
@@ -95,10 +96,10 @@ export function OutcomeCard({ t, contracts, fail, onSaved, onOpenContract }: { t
     try {
       const doc = file ? await upload(file) : undefined;
       const body: Record<string, unknown> = { outcome: mode, note: f.note };
-      if (mode === "renewed" || mode === "replaced") body.contract = { supplier: f.supplier, object: f.object, value: Number(f.value.replace(",", ".")), supplierId, start: f.start, end: f.end, noticeDays: f.noticeDays || null, currency: t.meta.currency ?? "EUR", ...(doc ?? {}) };
+      if (mode === "renewed" || mode === "replaced" || purchase) body.contract = { supplier: f.supplier, object: f.object, value: Number(f.value.replace(",", ".")), supplierId, start: f.start, end: f.end, noticeDays: f.noticeDays || null, currency: t.meta.currency ?? "EUR", ...(doc ?? {}) };
       if (mode === "extended") { body.end = f.end; body.document = doc; }
       if (mode === "ceased") { body.sentDate = f.sentDate; body.document = doc; }
-      const x = await portalApi.setOutcome(t.id, body);
+      const x = purchase ? await portalApi.registerContract(t.id, body) : await portalApi.setOutcome(t.id, body);
       onSaved(x, x.status === "done" ? "Esito registrato: pratica chiusa" : "Esito registrato: completa confronto e PO per chiudere");
     } catch (e) { setErr(fail(e)); }
     setBusy(false);
@@ -106,15 +107,19 @@ export function OutcomeCard({ t, contracts, fail, onSaved, onOpenContract }: { t
   const two = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))", columnGap: 12 } as const;
   return (
     <Card>
-      <CardTitle icon={<CheckCircle2 size={16} />}>Esito del rinnovo</CardTitle>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: 8, marginBottom: mode ? 14 : 0 }} role="radiogroup" aria-label="Esito">
+      <CardTitle icon={<CheckCircle2 size={16} />}>{purchase ? "Contratto" : "Esito del rinnovo"}</CardTitle>
+      {purchase && !mode && (<>
+        <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-4px 0 10px", lineHeight: 1.5 }}>Se l'acquisto prevede un contratto, registralo qui: entra nel registro contratti, collegato al fornitore, e alla scadenza partirà il task di rinnovo. Per un acquisto con sola offerta e PO non serve.</p>
+        <button onClick={() => setMode("replaced")} style={{ ...btnGhost, padding: "8px 14px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 7 }}><FileText size={15} />Registra il contratto firmato</button>
+      </>)}
+      {!purchase && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 160px), 1fr))", gap: 8, marginBottom: mode ? 14 : 0 }} role="radiogroup" aria-label="Esito">
         {OUTCOMES.map(o => (
           <button key={o.key} type="button" role="radio" aria-checked={mode === o.key} onClick={() => { setMode(o.key); setErr(null); }} style={{ ...sans, textAlign: "left", padding: "10px 12px", borderRadius: 10, border: `2px solid ${mode === o.key ? C.accent : C.border}`, background: mode === o.key ? C.accentLight : "#fff", cursor: "pointer" }}>
             <div style={{ fontWeight: 650, fontSize: 13, color: mode === o.key ? C.accent : C.text }}>{o.label}</div>
             <div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.4, marginTop: 2 }}>{o.text}</div>
           </button>
         ))}
-      </div>
+      </div>}
       {(mode === "renewed" || mode === "replaced") && (<>
         <div style={two}>
           <Field label="Fornitore" req htmlFor="o-sup"><SupplierPicker id="o-sup" value={f.supplier} supplierId={supplierId} vendors={vendors} onChange={(name, sid) => { setF(x => ({ ...x, supplier: name })); setSupplierId(sid); }} /></Field>
@@ -137,7 +142,7 @@ export function OutcomeCard({ t, contracts, fail, onSaved, onOpenContract }: { t
       {mode && (<>
         <Field label="Note" htmlFor="o-note"><input id="o-note" value={f.note} onChange={up("note")} placeholder="Es. rinegoziato -8%, gara con 3 offerte…" style={iStyle} /></Field>
         {err && <Notice kind="error">{err}</Notice>}
-        <button onClick={save} disabled={busy} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy && <Loader2 className="spin" size={15} />}Registra l'esito</button>
+        <button onClick={save} disabled={busy} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy && <Loader2 className="spin" size={15} />}{purchase ? "Registra il contratto" : "Registra l'esito"}</button>
       </>)}
     </Card>
   );
@@ -164,7 +169,7 @@ export function PraticaCard({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unk
   const renewal = t.source === "contract";
   const sapPos = t.pos.map(p => p.po);
   const allPos = [...new Set([...sapPos, ...t.poNumbers])];
-  const supplier = t.pos[0]?.supplierName || t.sourcing?.quotes.find(q => q.chosen)?.supplier || (renewal ? t.meta.supplier : "") || "";
+  const supplier = t.pos[0]?.supplierName || t.sourcing?.quotes.find(q => q.chosen)?.supplier || t.meta.supplier || "";
   const docs = t.documents;
   const needPo = !renewal || t.outcome === "renewed" || t.outcome === "replaced";
 
@@ -200,7 +205,7 @@ export function PraticaCard({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unk
         {t.sourcing ? <>{t.sourcing.mode === "comparison" ? `${t.sourcing.quotes.length} offerte` : t.sourcing.mode === "strategic" ? "Fornitura strategica" : t.sourcing.mode === "single_source" ? "Single source" : "Eccezione"}{t.saving ? <> · saving <b style={{ color: t.saving.amount >= 0 ? C.green : C.red }}>{fmt(t.saving.amount, t.meta.currency ?? "EUR")} ({t.saving.pct}%)</b></> : null}</>
           : t.sourcingRequired ? "Da registrare qui sotto (importo sopra soglia)" : "Non necessario sotto soglia"}
       </Row>
-      <Row ok={docs.some(d => d.kind === "offer" || d.kind === "contract" || d.kind === "addendum") ? true : renewal && t.outcome === "ceased" ? null : false} title={renewal ? "Contratto" : "Offerta"}>
+      <Row ok={docs.some(d => d.kind === "offer" || d.kind === "contract" || d.kind === "addendum") ? true : renewal && t.outcome === "ceased" ? null : false} title={renewal ? "Contratto" : t.source === "manual" ? "Offerta / contratto" : "Offerta"}>
         {docs.length > 0 && <div style={{ display: "grid", gap: 4, marginBottom: 6 }}>{docs.map(d => (
           <div key={d.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontSize: 11.5, color: C.subtle }}>{DOC_LABEL[d.kind]}</span>

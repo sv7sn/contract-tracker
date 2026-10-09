@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Contract, ContractOutcome, PlanStep, Saving, SourcingMode, SourcingQuote, Task, TaskDetail, TaskList, User } from "../types.ts";
+import type { Contract, ContractOutcome, PlanStep, Saving, SourcingMode, SourcingQuote, SupplierSummary, Task, TaskDetail, TaskList, User } from "../types.ts";
 import { computeSaving } from "../lib/saving.ts";
 import { OutcomeCard, PraticaCard, RenewalCard } from "./TaskPratica.tsx";
 import { ApiError, importSapFile, portalApi } from "../api.ts";
@@ -8,7 +8,7 @@ import { fmt, fmtDate, isoDate, NOW } from "../lib/format.ts";
 import { stepTemplate } from "../lib/plan.ts";
 import { Avatar, Card, CardTitle, EmptyState, Field, Grid, StatCard } from "../components/ui.tsx";
 import { AlertTriangle, Check, CheckCircle2, Clock, FileText, Inbox, Loader2, Paperclip, Plus, RotateCcw, Scale, Search, Send, Trash2, Upload } from "../components/icons.tsx";
-import { CloseButton, KV, Notice, Portal } from "../components/vendorUi.tsx";
+import { CloseButton, KV, Notice, Portal, SupplierPicker } from "../components/vendorUi.tsx";
 
 interface Props {
   currentUser: User; contracts: Contract[]; plans: Record<number, PlanStep[]>;
@@ -25,9 +25,11 @@ interface Item {
 const TODAY = isoDate(NOW);
 const daysFrom = (d: string) => Math.round((new Date(d).getTime() - new Date(TODAY).getTime()) / 864e5);
 const ORIGIN_LABEL = { contract: "Rinnovo", rda: "RDA", manual: "Manuale" } as const;
-const OUTCOME_LABEL: Record<ContractOutcome, string> = { renewed: "Rinnovato", replaced: "Nuovo contratto", extended: "Prorogato", ceased: "Cessato" };
+const OUTCOME_LABEL: Record<ContractOutcome | "new_contract", string> = { renewed: "Rinnovato", replaced: "Nuovo contratto", extended: "Prorogato", ceased: "Cessato", new_contract: "Contratto firmato" };
+/** Etichetta dell'origine: i task manuali di acquisto sono pratiche come RDA e rinnovi. */
+const originLabel = (t: Pick<Task, "source" | "kind">) => (t.source === "manual" && t.kind === "purchase" ? "Acquisto" : ORIGIN_LABEL[t.source]);
 const ORIGIN_COLOR = { contract: [C.blue, C.blueBg], rda: [C.purple, C.purpleBg], manual: [C.gray, C.grayBg] } as const;
-const DONE_TEXT: Record<string, string> = { po_created: "PO creato", removed_from_sap: "Non più aperta in SAP", manual: "Completato a mano", outcome: "Pratica chiusa" };
+const DONE_TEXT: Record<string, string> = { po_created: "PO creato", removed_from_sap: "Non più aperta in SAP", manual: "Completato a mano", outcome: "Pratica chiusa", merged: "Unita a una pratica" };
 const PRIO: Record<string, string> = { high: "Alta", normal: "Normale", low: "Bassa" };
 const SOURCING_LABEL: Record<SourcingMode, string> = { comparison: "Confronto tra offerte", strategic: "Fornitura strategica", single_source: "Single source", exception: "Eccezione" };
 /** RDA sopra soglia senza scelta del fornitore documentata (o con eccezione non ancora approvata). */
@@ -160,7 +162,7 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
       </Grid>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
-        {([["all", "Tutti"], ["rda", "RDA"], ["contract", "Contratti"], ["manual", "Manuali"]] as [Origin, string][]).map(([k, l]) => (
+        {([["all", "Tutti"], ["rda", "RDA"], ["contract", "Rinnovi"], ["manual", "Manuali e acquisti"]] as [Origin, string][]).map(([k, l]) => (
           <button key={k} onClick={() => setOrigin(k)} aria-pressed={origin === k} style={{ ...sans, padding: "6px 14px", borderRadius: 999, border: `1px solid ${origin === k ? C.accent : C.border}`, background: origin === k ? C.accentLight : "#fff", color: origin === k ? C.accent : C.muted, fontWeight: 650, fontSize: 12.5, cursor: "pointer" }}>{l}</button>
         ))}
       </div>
@@ -183,7 +185,7 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
               {shown.map(i => (
                 <tr key={i.key} onClick={() => open(i)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter") open(i); }}>
                   <td style={{ minWidth: 260, boxShadow: overdue(i) ? `inset 3px 0 0 ${C.red}` : i.priority === "high" && i.status !== "done" ? `inset 3px 0 0 ${C.yellow}` : undefined }}><div style={{ fontWeight: 650, color: C.text }}>{i.title}{sourcingChip(i)}</div><div style={{ fontSize: 12, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 420, whiteSpace: "nowrap" }}>{i.sub}</div></td>
-                  <td>{chip(ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}</td>
+                  <td>{chip(i.task ? originLabel(i.task) : ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}</td>
                   <td className="tabular" style={{ whiteSpace: "nowrap", color: overdue(i) ? C.red : C.text, fontWeight: overdue(i) ? 650 : 400 }}>{dueText(i)}</td>
                   <td><div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>{i.assignee !== "Da assegnare" && i.assignee !== "—" && <Avatar name={i.assignee} size={24} />}<span style={{ color: i.assignee === "Da assegnare" ? C.purple : C.muted, fontWeight: i.assignee === "Da assegnare" ? 650 : 400 }}>{i.assignee}</span></div></td>
                   <td>{statusChip(i)}</td>
@@ -199,7 +201,7 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
               <Card key={i.key} className="lift" onClick={() => open(i)} role="button" tabIndex={0} style={{ padding: 14, cursor: "pointer", borderRadius: radius.md, borderLeft: overdue(i) ? `4px solid ${C.red}` : undefined }}>
                 <div style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text }}>{i.title}{sourcingChip(i)}</div>
                 {i.sub && <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginBottom: 8 }}>{i.sub}</div>}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>{chip(ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}{statusChip(i)}<span style={{ ...sans, fontSize: 12, color: overdue(i) ? C.red : C.muted }}>{dueText(i)}</span></div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>{chip(i.task ? originLabel(i.task) : ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}{statusChip(i)}<span style={{ ...sans, fontSize: 12, color: overdue(i) ? C.red : C.muted }}>{dueText(i)}</span></div>
                 <div style={{ ...sans, fontSize: 12, color: C.subtle, marginTop: 8 }}>{i.assignee}</div>
                 <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>{contractAction(i, onCompleteStep, onSendBO, onOpenContract)}</div>
               </Card>
@@ -240,18 +242,39 @@ function contractAction(i: Item, done: (c: number, s: string) => void, sendBO: (
 }
 
 function NewTaskDialog({ isManager, buyers, currentUser, fail, onClose, onCreated }: { isManager: boolean; buyers: { id: number; name: string }[]; currentUser: User; fail: (e: unknown) => string; onClose: () => void; onCreated: () => void }) {
-  const [f, setF] = useState({ title: "", detail: "", due: "", priority: "normal", assigneeId: currentUser.id });
+  const [f, setF] = useState({ title: "", detail: "", due: "", priority: "normal", assigneeId: currentUser.id, kind: "activity" as "activity" | "purchase", value: "", supplier: "", supplierId: null as number | null, rda: "" });
   const [error, setError] = useState<string | null>(null); const [busy, setBusy] = useState(false);
+  const [vendors, setVendors] = useState<SupplierSummary[] | null>(null);
+  useEffect(() => { let off = false; portalApi.vendors().then(v => { if (!off) setVendors(v); }).catch(() => undefined); return () => { off = true; }; }, []);
+  const purchase = f.kind === "purchase";
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setError(null);
-    try { await portalApi.createTask({ title: f.title, detail: f.detail, due: f.due || null, priority: f.priority, ...(isManager ? { assigneeId: f.assigneeId } : {}) }); onCreated(); }
+    try {
+      await portalApi.createTask({ title: f.title, detail: f.detail, due: f.due || null, priority: f.priority, kind: f.kind, ...(isManager ? { assigneeId: f.assigneeId } : {}),
+        ...(purchase ? { value: Number(f.value.replace(",", ".")), supplier: f.supplier, supplierId: f.supplierId, rdaNumbers: f.rda.split(/[\s,;]+/).filter(Boolean) } : {}) });
+      onCreated();
+    }
     catch (err) { setError(fail(err)); setBusy(false); }
   };
   return (
     <div className="dialog-overlay" role="dialog" aria-modal="true">
       <form className="dialog" onSubmit={submit}>
         <h3 style={{ ...font, margin: "0 0 14px", fontSize: 17 }}>Nuovo task</h3>
-        <Field label="Titolo" req htmlFor="nt-title"><input id="nt-title" required autoFocus value={f.title} onChange={e => setF({ ...f, title: e.target.value })} style={iStyle} /></Field>
+        <div role="radiogroup" aria-label="Tipo di task" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+          {([["activity", "Attività", "Promemoria: telefonata, report, verifica…"], ["purchase", "Acquisto / nuovo contratto", "Pratica completa: confronto, offerta o contratto, fornitore, PO"]] as const).map(([k, l, d]) => (
+            <button key={k} type="button" role="radio" aria-checked={f.kind === k} onClick={() => setF({ ...f, kind: k })} style={{ ...sans, textAlign: "left", padding: "9px 11px", borderRadius: 10, border: `2px solid ${f.kind === k ? C.accent : C.border}`, background: f.kind === k ? C.accentLight : "#fff", cursor: "pointer" }}>
+              <div style={{ fontWeight: 650, fontSize: 13, color: f.kind === k ? C.accent : C.text }}>{l}</div><div style={{ fontSize: 11.5, color: C.muted, lineHeight: 1.35, marginTop: 2 }}>{d}</div>
+            </button>
+          ))}
+        </div>
+        <Field label={purchase ? "Cosa si acquista" : "Titolo"} req htmlFor="nt-title"><input id="nt-title" required autoFocus value={f.title} onChange={e => setF({ ...f, title: e.target.value })} style={iStyle} /></Field>
+        {purchase && (<>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="Importo stimato (EUR)" req htmlFor="nt-val"><input id="nt-val" required inputMode="decimal" value={f.value} onChange={e => setF({ ...f, value: e.target.value })} style={iStyle} /></Field>
+            <Field label="RDA, se esiste già" htmlFor="nt-rda"><input id="nt-rda" value={f.rda} onChange={e => setF({ ...f, rda: e.target.value })} placeholder="Numero RDA" style={iStyle} /></Field>
+          </div>
+          <Field label="Fornitore previsto" htmlFor="nt-sup"><SupplierPicker id="nt-sup" value={f.supplier} supplierId={f.supplierId} vendors={vendors} onChange={(name, sid) => setF(x => ({ ...x, supplier: name, supplierId: sid }))} /></Field>
+        </>)}
         <Field label="Note" htmlFor="nt-detail"><textarea id="nt-detail" value={f.detail} onChange={e => setF({ ...f, detail: e.target.value })} style={{ ...iStyle, height: 70, resize: "vertical" }} /></Field>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field label="Scadenza" htmlFor="nt-due"><input id="nt-due" type="date" value={f.due} onChange={e => setF({ ...f, due: e.target.value })} style={iStyle} /></Field>
@@ -261,7 +284,7 @@ function NewTaskDialog({ isManager, buyers, currentUser, fail, onClose, onCreate
         {error && <Notice kind="error">{error}</Notice>}
         <div style={{ display: "flex", gap: 10 }}>
           <button type="button" onClick={onClose} style={{ ...btnGhost, flex: 1 }}>Annulla</button>
-          <button type="submit" disabled={busy} style={{ ...btnPrimary, flex: 2, opacity: busy ? 0.7 : 1 }}>Crea task</button>
+          <button type="submit" disabled={busy} style={{ ...btnPrimary, flex: 2, opacity: busy ? 0.7 : 1 }}>{purchase ? "Apri la pratica" : "Crea task"}</button>
         </div>
       </form>
     </div>
@@ -291,6 +314,7 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
   };
   const rda = t?.source === "rda";
   const renewal = t?.source === "contract";
+  const purchase = t?.source === "manual" && t.kind === "purchase";
   const total = (t?.lines ?? []).reduce((a, l) => a + l.value, 0);
   const age = t?.meta.releaseDate ? Math.round((Date.now() - new Date(t.meta.releaseDate).getTime()) / 864e5) : null;
 
@@ -300,7 +324,7 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
         <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ ...font, fontSize: 18, fontWeight: 700, color: C.text, overflowWrap: "anywhere" }}>{t?.title ?? "…"}</div>
-            {t && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>{chip(ORIGIN_LABEL[t.source], ORIGIN_COLOR[t.source][0], ORIGIN_COLOR[t.source][1])}{t.status === "done" ? chip(t.outcome ? OUTCOME_LABEL[t.outcome] : DONE_TEXT[t.doneReason] ?? "Chiuso", C.green, C.greenBg) : chip(t.outcome ? `${OUTCOME_LABEL[t.outcome]} · da completare` : "Aperto", C.blue, C.blueBg)}</div>}
+            {t && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>{chip(originLabel(t), ORIGIN_COLOR[t.source][0], ORIGIN_COLOR[t.source][1])}{t.status === "done" ? chip(t.outcome ? OUTCOME_LABEL[t.outcome] : DONE_TEXT[t.doneReason] ?? "Chiuso", C.green, C.greenBg) : chip(t.outcome ? `${OUTCOME_LABEL[t.outcome]} · da completare` : "Aperto", C.blue, C.blueBg)}</div>}
           </div>
           <CloseButton onClick={onClose} />
         </div>
@@ -314,7 +338,7 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
             <Card>
               <KV rows={[
                 ...(rda ? [["Numero RDA", t.sourceKey ?? ""], ["Gruppo acquisti", t.meta.pgr ?? ""], ["Richiedente", t.meta.requestedBy ?? ""], ["Importo", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Rilasciata il", t.meta.releaseDate ? `${fmtDate(t.meta.releaseDate)}${age !== null ? ` (da ${age} gg)` : ""}` : ""], ["Consegna richiesta", t.meta.delivDate ? fmtDate(t.meta.delivDate) : ""]] as [string, string][] : []),
-                [renewal ? "Da gestire entro" : "Scadenza", t.due ? fmtDate(t.due) : ""], ["Assegnato a", t.assigneeName || "Da assegnare"], ...(!rda && !renewal ? [["Priorità", PRIO[t.priority]], ["Creato da", t.createdBy]] as [string, string][] : []),
+                [renewal ? "Da gestire entro" : "Scadenza", t.due ? fmtDate(t.due) : ""], ["Assegnato a", t.assigneeName || "Da assegnare"], ...(!rda && !renewal ? [["Priorità", PRIO[t.priority]], ["Creato da", t.createdBy]] as [string, string][] : []), ...(purchase ? [["Importo stimato", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Fornitore previsto", t.meta.supplier || "—"]] as [string, string][] : []),
               ]} />
               {!rda && t.detail && <div style={{ ...sans, fontSize: 13, color: C.muted, marginTop: 12, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{t.detail}</div>}
             </Card>
@@ -334,8 +358,9 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
 
             {renewal && <RenewalCard t={t} contracts={contracts} plan={t.contractId ? plans[t.contractId] ?? [] : []} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onOpenContract={onOpenContract} />}
             {renewal && <OutcomeCard t={t} contracts={contracts} fail={fail} onOpenContract={onOpenContract} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
-            {(rda || renewal) && <PraticaCard t={t} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
-            {(rda || renewal) && (t.sourcingRequired || t.sourcing) && <SourcingCard t={t} threshold={threshold} isManager={isManager} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
+            {purchase && <OutcomeCard t={t} contracts={contracts} fail={fail} onOpenContract={onOpenContract} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
+            {(rda || renewal || purchase) && <PraticaCard t={t} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
+            {(rda || renewal || purchase) && (t.sourcingRequired || t.sourcing) && <SourcingCard t={t} threshold={threshold} isManager={isManager} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
 
             {t.pos.length > 0 && (
               <Card>
@@ -352,7 +377,7 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
               )}
               <div style={{ flex: 1 }} />
               {renewal && t.status === "open" && <span style={{ ...sans, fontSize: 12.5, color: C.muted, flex: "1 1 260px" }}>La pratica si chiude da sola quando sono completi esito, confronto (se serve) e PO.</span>}
-              {t.status === "open" && !renewal && <button onClick={() => patch({ status: "done" }, "Task completato")} disabled={busy} style={{ ...btnPrimary, padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 7 }}>{busy ? <Loader2 className="spin" size={15} /> : <Check size={16} />}{rda ? "Segna come gestita" : "Completa"}</button>}
+              {t.status === "open" && !renewal && <button onClick={() => patch({ status: "done" }, "Task completato")} disabled={busy} style={{ ...btnPrimary, padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 7 }}>{busy ? <Loader2 className="spin" size={15} /> : <Check size={16} />}{rda ? "Segna come gestita" : purchase ? "Chiudi la pratica" : "Completa"}</button>}
               {t.status === "done" && (t.source === "manual" || t.doneReason === "manual") && <button onClick={() => patch({ status: "open" }, "Task riaperto")} disabled={busy} style={{ ...btnGhost, padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 7 }}><RotateCcw size={15} />Riapri</button>}
               {t.source === "manual" && <button onClick={remove} style={{ ...btnGhost, padding: "10px 14px", color: C.red, borderColor: "#f0c9c9", display: "inline-flex", alignItems: "center", gap: 6 }}><Trash2 size={15} />Elimina</button>}
             </div>

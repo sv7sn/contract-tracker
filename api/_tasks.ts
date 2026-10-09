@@ -25,7 +25,8 @@ export async function loadSla(db: Queryable): Promise<number> { return (await lo
 // Sopra soglia serve il confronto con almeno un altro fornitore, salvo fornitura strategica, single source o eccezione approvata dal Manager.
 const SOURCING_MODES: SourcingMode[] = ["comparison", "strategic", "single_source", "exception"];
 // Per i rinnovi il confronto serve solo se si firma un nuovo contratto (non per proroghe o cessazioni).
-const needsSourcing = (r: Row, threshold: number) => (r.source === "rda" || (r.source === "contract" && !["extended", "ceased"].includes(r.outcome ?? ""))) && Number(r.meta?.value ?? 0) > threshold;
+const isPurchase = (r: Row) => r.source === "manual" && r.kind === "purchase";
+const needsSourcing = (r: Row, threshold: number) => (r.source === "rda" || isPurchase(r) || (r.source === "contract" && !["extended", "ceased"].includes(r.outcome ?? ""))) && Number(r.meta?.value ?? 0) > threshold;
 function sourcingStatusOf(required: boolean, s: Sourcing | null): SourcingStatus {
   if (!required) return "na";
   if (!s) return "missing";
@@ -78,6 +79,9 @@ async function importPr(db: Queryable, lines: PrLine[], res: ImportResult, force
     const title = `RDA ${pr} · ${first.shortText || "senza descrizione"}${ls.length > 1 ? ` (+${ls.length - 1})` : ""}`.slice(0, 200);
     const due = release ? addDays(release, sla) : null;
     const cur = (await db.query("select * from tasks where source = 'rda' and source_key = $1 for update", [pr])).rows[0];
+    // RDA già seguita in una pratica (acquisto manuale o rinnovo): niente secondo task.
+    if (cur?.done_reason === "merged") continue;
+    if (!cur && (await db.query("select 1 from tasks where source in ('manual','contract') and status = 'open' and $1 = any(rda_numbers)", [pr])).rows.length) { res.updated++; continue; }
     if (!cur) {
       const assignee = maps.get(first.pgr) ?? null;
       await db.query("insert into tasks (source, source_key, title, due, assignee_id, assignee_auto, group_key, meta, created_by) values ('rda',$1,$2,$3,$4,$5,$6,$7,'SAP')", [pr, title, due, assignee, assignee !== null, first.pgr, JSON.stringify({ ...meta, firstSeen: new Date().toISOString() })]);
@@ -137,7 +141,7 @@ function mapTask(r: Row, pos: Row[], threshold: number, docs: Row[] = []): Task 
   const required = needsSourcing(r, threshold);
   return {
     sourcing: r.sourcing ?? null, sourcingRequired: required, sourcingStatus: sourcingStatusOf(required, r.sourcing ?? null), saving: computeSaving(r.sourcing),
-    contractId: r.contract_id ?? null, outcome: r.outcome ?? "", newContractId: r.new_contract_id ?? null,
+    contractId: r.contract_id ?? null, outcome: r.outcome ?? "", newContractId: r.new_contract_id ?? null, kind: r.kind === "purchase" ? "purchase" : "activity",
     rdaNumbers: r.source === "rda" ? [r.source_key, ...(r.rda_numbers ?? []).filter((x: string) => x !== r.source_key)] : (r.rda_numbers ?? []),
     poNumbers: r.po_numbers ?? [], noPoReason: r.no_po_reason ?? "",
     documents: docs.filter(d => d.task_id === r.id).map(d => ({ id: d.id, kind: d.kind, fileName: d.file_name, size: d.size, uploadedBy: d.uploaded_by, uploadedAt: iso(d.uploaded_at) })),
@@ -169,7 +173,7 @@ export async function taskSummary(user: User): Promise<TaskSummary> {
   const { sourcingThreshold } = await loadRdaSettings(db);
   const r = (await db.query(`select count(*)::int as open, count(*) filter (where t.due < current_date)::int as overdue, count(*) filter (where t.due >= current_date and t.due <= current_date + 7)::int as due_soon,
     count(*) filter (where t.assignee_id is null)::int as unassigned,
-    count(*) filter (where t.source in ('rda','contract') and coalesce((t.meta->>'value')::numeric, 0) > $1 and ${SOURCING_MISSING_SQL})::int as sourcing_missing
+    count(*) filter (where (t.source in ('rda','contract') or (t.source = 'manual' and t.kind = 'purchase')) and coalesce((t.meta->>'value')::numeric, 0) > $1 and ${SOURCING_MISSING_SQL})::int as sourcing_missing
     from tasks t where t.status = 'open' and ${visibleSql(user)}`, [sourcingThreshold])).rows[0];
   const p = (await db.query(`select count(*)::int as n from tasks t where t.sourcing->>'approval' = 'pending' and ${visibleSql(user)}`)).rows[0];
   return { open: r.open, overdue: r.overdue, dueSoon: r.due_soon, unassigned: r.unassigned, sourcingMissing: r.sourcing_missing, exceptionsPending: p.n };
@@ -195,7 +199,22 @@ export async function createManualTask(user: User, input: Row): Promise<Task> {
   let assignee: number = user.id;
   if (user.role === "manager" && input?.assigneeId !== undefined && input.assigneeId !== null) assignee = Number(input.assigneeId);
   if (!(await getPool().query("select 1 from users where id = $1 and active and role in ('buyer','manager')", [assignee])).rows.length) bad("Assegnatario non valido");
-  const r = (await getPool().query("insert into tasks (source, title, detail, due, priority, assignee_id, created_by) values ('manual',$1,$2,$3,$4,$5,$6) returning id", [title, str(input?.detail, 2000), due, priority, assignee, user.name])).rows[0];
+  const purchase = input?.kind === "purchase";
+  let meta: RdaMeta = {};
+  if (purchase) {
+    const value = Number(input?.value);
+    if (!Number.isFinite(value) || value <= 0) bad("Indica l'importo stimato dell'acquisto");
+    const supplierId = Number.isInteger(input?.supplierId) && input.supplierId > 0 ? input.supplierId as number : null;
+    if (supplierId && !(await getPool().query("select 1 from suppliers where id = $1", [supplierId])).rows.length) bad("Fornitore non trovato in anagrafica");
+    meta = { value, currency: str(input?.currency, 3) || "EUR", supplier: str(input?.supplier, 200), supplierId, object: title };
+  }
+  const r = (await getPool().query("insert into tasks (source, kind, title, detail, due, priority, assignee_id, created_by, meta) values ('manual',$1,$2,$3,$4,$5,$6,$7,$8) returning id",
+    [purchase ? "purchase" : "activity", title, str(input?.detail, 2000), due, priority, assignee, user.name, JSON.stringify(meta)])).rows[0];
+  if (purchase && Array.isArray(input?.rdaNumbers) && input.rdaNumbers.length) {
+    // Se l'RDA non si può collegare (già in un'altra pratica o già lavorata), la pratica non resta creata a metà.
+    try { return await setTaskLinks(user, r.id, { rdaNumbers: input.rdaNumbers }); }
+    catch (err) { await getPool().query("delete from tasks where id = $1", [r.id]); throw err; }
+  }
   return (await getTask(user, r.id)) as Task;
 }
 
@@ -204,15 +223,15 @@ export async function updateTask(user: User, id: number, input: Row): Promise<Ta
   const cur = await getTask(user, id);
   const sets: string[] = []; const vals: unknown[] = [];
   const set = (col: string, v: unknown) => { vals.push(v); sets.push(`${col} = $${vals.length}`); };
-  if (input?.status === "done" && cur.status === "open" && cur.source === "contract") {
+  if (input?.status === "done" && cur.status === "open" && (cur.source === "contract" || cur.kind === "purchase" && cur.source === "manual")) {
     const why = closeBlocker(cur);
-    if (why) throw new HttpError(409, why, { needsOutcome: !cur.outcome });
+    if (why) throw new HttpError(409, why, { needsOutcome: cur.source === "contract" && !cur.outcome });
   }
-  if (input?.status === "open" && cur.status === "done" && cur.source === "contract" && cur.outcome) throw new HttpError(409, "Il rinnovo è già stato chiuso con un esito registrato sul contratto");
+  if (input?.status === "open" && cur.status === "done" && cur.outcome) throw new HttpError(409, "La pratica è già stata chiusa con un contratto registrato");
   if (input?.status === "done" && cur.status === "open" && cur.sourcingRequired && cur.sourcingStatus !== "ok") {
     throw new HttpError(409, cur.sourcingStatus === "pending"
       ? "L'eccezione per questa RDA è in attesa di approvazione del Manager: potrai chiuderla dopo l'approvazione"
-      : `${cur.source === "contract" ? "Nuovo contratto" : "RDA"} sopra soglia (${fmtEur((await loadRdaSettings(getPool())).sourcingThreshold)}): prima di chiuderla registra il confronto con almeno un altro fornitore, oppure indica che è strategica o single source, o chiedi un'eccezione`, { needsSourcing: true });
+      : `${cur.source === "rda" ? "RDA" : cur.source === "contract" ? "Nuovo contratto" : "Acquisto"} sopra soglia (${fmtEur((await loadRdaSettings(getPool())).sourcingThreshold)}): prima di chiuderla registra il confronto con almeno un altro fornitore, oppure indica che è strategica o single source, o chiedi un'eccezione`, { needsSourcing: true });
   }
   if (input?.status === "done" && cur.status === "open") { set("status", "done"); set("done_at", new Date()); set("done_reason", "manual"); set("done_by", user.name); }
   else if (input?.status === "open" && cur.status === "done") {
@@ -242,7 +261,7 @@ const fmtEur = (n: number) => `${n.toLocaleString("it-IT")} €`;
 /** Registra come è stato scelto il fornitore: confronto offerte, fornitura strategica, single source o eccezione. */
 export async function saveSourcing(user: User, id: number, input: Row): Promise<TaskDetail> {
   const cur = await getTask(user, id);
-  if (cur.source === "manual") bad("La scelta del fornitore si registra sulle RDA e sui rinnovi dei contratti");
+  if (cur.source === "manual" && cur.kind !== "purchase") bad("La scelta del fornitore si registra sulle pratiche d'acquisto: RDA, rinnovi e acquisti");
   const mode = input?.mode as SourcingMode;
   if (!SOURCING_MODES.includes(mode)) bad("Scegli come è stato individuato il fornitore");
   const justification = str(input?.justification, 2000);
@@ -352,8 +371,15 @@ const OUTCOME_LABEL: Record<ContractOutcome, string> = { renewed: "Rinnovato", r
 const isoDay = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(new Date(v).getTime()) ? v : null);
 const nowTs = () => new Date().toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" });
 
-/** Cosa manca per chiudere un task di rinnovo (null = si può chiudere). */
+/** Cosa manca per chiudere una pratica (rinnovo o acquisto manuale); null = si può chiudere. */
 function closeBlocker(t: Task): string | null {
+  if (t.source === "manual") {
+    if (t.kind !== "purchase") return null;
+    if (t.sourcingRequired && t.sourcingStatus !== "ok") return t.sourcingStatus === "pending" ? "L'eccezione al confronto è in attesa del Manager" : "Acquisto sopra soglia: registra il confronto con un altro fornitore (o strategica, single source, eccezione)";
+    if (!t.newContractId && !t.documents.some(d => d.kind === "offer" || d.kind === "contract")) return "Allega l'offerta accettata o registra il contratto firmato";
+    if (!t.poNumbers.length && !t.noPoReason) return "Indica il numero di PO, oppure perché non serve";
+    return null;
+  }
   if (!t.outcome) return "Registra prima l'esito del rinnovo: rinnovo, nuovo contratto, proroga o cessazione";
   if (t.outcome === "renewed" || t.outcome === "replaced") {
     if (!t.newContractId) return "Carica il nuovo contratto";
@@ -368,7 +394,8 @@ function closeBlocker(t: Task): string | null {
  * Poi chiude le pratiche complete. Restituisce quante pratiche ha chiuso.
  */
 export async function autoLinkPos(db: Queryable): Promise<number> {
-  const waiting = "t.source = 'contract' and t.status = 'open' and t.outcome in ('renewed','replaced') and cardinality(t.po_numbers) = 0 and t.no_po_reason = ''";
+  const pratica = "((t.source = 'contract' and t.outcome in ('renewed','replaced')) or (t.source = 'manual' and t.kind = 'purchase'))";
+  const waiting = `${pratica} and t.status = 'open' and cardinality(t.po_numbers) = 0 and t.no_po_reason = ''`;
   await db.query(`update tasks t set po_numbers = x.pos, updated_at = now() from (
       select t.id, array_agg(distinct p.po) as pos from tasks t join sap_pos p on p.pr = any(t.rda_numbers) where ${waiting} group by t.id) x where t.id = x.id`);
   await db.query(`update tasks t set po_numbers = x.pos, updated_at = now() from (
@@ -376,12 +403,13 @@ export async function autoLinkPos(db: Queryable): Promise<number> {
         join contracts nc on nc.id = t.new_contract_id join suppliers s on s.id = nc.supplier_id
         join contracts oc on oc.id = t.contract_id
         join sap_pos p on ltrim(p.supplier_code, '0') = ltrim(s.sap_code, '0') and coalesce(s.sap_code, '') <> '' and p.doc_date >= coalesce(oc.closed_at, t.created_at)::date - 30
-      where ${waiting} group by t.id) x where t.id = x.id`);
+      where t.source = 'contract' and ${waiting} group by t.id) x where t.id = x.id`);
   const { sourcingThreshold } = await loadRdaSettings(db);
-  const rows = (await db.query("select t.* from tasks t where t.source = 'contract' and t.status = 'open' and t.outcome in ('renewed','replaced') and cardinality(t.po_numbers) > 0")).rows;
+  const rows = (await db.query(`select t.* from tasks t where ${pratica} and t.status = 'open' and cardinality(t.po_numbers) > 0`)).rows;
+  const docs = rows.length ? (await db.query("select * from task_documents where task_id = any($1)", [rows.map(r => r.id)])).rows : [];
   let closed = 0;
   for (const r of rows) {
-    if (closeBlocker(mapTask(r, [], sourcingThreshold))) continue;
+    if (closeBlocker(mapTask(r, [], sourcingThreshold, docs))) continue;
     await db.query("update tasks set status = 'done', done_at = now(), done_reason = 'outcome', done_by = 'SAP', updated_at = now() where id = $1", [r.id]);
     closed++;
   }
@@ -390,7 +418,7 @@ export async function autoLinkPos(db: Queryable): Promise<number> {
 
 async function closeIfComplete(user: User, id: number): Promise<TaskDetail> {
   const t = await getTask(user, id);
-  if (t.status === "open" && t.source === "contract" && !closeBlocker(t))
+  if (t.status === "open" && (t.source === "contract" || (t.source === "manual" && t.kind === "purchase")) && !closeBlocker(t))
     await getPool().query("update tasks set status = 'done', done_at = now(), done_reason = 'outcome', done_by = $2, updated_at = now() where id = $1", [id, user.name]);
   return getTask(user, id);
 }
@@ -403,6 +431,53 @@ async function attachDoc(db: Queryable, taskId: number, kind: TaskDocKind, doc: 
 }
 const audit = (db: Queryable, contractId: number, user: string, action: string, detail: string) =>
   db.query("insert into audit_log (contract_id, ts, user_name, action, detail) values ($1,$2,$3,$4,$5)", [contractId, nowTs(), user, action, detail]);
+
+interface ContractDefaults { supplier: string; object: string; category: string; country: string; currency: string; owner: string; boEmail: string; type: string; supplierId: number | null; replaces: number | null }
+/** Crea un contratto nel registro (con il suo piano di rinnovo) a partire dal form dell'esito o della pratica d'acquisto. */
+async function insertContract(db: Queryable, c: Row, note: string, d: ContractDefaults): Promise<{ id: number; supplier: string; end: string; value: number; fileName: string; filePath: string }> {
+  const end = isoDay(c.end); if (!end) bad("Indica la scadenza del contratto");
+  const start = isoDay(c.start) ?? "";
+  if (start && start > end!) bad("La scadenza deve essere successiva alla data di inizio");
+  const noticeDays = c.noticeDays === undefined || c.noticeDays === null || c.noticeDays === "" ? null : Number(c.noticeDays);
+  if (noticeDays !== null && (!Number.isInteger(noticeDays) || noticeDays < 1 || noticeDays > 1095)) bad("Giorni di preavviso non validi");
+  let noticeDate = isoDay(c.noticeDate) ?? "";
+  if (noticeDays !== null && !noticeDate) { const x = new Date(`${end}T00:00:00Z`); x.setUTCDate(x.getUTCDate() - noticeDays); noticeDate = x.toISOString().slice(0, 10); }
+  if (noticeDate && noticeDate > end!) bad("La data limite di disdetta deve precedere la scadenza");
+  const supplier = str(c.supplier, 200) || d.supplier;
+  if (!supplier) bad("Indica il fornitore");
+  const value = Number(c.value); if (!Number.isFinite(value) || value < 0) bad("Valore del contratto non valido");
+  const filePath = str(c.filePath, 300), fileName = str(c.fileName, 200);
+  if (!FILE_PATH_RE.test(filePath) || !fileName) bad("Carica il documento del contratto firmato");
+  // Fornitore in anagrafica: quello scelto, altrimenti quello di partenza se il nome non cambia.
+  let supplierId: number | null = Number.isInteger(c.supplierId) && c.supplierId > 0 ? c.supplierId : null;
+  if (supplierId && !(await db.query("select 1 from suppliers where id = $1", [supplierId])).rows.length) bad("Fornitore non trovato in anagrafica");
+  if (!supplierId && supplier.toLowerCase() === d.supplier.toLowerCase()) supplierId = d.supplierId;
+  const id = (await db.query(`insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path, notice_days, notice_date, replaces, supplier_id)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Non definito',$11,$12,false,$13,$14,$15,$16,$17,$18) returning id`,
+    [supplier, str(c.object, 300) || d.object, d.category, d.country, value, str(c.currency, 3) || d.currency, start, end, d.owner, str(c.boEmail, 200).toLowerCase() || d.boEmail, d.type, note, fileName, filePath, noticeDays, noticeDate, d.replaces, supplierId])).rows[0].id as number;
+  for (const s of makePlan(id, noticeDate || end!))
+    await db.query(`insert into plan_steps (contract_id, step_id, scheduled_date, original_date, status, completed_at, completed_by, bo_decision, bo_notes, bo_responded_at, modified, modified_reason) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [id, s.stepId, s.scheduledDate, s.originalDate, s.status, s.completedAt, s.completedBy, s.boDecision, s.boNotes, s.boRespondedAt, s.modified, s.modifiedReason]);
+  return { id, supplier, end: end!, value, fileName, filePath };
+}
+
+/** Pratica d'acquisto manuale chiusa con un contratto firmato: il contratto entra nel registro (e da lì partiranno i rinnovi). */
+export async function registerPurchaseContract(user: User, id: number, input: Row): Promise<TaskDetail> {
+  const t = await getTask(user, id);
+  if (t.source !== "manual" || t.kind !== "purchase") bad("Il contratto si registra qui solo sulle pratiche d'acquisto manuali");
+  if (t.newContractId) throw new HttpError(409, "Il contratto di questa pratica è già stato registrato");
+  const note = str(input?.note, 1000);
+  await inTransaction(async db => {
+    const owner = (await db.query("select name from users where id = $1 and active and role in ('buyer','manager')", [t.assigneeId])).rows[0]?.name ?? user.name;
+    const c = (input?.contract ?? {}) as Row;
+    const nc = await insertContract(db, c, note, { supplier: t.meta.supplier ?? "", object: t.title, category: str(c.category, 100), country: str(c.country, 100) || "Italia", currency: t.meta.currency ?? "EUR", owner, boEmail: "", type: str(c.type, 100) || "Servizi", supplierId: t.meta.supplierId ?? null, replaces: null });
+    await db.query("update tasks set outcome = 'new_contract', new_contract_id = $2, meta = meta || jsonb_build_object('value', $3::numeric, 'supplier', $4::text), updated_at = now() where id = $1", [id, nc.id, nc.value, nc.supplier]);
+    await db.query("insert into task_documents (task_id, kind, file_name, file_path, uploaded_by) values ($1,'contract',$2,$3,$4)", [id, nc.fileName, nc.filePath, user.name]);
+    await audit(db, nc.id, user.name, "Contratto creato", `Da pratica d'acquisto: ${t.title}${note ? ` · ${note}` : ""}`);
+  });
+  await autoLinkPos(getPool());
+  return closeIfComplete(user, id);
+}
 
 /** Registra l'esito di un rinnovo e lo applica al contratto: nuovo contratto collegato, proroga o cessazione. */
 export async function setRenewalOutcome(user: User, id: number, input: Row): Promise<TaskDetail> {
@@ -418,28 +493,7 @@ export async function setRenewalOutcome(user: User, id: number, input: Row): Pro
     if (old.status !== "active") throw new HttpError(409, "Il contratto è già chiuso");
     if (outcome === "renewed" || outcome === "replaced") {
       const c = (input?.contract ?? {}) as Row;
-      const end = isoDay(c.end); if (!end) bad("Indica la scadenza del nuovo contratto");
-      const start = isoDay(c.start) ?? "";
-      if (start && start > end!) bad("La scadenza deve essere successiva alla data di inizio");
-      const noticeDays = c.noticeDays === undefined || c.noticeDays === null || c.noticeDays === "" ? null : Number(c.noticeDays);
-      if (noticeDays !== null && (!Number.isInteger(noticeDays) || noticeDays < 1 || noticeDays > 1095)) bad("Giorni di preavviso non validi");
-      let noticeDate = isoDay(c.noticeDate) ?? "";
-      if (noticeDays !== null && !noticeDate) { const d = new Date(`${end}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - noticeDays); noticeDate = d.toISOString().slice(0, 10); }
-      if (noticeDate && noticeDate > end!) bad("La data limite di disdetta deve precedere la scadenza");
-      const supplier = str(c.supplier, 200) || old.supplier;
-      const value = Number(c.value); if (!Number.isFinite(value) || value < 0) bad("Valore del contratto non valido");
-      const filePath = str(c.filePath, 300), fileName = str(c.fileName, 200);
-      if (!FILE_PATH_RE.test(filePath) || !fileName) bad("Carica il documento del nuovo contratto");
-      // Fornitore in anagrafica: quello scelto, altrimenti lo stesso del contratto precedente se il nome non cambia.
-      let supplierId: number | null = Number.isInteger(c.supplierId) && c.supplierId > 0 ? c.supplierId : null;
-      if (supplierId && !(await db.query("select 1 from suppliers where id = $1", [supplierId])).rows.length) bad("Fornitore non trovato in anagrafica");
-      if (!supplierId && supplier.toLowerCase() === String(old.supplier).toLowerCase()) supplierId = old.supplier_id ?? null;
-      const nc = (await db.query(`insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path, notice_days, notice_date, replaces, supplier_id)
-        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Non definito',$11,$12,false,$13,$14,$15,$16,$17,$18) returning id`,
-        [supplier, str(c.object, 300) || old.object, old.category, old.country, value, str(c.currency, 3) || old.currency, start, end, old.owner, old.bo_email, old.type, note, fileName, filePath, noticeDays, noticeDate, old.id, supplierId])).rows[0].id as number;
-      for (const s of makePlan(nc, noticeDate || end!))
-        await db.query(`insert into plan_steps (contract_id, step_id, scheduled_date, original_date, status, completed_at, completed_by, bo_decision, bo_notes, bo_responded_at, modified, modified_reason) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-          [nc, s.stepId, s.scheduledDate, s.originalDate, s.status, s.completedAt, s.completedBy, s.boDecision, s.boNotes, s.boRespondedAt, s.modified, s.modifiedReason]);
+      const { id: nc, supplier, end, value, fileName, filePath } = await insertContract(db, c, note, { supplier: old.supplier, object: old.object, category: old.category, country: old.country, currency: old.currency, owner: old.owner, boEmail: old.bo_email, type: old.type, supplierId: old.supplier_id ?? null, replaces: old.id });
       await db.query("update contracts set status = 'closed', outcome = $2, outcome_note = $3, closed_at = now(), replaced_by = $4, renewal = $5 where id = $1", [old.id, outcome, note, nc, OUTCOME_LABEL[outcome]]);
       // Da qui la soglia del confronto vale sul nuovo contratto; il valore precedente resta come riferimento per il saving.
       await db.query("update tasks set outcome = $2, new_contract_id = $3, meta = meta || jsonb_build_object('previousValue', meta->'value', 'value', $4::numeric), updated_at = now() where id = $1", [id, outcome, nc, value]);
@@ -480,13 +534,23 @@ export async function setRenewalOutcome(user: User, id: number, input: Row): Pro
 /** Numeri di RDA e PO collegati alla pratica (oltre a quelli letti da SAP), o il motivo per cui il PO non serve. */
 export async function setTaskLinks(user: User, id: number, input: Row): Promise<TaskDetail> {
   const t = await getTask(user, id);
-  if (t.source === "manual") bad("RDA e PO si collegano alle RDA e ai rinnovi");
+  if (t.source === "manual" && t.kind !== "purchase") bad("RDA e PO si collegano alle pratiche d'acquisto");
   const list = (v: unknown) => [...new Set((Array.isArray(v) ? v : []).map(x => str(x, 30).replace(/\s+/g, "")).filter(Boolean))].slice(0, 20);
   const sets: string[] = [], vals: unknown[] = [id];
   if (input?.poNumbers !== undefined) { const p = list(input.poNumbers); if (p.some(x => !/^[A-Za-z0-9/-]{3,30}$/.test(x))) bad("Numero di PO non valido"); vals.push(p); sets.push(`po_numbers = $${vals.length}`); }
   if (input?.rdaNumbers !== undefined) { const p = list(input.rdaNumbers); if (p.some(x => !/^[A-Za-z0-9/-]{3,30}$/.test(x))) bad("Numero di RDA non valido"); vals.push(p); sets.push(`rda_numbers = $${vals.length}`); }
   if (input?.noPoReason !== undefined) { const r = str(input.noPoReason, 500); if (r && r.length < 5) bad("Spiega perché il PO non serve"); vals.push(r); sets.push(`no_po_reason = $${vals.length}`); }
   if (!sets.length) return t;
+  // Una RDA già arrivata da SAP come task a sé viene unita a questa pratica, per non lavorarla due volte.
+  const newRdas = input?.rdaNumbers !== undefined && t.source !== "rda" ? list(input.rdaNumbers).filter(x => !t.rdaNumbers.includes(x)) : [];
+  if (newRdas.length) {
+    const dup = (await getPool().query("select id, source_key, sourcing, (select count(*)::int from task_documents d where d.task_id = t.id) as docs from tasks t where source = 'rda' and status = 'open' and source_key = any($1)", [newRdas])).rows;
+    const busy = dup.find(d => d.sourcing || d.docs > 0);
+    if (busy) throw new HttpError(409, `La RDA ${busy.source_key} ha già un task con confronto o documenti: completa la pratica da quel task`);
+    const other = (await getPool().query("select id from tasks where id <> $1 and source in ('manual','contract') and status = 'open' and rda_numbers && $2::text[]", [id, newRdas])).rows[0];
+    if (other) throw new HttpError(409, "Questa RDA è già collegata a un'altra pratica aperta");
+    for (const d of dup) await getPool().query("update tasks set status = 'done', done_at = now(), done_reason = 'merged', done_by = $2, meta = meta || jsonb_build_object('mergedInto', $3::int), updated_at = now() where id = $1", [d.id, user.name, id]);
+  }
   await getPool().query(`update tasks set ${sets.join(", ")}, updated_at = now() where id = $1`, vals);
   await autoLinkPos(getPool());
   return closeIfComplete(user, id);

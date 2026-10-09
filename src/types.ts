@@ -179,7 +179,9 @@ export interface RdaMeta { pgr?: string; requestedBy?: string; createdBy?: strin
   /** Solo task di rinnovo: dati del contratto di origine al momento della creazione. */
   supplier?: string; object?: string; keyDate?: string; end?: string; noticeDate?: string;
   /** Valore del contratto in scadenza, dopo che l'esito ha registrato il nuovo valore. */
-  previousValue?: number }
+  previousValue?: number;
+  /** Acquisti manuali: fornitore previsto in anagrafica; RDA da SAP: pratica in cui è stata unita. */
+  supplierId?: number | null; mergedInto?: number }
 /** Come è stato scelto il fornitore di una RDA sopra soglia. */
 export type SourcingMode = "comparison" | "strategic" | "single_source" | "exception";
 export interface SourcingQuote { supplier: string; amount: number; chosen: boolean }
@@ -200,7 +202,9 @@ export interface Task {
   meta: RdaMeta; pos: TaskPo[]; createdBy: string; createdAt: string; updatedAt: string;
   sourcing: Sourcing | null; sourcingRequired: boolean; sourcingStatus: SourcingStatus; saving: Saving | null;
   /** Pratica: contratto di origine (task di rinnovo), esito, nuovo contratto, RDA, PO e documenti. */
-  contractId: number | null; outcome: ContractOutcome | ""; newContractId: number | null;
+  contractId: number | null; outcome: ContractOutcome | "new_contract" | ""; newContractId: number | null;
+  /** Solo task manuali: attività semplice oppure acquisto (pratica completa come RDA e rinnovi). */
+  kind: "activity" | "purchase";
   rdaNumbers: string[]; poNumbers: string[]; noPoReason: string; documents: TaskDocument[];
 }
 export type TaskDocKind = "offer" | "contract" | "addendum" | "termination" | "other";

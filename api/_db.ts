@@ -143,6 +143,7 @@ alter table tasks add column if not exists new_contract_id integer references co
 alter table tasks add column if not exists rda_numbers text[] not null default '{}';
 alter table tasks add column if not exists po_numbers text[] not null default '{}';
 alter table tasks add column if not exists no_po_reason text not null default '';
+alter table tasks add column if not exists kind text not null default 'activity';
 create index if not exists tasks_contract_idx on tasks (contract_id);
 create table if not exists task_documents (
   id serial primary key, task_id integer not null references tasks(id) on delete cascade, kind text not null,
