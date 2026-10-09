@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Contract, User } from "../types.ts";
 import { C, iStyle, radius, sans, shadow, URGENCY_COLORS } from "../theme.ts";
-import { daysToExpiry, fmt, fmtDate, urgency } from "../lib/format.ts";
+import { daysToDeadline, fmt, fmtDate, urgency } from "../lib/format.ts";
 import { canCreateContract, canViewTeam } from "../permissions.ts";
 import { Avatar, Card, DaysChip, EmptyState, Grid, RenewalBadge } from "../components/ui.tsx";
 import { Archive, FileText, LayoutGrid, Paperclip, Plus, Rows3, Search } from "../components/icons.tsx";
@@ -22,7 +22,7 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
     if (search) list = list.filter(c => `${c.supplier} ${c.object} ${c.owner} ${c.category}`.toLowerCase().includes(search.toLowerCase()));
     if (!showArchive) { if (filter === "Urgenti") list = list.filter(c => urgency(c) === "red"); else if (filter === "In scadenza") list = list.filter(c => urgency(c) === "yellow"); else if (filter === "Regolari") list = list.filter(c => urgency(c) === "green"); }
     list = [...list];
-    if (sort === "expiry") list.sort((a, b) => daysToExpiry(a.end) - daysToExpiry(b.end)); else if (sort === "value") list.sort((a, b) => b.value - a.value); else list.sort((a, b) => a.supplier.localeCompare(b.supplier));
+    if (sort === "expiry") list.sort((a, b) => daysToDeadline(a) - daysToDeadline(b)); else if (sort === "value") list.sort((a, b) => b.value - a.value); else list.sort((a, b) => a.supplier.localeCompare(b.supplier));
     return list;
   }, [contracts, search, filter, sort, showArchive]);
 
@@ -74,7 +74,7 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
               <thead><tr><th>Fornitore</th>{showOwner && <th>Owner</th>}<th>Scadenza</th><th>Rinnovo</th><th className="num">Valore</th><th aria-label="Documento" /></tr></thead>
               <tbody>
                 {filtered.map(c => {
-                  const days = daysToExpiry(c.end); const u = urgency(c);
+                  const days = daysToDeadline(c); const u = urgency(c);
                   return (
                     <tr key={c.id} onClick={() => onSelect(c)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter") onSelect(c); }} style={{ opacity: c.ceased ? 0.7 : 1 }}>
                       <td style={{ boxShadow: `inset 3px 0 0 ${URGENCY_COLORS[u]}`, minWidth: 220 }}>
@@ -82,7 +82,7 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
                         <div style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{c.object}</div>
                       </td>
                       {showOwner && <td><div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}><Avatar name={c.owner || "?"} size={26} /><span style={{ color: C.muted }}>{c.owner || "—"}</span></div></td>}
-                      <td style={{ whiteSpace: "nowrap" }}><div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}><span className="tabular" style={{ color: C.text }}>{fmtDate(c.end)}</span><DaysChip days={days} level={u} ceased={c.ceased} /></div></td>
+                      <td style={{ whiteSpace: "nowrap" }}><div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}><span className="tabular" style={{ color: C.text }}>{fmtDate(c.end)}</span>{c.noticeDate && <span className="tabular" style={{ fontSize: 11.5, color: C.muted }}>Disdetta entro {fmtDate(c.noticeDate)}</span>}<DaysChip days={days} level={u} ceased={c.ceased} /></div></td>
                       <td>{c.ceased ? <span style={{ color: C.muted }}>Cessato</span> : <RenewalBadge status={c.renewal} />}</td>
                       <td className="num" style={{ fontWeight: 650, color: C.text, whiteSpace: "nowrap" }}>{fmt(c.value, c.currency)}</td>
                       <td style={{ width: 36, color: c.fileName ? C.subtle : "transparent" }}>{c.fileName && <Paperclip size={15} aria-label="Ha un documento" />}</td>
@@ -98,7 +98,7 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
         <div className={layout === "table" ? "mobile-only" : undefined}>
           <Grid min={340} gap={12}>
             {filtered.map(c => {
-              const days = daysToExpiry(c.end); const u = urgency(c);
+              const days = daysToDeadline(c); const u = urgency(c);
               return (
                 <Card key={c.id} className="lift" onClick={() => onSelect(c)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") onSelect(c); }}
                   style={{ padding: 16, cursor: "pointer", borderLeft: `4px solid ${URGENCY_COLORS[u]}`, borderRadius: radius.md, opacity: c.ceased ? 0.7 : 1 }}>
@@ -113,7 +113,7 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
                     {c.ceased ? <span style={{ ...sans, fontSize: 11.5, color: C.gray, background: C.grayBg, borderRadius: 999, padding: "3px 10px", fontWeight: 600 }}>Cessato</span> : <RenewalBadge status={c.renewal} />}
                     <span style={{ marginLeft: "auto" }}><DaysChip days={days} level={u} ceased={c.ceased} /></span>
                   </div>
-                  {showOwner && <div style={{ ...sans, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.subtle, marginTop: 10 }}><Avatar name={c.owner || "?"} size={22} />{c.owner || "—"}<span style={{ marginLeft: "auto" }}>Scade il {fmtDate(c.end)}</span></div>}
+                  {showOwner && <div style={{ ...sans, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.subtle, marginTop: 10 }}><Avatar name={c.owner || "?"} size={22} />{c.owner || "—"}<span style={{ marginLeft: "auto" }}>{c.noticeDate ? `Disdetta entro ${fmtDate(c.noticeDate)}` : `Scade il ${fmtDate(c.end)}`}</span></div>}
                 </Card>
               );
             })}

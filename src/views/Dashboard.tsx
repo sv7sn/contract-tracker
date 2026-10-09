@@ -1,6 +1,6 @@
 import type { Contract, Plans, User, View } from "../types.ts";
 import { C, font, radius, sans, shadow, URGENCY_COLORS } from "../theme.ts";
-import { daysToExpiry, fmt, fmtCompact, NOW, urgency } from "../lib/format.ts";
+import { daysToDeadline, fmt, fmtCompact, NOW, urgency } from "../lib/format.ts";
 import { getSuggestions } from "../lib/plan.ts";
 import { canCreateContract } from "../permissions.ts";
 import { Card, CardTitle, DaysChip, EmptyState, Grid, StatCard } from "../components/ui.tsx";
@@ -12,7 +12,7 @@ const greeting = () => { const h = new Date().getHours(); return h < 13 ? "Buong
 export function Dashboard({ contracts, plans, currentUser, onNavigate, onNew }: { contracts: Contract[]; plans: Plans; currentUser: User; onNavigate: (v: View, c?: Contract) => void; onNew: () => void }) {
   const mine = contracts.filter(c => !c.ceased);
   const totalEUR = mine.filter(c => c.currency === "EUR").reduce((a, c) => a + c.value, 0);
-  const urgent = [...mine].filter(c => urgency(c) !== "green").sort((a, b) => daysToExpiry(a.end) - daysToExpiry(b.end)).slice(0, 6);
+  const urgent = [...mine].filter(c => urgency(c) !== "green").sort((a, b) => daysToDeadline(a) - daysToDeadline(b)).slice(0, 6);
   const isManager = currentUser.role === "manager";
   const pendingBO = isManager ? mine.filter(c => (plans[c.id] || []).some(s => s.status === "pending_bo")).length : 0;
   const suggestions = isManager ? getSuggestions(contracts, plans) : [];
@@ -54,7 +54,7 @@ export function Dashboard({ contracts, plans, currentUser, onNavigate, onNew }: 
           <Card style={{ padding: 18 }}>
             <CardTitle icon={<AlertTriangle size={16} />} action={<button onClick={() => onNavigate("list")} style={{ ...sans, display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 12.5, fontWeight: 650 }}>Tutti <ArrowRight size={14} /></button>}>Priorità immediate</CardTitle>
             {urgent.length === 0 && <p style={{ ...sans, color: C.muted, fontSize: 13, margin: 0 }}>Nessuna urgenza: tutto sotto controllo.</p>}
-            {urgent.map((c, i) => { const days = daysToExpiry(c.end); const u = urgency(c); return (
+            {urgent.map((c, i) => { const days = daysToDeadline(c); const u = urgency(c); return (
               <div key={c.id} onClick={() => onNavigate("detail", c)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") onNavigate("detail", c); }}
                 style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 8px", margin: "0 -8px", borderTop: i ? `1px solid ${C.borderLight}` : "none", cursor: "pointer", borderRadius: 8 }}
                 onMouseEnter={e => e.currentTarget.style.background = "#f7f9fc"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>

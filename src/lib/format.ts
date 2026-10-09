@@ -3,7 +3,11 @@ import type { Contract, Urgency } from "../types.ts";
 export const NOW = new Date();
 
 export function daysToExpiry(end: string) { return Math.ceil((new Date(end).getTime() - NOW.getTime()) / 864e5); }
-export function urgency(c: Contract): Urgency { if (c.ceased) return "gray"; const d = daysToExpiry(c.end); return d <= 30 ? "red" : d <= 90 ? "yellow" : "green"; }
+/** Data che conta per agire: la data limite di disdetta se c'è preavviso, altrimenti la scadenza. */
+export function keyDate(c: Pick<Contract, "end" | "noticeDate">) { return c.noticeDate || c.end; }
+export function daysToDeadline(c: Pick<Contract, "end" | "noticeDate">) { return daysToExpiry(keyDate(c)); }
+export function deadlineLabel(c: Pick<Contract, "noticeDate">) { return c.noticeDate ? "Disdetta entro" : "Scadenza"; }
+export function urgency(c: Contract): Urgency { if (c.ceased) return "gray"; const d = daysToDeadline(c); return d <= 30 ? "red" : d <= 90 ? "yellow" : "green"; }
 export function fmt(n: number, cur = "EUR") { try { return new Intl.NumberFormat("it-IT", { style: "currency", currency: cur, maximumFractionDigits: 0 }).format(n); } catch { return `${n} ${cur}`; } }
 /** Importi grandi in forma breve (8,23 Mio €), sotto il milione per esteso. */
 export function fmtCompact(n: number, cur = "EUR") {

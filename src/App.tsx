@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AppState, AuditEntry, CommitPayload, Contract, ContractData, NewUserInput, PlanStep, Role, User, View } from "./types.ts";
 import { api, ApiError } from "./api.ts";
 import { C, font, iStyle, ROLE_LABELS, sans, shadow } from "./theme.ts";
-import { fmtDate, tsNow } from "./lib/format.ts";
+import { fmtDate, keyDate, tsNow } from "./lib/format.ts";
 import { clearLocal, DEMO_PASSWORD, DEMO_USERS, demoState, loadLocal, saveLocal } from "./lib/demo.ts";
 import { makePlan, RENEWAL_BY_DECISION, reschedulePlan, stepTemplate } from "./lib/plan.ts";
 import { canCreateContract, canManageUsers, canViewTeam } from "./permissions.ts";
@@ -145,16 +145,16 @@ export default function App() {
       const id = editingContract.id;
       const audit = [entry("Contratto modificato", `Da ${currentUser.name}`)];
       let plan: PlanStep[] | undefined;
-      if (form.end !== editingContract.end) {
-        plan = reschedulePlan(plans[id] || [], id, form.end);
-        audit.push(entry("Piano ricalcolato", `Nuova scadenza: ${fmtDate(form.end)}`, "Sistema"));
+      if (keyDate(form) !== keyDate(editingContract)) {
+        plan = reschedulePlan(plans[id] || [], id, keyDate(form));
+        audit.push(entry("Piano ricalcolato", form.noticeDate ? `Nuovo termine di disdetta: ${fmtDate(form.noticeDate)} (scadenza ${fmtDate(form.end)})` : `Nuova scadenza: ${fmtDate(form.end)}`, "Sistema"));
       }
       if (!(await persist({ contract: { ...form, id }, plan, audit })).ok) return;
       setData(s => pushAudit({ ...s, contracts: s.contracts.map(c => c.id === id ? { ...c, ...form, owner: currentUser.role === "buyer" ? c.owner : form.owner } : c), plans: plan ? { ...s.plans, [id]: plan } : s.plans }, id, audit));
       showToast("💾 Aggiornato");
     } else {
       const audit = [entry("Contratto creato", `${form.supplier} · ${form.object}`)];
-      const plan = makePlan(0, form.end);
+      const plan = makePlan(0, keyDate(form));
       const res = await persist({ contract: form, plan, audit });
       if (!res.ok) return;
       const newId = res.contractId ?? Math.max(...contracts.map(c => c.id), 0) + 1;
@@ -206,7 +206,7 @@ export default function App() {
   const handleApplySuggestion = async (id: number, offset: number) => {
     const c = contracts.find(x => x.id === id);
     if (!c) return;
-    if (await updatePlan(id, makePlan(id, c.end, offset), [entry("Piano anticipato", `Anticipo di ${offset} giorni`, "Sistema")])) showToast(`⏩ Piano anticipato di ${offset} giorni`);
+    if (await updatePlan(id, makePlan(id, keyDate(c), offset), [entry("Piano anticipato", `Anticipo di ${offset} giorni`, "Sistema")])) showToast(`⏩ Piano anticipato di ${offset} giorni`);
   };
 
   const handleDelete = async () => {

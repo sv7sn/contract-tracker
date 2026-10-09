@@ -26,6 +26,8 @@ create table if not exists contracts (
   type text not null default '', notes text not null default '', ceased boolean not null default false, file_name text, file_path text
 );
 alter table contracts add column if not exists file_path text;
+alter table contracts add column if not exists notice_days integer;
+alter table contracts add column if not exists notice_date text not null default '';
 create table if not exists plan_steps (
   contract_id integer not null references contracts(id) on delete cascade, step_id text not null,
   scheduled_date text not null, original_date text not null, status text not null,
@@ -207,13 +209,20 @@ function cleanContract(c: unknown): ContractInput {
   if (r.start !== "" && r.start !== undefined && !isDate(r.start)) bad("Data di inizio non valida");
   if (r.boEmail && !isEmail(r.boEmail)) bad("Email Business Owner non valida");
   const value = Number(r.value);
+  // Preavviso: i giorni e la data limite si compilano insieme; con i soli giorni la data si calcola dalla scadenza.
+  const noticeDays = r.noticeDays === null || r.noticeDays === undefined || r.noticeDays === "" ? null : Number(r.noticeDays);
+  if (noticeDays !== null && (!Number.isInteger(noticeDays) || noticeDays < 1 || noticeDays > 1095)) bad("Giorni di preavviso non validi");
+  let noticeDate = r.noticeDate === undefined || r.noticeDate === null ? "" : r.noticeDate;
+  if (noticeDate !== "" && !isDate(noticeDate)) bad("Data limite di disdetta non valida");
+  if (noticeDays !== null && noticeDate === "") { const d = new Date(`${r.end as string}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - noticeDays); noticeDate = d.toISOString().slice(0, 10); }
+  if (noticeDate !== "" && (noticeDate as string) > (r.end as string)) bad("La data limite di disdetta deve precedere la scadenza");
   return {
     id: Number.isInteger(r.id) ? (r.id as number) : undefined,
     supplier: str(r.supplier, 200), object: str(r.object, 300), category: str(r.category, 100), country: str(r.country, 100),
     value: Number.isFinite(value) ? value : 0, currency: str(r.currency, 3) || "EUR",
     start: str(r.start, 10), end: r.end as string, owner: str(r.owner, 100), boEmail: str(r.boEmail, 200).toLowerCase(),
     renewal: str(r.renewal, 100) || "Non definito", type: str(r.type, 100), notes: str(r.notes, 4000),
-    ceased: r.ceased === true, fileName: nstr(r.fileName),
+    ceased: r.ceased === true, fileName: nstr(r.fileName), noticeDays, noticeDate: noticeDate as string,
     filePath: r.filePath == null ? null : typeof r.filePath === "string" && FILE_PATH_RE.test(r.filePath) ? r.filePath : bad("Documento non valido"),
   };
 }
@@ -360,6 +369,7 @@ function rowToContract(r: Record<string, unknown>): Contract {
     value: r.value as number, currency: r.currency as string, start: r.start_date as string, end: r.end_date as string, owner: r.owner as string,
     boEmail: r.bo_email as string, renewal: r.renewal as string, type: r.type as string, notes: r.notes as string, ceased: r.ceased as boolean,
     fileName: r.file_name as string | null, filePath: r.file_path as string | null,
+    noticeDays: r.notice_days as number | null, noticeDate: (r.notice_date as string) ?? "",
   };
 }
 function rowToStep(r: Record<string, unknown>): PlanStep {
@@ -404,16 +414,16 @@ async function fetchPlan(db: Queryable, id: number): Promise<PlanStep[]> {
 }
 
 async function upsertContract(db: Queryable, c: ContractInput): Promise<number> {
-  const cols = [c.supplier, c.object, c.category, c.country, c.value, c.currency, c.start, c.end, c.owner, c.boEmail, c.renewal, c.type, c.notes, c.ceased, c.fileName, c.filePath];
+  const cols = [c.supplier, c.object, c.category, c.country, c.value, c.currency, c.start, c.end, c.owner, c.boEmail, c.renewal, c.type, c.notes, c.ceased, c.fileName, c.filePath, c.noticeDays, c.noticeDate];
   if (c.id === undefined) {
     const r = await db.query(
-      `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) returning id`, cols);
+      `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path, notice_days, notice_date)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) returning id`, cols);
     return r.rows[0].id;
   }
   const r = await db.query(
     `update contracts set supplier=$1, object=$2, category=$3, country=$4, value=$5, currency=$6, start_date=$7, end_date=$8,
-       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15, file_path=$16 where id=$17`, [...cols, c.id]);
+       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15, file_path=$16, notice_days=$17, notice_date=$18 where id=$19`, [...cols, c.id]);
   if (!r.rowCount) throw new HttpError(404, "Contratto non trovato");
   return c.id;
 }

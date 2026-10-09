@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { Contract, Plans } from "../types.ts";
 import { C, CHART, colorFor, font, radius, sans, shadow, URGENCY_COLORS } from "../theme.ts";
-import { daysToExpiry, urgency } from "../lib/format.ts";
+import { daysToDeadline, urgency } from "../lib/format.ts";
 import { BO_COLORS, calcWorkload, getSuggestions, planProgress, WORKLOAD_THRESHOLD } from "../lib/plan.ts";
 import { Avatar, Card, DaysChip, Grid } from "../components/ui.tsx";
 import { ChartCard } from "../components/charts.tsx";
@@ -103,7 +103,7 @@ export function TeamView({ contracts, plans, onApplySuggestion }: { contracts: C
               <Card key={c.id} style={{ borderLeft: `4px solid ${URGENCY_COLORS[u]}`, borderRadius: radius.md, padding: 16 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
                   <div style={{ minWidth: 0 }}><div style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.supplier}</div><div style={{ ...sans, fontSize: 12.5, color: C.muted }}>{c.object}</div></div>
-                  <DaysChip days={daysToExpiry(c.end)} level={u} />
+                  <DaysChip days={daysToDeadline(c)} level={u} />
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0 6px" }}>
                   <div style={{ flex: 1, height: 6, background: C.borderLight, borderRadius: 3 }}><div style={{ height: "100%", width: `${prog}%`, background: bColor, borderRadius: 3 }} /></div>

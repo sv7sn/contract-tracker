@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { Contract, PlanStep, TaskSummary, User, View } from "../types.ts";
 import { portalApi } from "../api.ts";
 import { C, font, radius, sans } from "../theme.ts";
-import { daysToExpiry } from "../lib/format.ts";
+import { daysToDeadline } from "../lib/format.ts";
 import type { ModuleDef } from "../lib/modules.tsx";
 import { Card, Grid } from "../components/ui.tsx";
 import { ArrowRight } from "../components/icons.tsx";
@@ -39,8 +39,8 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
   const active = contracts.filter(c => !c.ceased);
   const metrics: Record<string, Metric[]> = {
     contracts: user.role === "bo" ? [] : [
-      { label: "In scadenza entro 30 giorni", value: active.filter(c => daysToExpiry(c.end) >= 0 && daysToExpiry(c.end) <= 30).length, tone: "bad" },
-      { label: "In scadenza entro 90 giorni", value: active.filter(c => daysToExpiry(c.end) > 30 && daysToExpiry(c.end) <= 90).length, tone: "warn" },
+      { label: "In scadenza entro 30 giorni", value: active.filter(c => daysToDeadline(c) >= 0 && daysToDeadline(c) <= 30).length, tone: "bad" },
+      { label: "In scadenza entro 90 giorni", value: active.filter(c => daysToDeadline(c) > 30 && daysToDeadline(c) <= 90).length, tone: "warn" },
       { label: "Contratti attivi", value: active.length },
     ],
     vendors: [
