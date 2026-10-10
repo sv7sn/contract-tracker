@@ -53,7 +53,11 @@ export function BudgetView({ currentUser, notify, onSessionExpired }: { currentU
   const upload = async (f: File | undefined) => {
     if (!f) return;
     setUploading(true);
-    try { const ver = await importBudgetFile(f, upYear, label); notify(`${ver.label} caricato: ${ver.lines} internal order, ${fmt(ver.total)}`); setLabel(""); setYear(upYear); await load(upYear); }
+    try {
+      const r = await importBudgetFile(f, upYear, label);
+      const parts = [r.created.length ? `nuove: ${r.created.map(x => x.label).join(", ")}` : "", r.updated.length ? `aggiornate: ${r.updated.map(x => x.label).join(", ")}` : ""].filter(Boolean).join(" · ");
+      notify(`Master Plan ${r.year} caricato (${parts})`); setLabel(""); setYear(r.year); await load(r.year);
+    }
     catch (err) { notify(`⚠️ ${fail(err)}`); }
     setUploading(false); if (fileRef.current) fileRef.current.value = "";
   };
@@ -132,7 +136,7 @@ export function BudgetView({ currentUser, notify, onSessionExpired }: { currentU
       {v.canUpload && (
         <Card>
           <CardTitle icon={<Upload size={16} />} action={<a href={budgetTemplateUrl} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6 }}><Download size={14} />Modello</a>}>Carica il Master Plan</CardTitle>
-          <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-6px 0 12px", lineHeight: 1.55 }}>File Excel (.xlsx) o CSV con almeno le colonne <b>Internal order</b> e <b>Budget</b> (facoltative: Descrizione, Funzione, Centro di costo, Conto, Categoria). La prima versione dell'anno resta il riferimento per il saving; le revisioni successive aggiornano il budget in uso.</p>
+          <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-6px 0 12px", lineHeight: 1.55 }}>Il file di Finance così com'è (Excel .xlsx o CSV): <b>Row Labels</b> (internal order), CDC, CDC NAME, NAME, CATEGORIA e una colonna per versione — <b>MP26</b>, R3, R5, R7… Ogni colonna diventa una versione: MP26 resta il riferimento per il saving, l'ultima revisione è il budget in uso. Ricaricando il file con una revisione in più si aggiunge solo quella. L'anno si legge dalla colonna MP; anno e nome qui sotto servono solo per file con una sola colonna "Budget".</p>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
             <Field label="Anno" htmlFor="b-year"><select id="b-year" value={upYear} onChange={e => setUpYear(Number(e.target.value))} style={{ ...iStyle, width: 120 }}>{[v.currentYear - 1, v.currentYear, v.currentYear + 1, v.currentYear + 2].map(y => <option key={y} value={y}>{y}</option>)}</select></Field>
             <Field label="Nome della versione (facoltativo)" htmlFor="b-label"><input id="b-label" value={label} onChange={e => setLabel(e.target.value)} placeholder={`Es. MP${String(upYear).slice(2)} revisione giugno`} style={{ ...iStyle, width: 260 }} /></Field>

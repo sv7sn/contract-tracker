@@ -238,6 +238,7 @@ export interface Kpis {
 }
 
 /** Master Plan (budget annuale per internal order): versioni caricate da Finance. La prima versione dell'anno è il riferimento per il saving. */
+export interface BudgetImport { year: number; created: MpVersion[]; updated: MpVersion[] }
 export interface MpVersion { id: number; year: number; version: number; label: string; fileName: string; uploadedBy: string; uploadedAt: string; lines: number; total: number }
 export interface BudgetLine {
   io: string; description: string; function: string; costCenter: string; glAccount: string; category: string;
