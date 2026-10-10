@@ -9,7 +9,7 @@ import { isXlsx, parseCsvRows, parseXlsx } from "./_xlsx.js";
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const bad = (msg: string): never => { throw new HttpError(400, msg); };
 const r2 = (n: number) => Math.round(n * 100) / 100;
-export const canSeeBudget = (u: User) => u.role === "manager" || u.role === "buyer" || u.role === "finance";
+export const canSeeBudget = (u: User) => u.role === "manager" || u.role === "buyer" || u.role === "finance" || u.role === "viewer";
 export const canUploadBudget = (u: User) => u.role === "manager" || u.role === "finance";
 
 // ─── Lettura del file di Finance ─────────────────────────────

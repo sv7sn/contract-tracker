@@ -184,6 +184,7 @@ export async function loadBudgetDemo(user: User): Promise<{ years: number[]; tas
       if (notice) { const d = new Date(`${end}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - notice); noticeDate = d.toISOString().slice(0, 10); }
       const cid = (await tx.query(`insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, internal_order, supplier_id, notice_days, notice_date)
         values ($1,$2,'Simulazione','Italia',$3,'EUR',$4,$5,$6,'','Non definito','Servizi',$7,$8,$9,$10,$11) returning id`, [supplier, object, value, start, end, user.name, SIM_TAG, io, supplierId[supplier] ?? null, notice, noticeDate])).rows[0].id as number;
+      await tx.query("update contracts set owner_id = (select u.id from users u where lower(u.name) = lower(contracts.owner) and u.role in ('manager','buyer')) where id = $1", [cid]);
       for (const s of makePlan(cid, noticeDate || end))
         await tx.query(`insert into plan_steps (contract_id, step_id, scheduled_date, original_date, status, completed_at, completed_by, bo_decision, bo_notes, bo_responded_at, modified, modified_reason) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
           [cid, s.stepId, s.scheduledDate, s.originalDate, s.status, s.completedAt, s.completedBy, s.boDecision, s.boNotes, s.boRespondedAt, s.modified, s.modifiedReason]);

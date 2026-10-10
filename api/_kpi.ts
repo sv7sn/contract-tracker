@@ -14,7 +14,7 @@ const CYCLE = "extract(epoch from (t.done_at - (t.meta->>'releaseDate')::date)) 
 const KEY_DATE = "coalesce(nullif(c.notice_date, ''), c.end_date)::date";
 
 export async function computeKpis(user: User): Promise<Kpis> {
-  if (user.role !== "manager") throw new HttpError(403, "Gli indicatori sono riservati al Manager");
+  if (user.role !== "manager" && user.role !== "viewer") throw new HttpError(403, "Gli indicatori sono riservati al Manager e a Controlling/CFO");
   const db = getPool();
   const { slaDays, sourcingThreshold: th } = await loadRdaSettings(db);
   const q = async (sql: string, params: unknown[] = []) => (await db.query(sql, params)).rows;

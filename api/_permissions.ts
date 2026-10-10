@@ -2,17 +2,21 @@
 // Resta dentro api/ perché Vercel compila questi file insieme alle funzioni (vedi i commenti in README).
 import type { Contract, User } from "../src/types.ts";
 
-type Subject = Pick<User, "role" | "name" | "email">;
+type Subject = Pick<User, "role" | "name" | "email"> & { id?: number };
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 export const isManager = (u: Subject) => u.role === "manager";
 
-export const canViewContract = (u: Subject, c: Pick<Contract, "owner" | "boEmail">) =>
-  u.role === "manager" || (u.role === "buyer" && same(c.owner, u.name)) || (u.role === "bo" && !!c.boEmail && same(c.boEmail, u.email));
+/** Il contratto è del buyer: per utente collegato (ownerId) e, per i contratti più vecchi non ancora collegati, per nome. */
+const isOwner = (u: Subject, c: Pick<Contract, "owner" | "ownerId">) => (c.ownerId != null && u.id !== undefined ? c.ownerId === u.id : same(c.owner, u.name));
+
+/** Controlling / CFO (viewer) vedono tutti i contratti ma non modificano nulla. */
+export const canViewContract = (u: Subject, c: Pick<Contract, "owner" | "ownerId" | "boEmail">) =>
+  u.role === "manager" || u.role === "viewer" || (u.role === "buyer" && isOwner(u, c)) || (u.role === "bo" && !!c.boEmail && same(c.boEmail, u.email));
 
 /** Modificare dati, piano e stato di un contratto. */
-export const canEditContract = (u: Subject, c: Pick<Contract, "owner">) =>
-  u.role === "manager" || (u.role === "buyer" && same(c.owner, u.name));
+export const canEditContract = (u: Subject, c: Pick<Contract, "owner" | "ownerId">) =>
+  u.role === "manager" || (u.role === "buyer" && isOwner(u, c));
 
 export const canCreateContract = (u: Subject) => u.role === "manager" || u.role === "buyer";
 export const canDeleteContract = (u: Subject) => u.role === "manager";
