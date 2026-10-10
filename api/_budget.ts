@@ -102,6 +102,8 @@ export async function importBudget(user: User, yearIn: number, label: string, fi
   const year = parsed.year ?? yearIn;
   if (!Number.isInteger(year) || year < 2020 || year > 2100) bad("Anno non valido");
   const multi = parsed.versions.some(v => v.label);
+  if (fileName !== "simulazione-master-plan.csv" && (await getPool().query("select 1 from mp_versions where year = $1 and file_name = 'simulazione-master-plan.csv' limit 1", [year])).rows.length)
+    throw new HttpError(409, `Per il ${year} è caricata la simulazione: eliminala (pulsante in alto) prima di caricare il Master Plan vero`);
   return inTransaction(async db => {
     const out: BudgetImport = { year, created: [], updated: [] };
     for (const pv of parsed.versions) {
@@ -217,7 +219,8 @@ export async function budgetView(user: User, yearIn?: number): Promise<BudgetVie
   }
   // Prima le righe del Master Plan (per funzione), poi gli internal order impegnati ma non a budget.
   const lines = [...map.values()].sort((a, b) => Number(a.current === null) - Number(b.current === null) || (a.function || "~").localeCompare(b.function || "~") || a.io.localeCompare(b.io));
-  return { year, currentYear, years, versions, baselineId: base?.id ?? null, currentId: cur?.id ?? null, lines, unassigned: unassigned.sort((a, b) => b.value - a.value), canUpload: canUploadBudget(user) };
+  const demo = (await db.query("select 1 from mp_versions where file_name = 'simulazione-master-plan.csv' limit 1")).rows.length > 0;
+  return { demo, year, currentYear, years, versions, baselineId: base?.id ?? null, currentId: cur?.id ?? null, lines, unassigned: unassigned.sort((a, b) => b.value - a.value), canUpload: canUploadBudget(user) };
 }
 
 /** Dettaglio di un internal order: budget e pratiche/contratti che lo impegnano. */

@@ -75,6 +75,8 @@ export const portalApi = {
   demoSupplier: () => post<{ id: number; name: string; email: string; password: string }>(portal("vendor-demo"), {}),
   budget: (year?: number) => request<BudgetView>(portal("budget", year ? `&year=${year}` : "")),
   budgetIo: (io: string, year?: number) => request<{ line: BudgetLine | null; items: BudgetItem[]; year: number }>(portal("budget-io", `&io=${encodeURIComponent(io)}${year ? `&year=${year}` : ""}`)),
+  loadBudgetDemo: () => post<{ years: number[]; tasks: number; contracts: number }>(portal("budget-demo"), {}),
+  deleteBudgetDemo: () => request<{ deleted: number }>(portal("budget-demo"), { method: "DELETE" }),
   deleteBudgetVersion: (id: number) => request<{ ok: true }>(portal("budget-version", `&id=${id}`), { method: "DELETE" }),
   configAudit: () => request<{ entries: ConfigAuditEntry[] }>(portal("config-audit")).then(r => r.entries),
   anonymize: (id: number, reason: string) => post<{ supplier: Supplier }>(portal("vendor-anonymize", `&id=${id}`), { reason }).then(r => r.supplier),
