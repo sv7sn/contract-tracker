@@ -9,6 +9,7 @@ import { listConfigAudit, logConfigChange } from "./_audit.js";
 import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
 import { computeKpis } from "./_kpi.js";
 import { spendLines, spendView } from "./_spend.js";
+import { addRating, deleteRating, ratingSummary, supplierScorecard } from "./_rating.js";
 import { closeRfq, createRfq, listMyRfqs, listTaskRfqs, submitQuote, applyRfq } from "./_rfq.js";
 import { deleteCategory, listCategories, saveCategory, seedCategoriesFromMp, setCategoryMap } from "./_categories.js";
 import { createDemoSupplier } from "./_demo.js";
@@ -231,6 +232,10 @@ async function handle(request: Request): Promise<Response> {
       await runExternalChecks(getPool(), id);
       return json({ supplier: await getVendor(user, id) });
     }
+    if (op === "vendor-rating" && method === "GET") return json({ scorecard: await supplierScorecard(user, idOf(url)) });
+    if (op === "vendor-rating-add" && method === "POST") return json({ scorecard: await addRating(user, idOf(url), (await readJson(request)) as Record<string, unknown>) }, { status: 201 });
+    if (op === "vendor-rating" && method === "DELETE") return json({ scorecard: await deleteRating(user, idOf(url)) });
+    if (op === "vendor-ratings" && method === "GET") return json({ ratings: await ratingSummary(user) });
     if (op === "vendor" && method === "GET") return json({ supplier: await getVendor(user, idOf(url)) });
     if (op === "config" && method === "GET") return json({ config: await loadConfig() });
     if (op === "config-save" && method === "POST") {

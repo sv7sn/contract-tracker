@@ -298,3 +298,13 @@ export interface RfqInvite { supplierId: number; supplierName: string; sapCode: 
 export interface Rfq { id: number; taskId: number; title: string; description: string; deadline: string; status: "open" | "closed"; createdBy: string; createdAt: string; invites: RfqInvite[] }
 /** Vista del fornitore: solo la propria offerta, mai quelle degli altri. */
 export interface SupplierRfq { id: number; title: string; description: string; deadline: string; status: "open" | "closed"; myQuote: { amount: number | null; notes: string; quotedAt: string | null; declined: boolean } }
+
+// ─── Valutazione dei fornitori ───────────────────────────────
+export type RatingCriterion = "quality" | "delivery" | "service" | "price";
+export interface SupplierRating { id: number; raterName: string; quality: number; delivery: number; service: number; price: number; comment: string; po: string; createdAt: string; mine: boolean }
+export interface Scorecard {
+  count: number; overall: number | null; criteria: Record<RatingCriterion, number | null>; ratings: SupplierRating[];
+  /** Dati che il software già conosce: risposte alle richieste di offerta e ordini degli ultimi 12 mesi. */
+  rfq: { invited: number; answered: number; declined: number };
+  spend12m: number; pos12m: number;
+}

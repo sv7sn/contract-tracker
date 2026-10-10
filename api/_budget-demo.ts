@@ -128,6 +128,9 @@ export async function loadBudgetDemo(user: User): Promise<{ years: number[]; tas
   // Fornitori registrati e in regola (con documenti e accesso al portale).
   const supplierId: Record<string, number> = {};
   for (const [name, sapCode] of SUPPLIERS) supplierId[name] = (await createDemoSupplier(user, { name, sapCode })).id;
+  // Qualche valutazione di prova (si eliminano con i fornitori).
+  const RATINGS: [string, number, number, number, number, string][] = [["AgroLab Srl", 5, 4, 5, 3, "Analisi affidabili"], ["AgroLab Srl", 4, 4, 4, 4, ""], ["Software Point Srl", 4, 5, 4, 3, ""], ["Pulito Spa", 3, 2, 3, 4, "Ritardi frequenti nelle pulizie del magazzino"], ["Expo Service Srl", 5, 5, 4, 3, "Allestimento fiera impeccabile"]];
+  for (const [name, q, d, sv, pr, comment] of RATINGS) await db.query("insert into supplier_ratings (supplier_id, rater_id, rater_name, quality, delivery, service, price, comment) values ($1,$2,$3,$4,$5,$6,$7,$8)", [supplierId[name], user.id, "Buyer di prova", q, d, sv, pr, comment]);
   const buyers = (await db.query("select id from users where active and role in ('buyer','manager') order by role = 'buyer' desc, id")).rows.map(r => r.id as number);
   const who = (i: number) => buyers[i % buyers.length] ?? user.id;
   let tasks = 0;
