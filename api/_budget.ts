@@ -15,49 +15,71 @@ export const canUploadBudget = (u: User) => u.role === "manager" || u.role === "
 // ─── Lettura del file di Finance ─────────────────────────────
 const norm = (s: string | null | undefined) => (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 const HEADERS: Record<string, string[]> = {
-  io: ["internalorder", "io", "ordineinterno", "order", "ordine", "codiceio", "internalordercode", "ordernumber"],
-  amount: ["budget", "importo", "amount", "valore", "value", "totale", "total", "budgetannuale", "importobudget", "mp", "budgeteur", "importoeur"],
-  description: ["descrizione", "description", "desc", "oggetto", "descrizioneio", "iodescription"],
-  function: ["funzione", "function", "area", "dipartimento", "department", "direzione", "ente"],
+  io: ["internalorder", "io", "ordineinterno", "order", "ordine", "codiceio", "internalordercode", "ordernumber", "rowlabels", "etichettediriga"],
+  amount: ["budget", "importo", "amount", "valore", "value", "totale", "total", "budgetannuale", "importobudget", "budgeteur", "importoeur"],
+  description: ["descrizione", "description", "desc", "oggetto", "descrizioneio", "iodescription", "name", "nome"],
+  function: ["funzione", "function", "area", "dipartimento", "department", "direzione", "ente", "cdcname", "costcentername", "nomecdc"],
   costCenter: ["centrodicosto", "costcenter", "cdc", "costctr", "centrocosto"],
   glAccount: ["conto", "glaccount", "gl", "contocontabile", "account", "glacct", "natura"],
   category: ["categoria", "category", "famiglia", "categoriamerceologica"],
 };
-/** Importi italiani o internazionali: "1.234,56", "1,234.56", "1234.56", "€ 1.000". */
+/** Colonne che sono versioni del Master Plan: "MP26" (prima versione) e le revisioni "R3", "R5", "Rev 2", "FC1"… */
+const VERSION_COL = /^(mp\d{2}(\d{2})?|r\d{1,2}|rev\d{1,2}|fc\d{0,2}|forecast\d{0,2})$/;
+/** Importi italiani o internazionali: "1.234,56", "1,234.56", "61,000", "1234.56", "€ 1.000". */
 export function parseAmount(v: string | null): number | null {
   if (!v) return null;
   let s = v.replace(/[€\s]/g, "").replace(/^EUR|EUR$/i, "");
-  if (!s) return null;
+  if (!s || s === "-") return null;
   const neg = /^\(.*\)$/.test(s) || s.startsWith("-"); s = s.replace(/[()-]/g, "");
   if (s.includes(",") && s.includes(".")) s = s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
-  else if (s.includes(",")) s = /,\d{3}$/.test(s) && s.split(",").length > 2 ? s.replace(/,/g, "") : s.replace(",", ".");
+  else if (/^\d{1,3}(,\d{3})+$/.test(s)) s = s.replace(/,/g, ""); // 61,000 = sessantunomila (separatore delle migliaia)
+  else if (s.includes(",")) s = s.replace(",", ".");
   else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
   const n = Number(s);
   return Number.isFinite(n) ? (neg ? -n : n) : null;
 }
 export interface ParsedLine { io: string; description: string; function: string; costCenter: string; glAccount: string; category: string; amount: number }
-/** Trova l'intestazione (entro le prime 20 righe) e legge le righe; più righe con lo stesso internal order si sommano. */
-export function parseBudgetRows(rows: (string | null)[][]): ParsedLine[] {
-  let h = -1, cols: Record<string, number> = {};
+export interface ParsedBudget { versions: { label: string; lines: ParsedLine[] }[]; year: number | null }
+const TOTAL_ROW = /^(totale|total|grandtotal|totalegenerale|totalecomplessivo)/;
+/**
+ * Trova l'intestazione (entro le prime 20 righe) e legge le righe; più righe con lo stesso internal order si sommano.
+ * Se ci sono colonne di versione (MP26, R3, R5…) ognuna diventa una versione; altrimenti si usa la colonna "Budget".
+ */
+export function parseBudget(rows: (string | null)[][]): ParsedBudget {
+  let h = -1, cols: Record<string, number> = {}, vcols: { label: string; i: number }[] = [];
   for (let i = 0; i < Math.min(rows.length, 20) && h < 0; i++) {
-    const c: Record<string, number> = {};
-    rows[i].forEach((cell, j) => { const k = norm(cell); for (const [key, names] of Object.entries(HEADERS)) if (c[key] === undefined && names.includes(k)) c[key] = j; });
-    if (c.io !== undefined && c.amount !== undefined) { h = i; cols = c; }
+    const c: Record<string, number> = {}, vc: { label: string; i: number }[] = [];
+    rows[i].forEach((cell, j) => {
+      const k = norm(cell);
+      if (VERSION_COL.test(k)) { vc.push({ label: (cell ?? "").trim().toUpperCase().replace(/\s+/g, " "), i: j }); return; }
+      for (const [key, names] of Object.entries(HEADERS)) if (c[key] === undefined && names.includes(k)) c[key] = j;
+    });
+    if (c.io !== undefined && (vc.length || c.amount !== undefined)) { h = i; cols = c; vcols = vc; }
   }
-  if (h < 0) bad("Non trovo le colonne: servono almeno \"Internal order\" e \"Budget\" (o \"Importo\"). Scarica il modello per vedere il formato");
-  const get = (r: (string | null)[], k: string) => (cols[k] === undefined ? "" : (r[cols[k]] ?? "").trim());
-  const by = new Map<string, ParsedLine>();
+  if (h < 0) bad("Non trovo le colonne: servono l'internal order (\"Internal order\" o \"Row Labels\") e il budget (\"Budget\", oppure le colonne MP26, R3, R5…). Scarica il modello per vedere il formato");
+  const get = (r: (string | null)[], i: number | undefined) => (i === undefined ? "" : (r[i] ?? "").trim());
+  const amountCols = vcols.length ? vcols : [{ label: "", i: cols.amount }];
+  const by = amountCols.map(() => new Map<string, ParsedLine>());
   for (const r of rows.slice(h + 1)) {
-    const io = get(r, "io").replace(/\s+/g, "");
-    if (!io || /^(totale|total)/i.test(io)) continue;
-    const amount = parseAmount(get(r, "amount"));
-    if (amount === null) continue;
-    const cur = by.get(io);
-    if (cur) cur.amount = r2(cur.amount + amount);
-    else by.set(io, { io: io.slice(0, 40), description: get(r, "description").slice(0, 300), function: get(r, "function").slice(0, 120), costCenter: get(r, "costCenter").slice(0, 40), glAccount: get(r, "glAccount").slice(0, 40), category: get(r, "category").slice(0, 120), amount: r2(amount) });
+    const io = get(r, cols.io).replace(/\s+/g, "");
+    if (!io || TOTAL_ROW.test(norm(io))) continue;
+    const base = { io: io.slice(0, 40), description: get(r, cols.description).slice(0, 300), function: get(r, cols.function).slice(0, 120), costCenter: get(r, cols.costCenter).slice(0, 40), glAccount: get(r, cols.glAccount).slice(0, 40), category: get(r, cols.category).slice(0, 120) };
+    amountCols.forEach((c, k) => {
+      const amount = parseAmount(get(r, c.i));
+      if (amount === null) return;
+      const cur = by[k].get(io);
+      if (cur) cur.amount = r2(cur.amount + amount); else by[k].set(io, { ...base, amount: r2(amount) });
+    });
   }
-  return [...by.values()];
+  const mp = vcols.find(v => /^MP\d/.test(v.label));
+  const yy = mp ? Number(mp.label.replace(/\D/g, "")) : NaN;
+  return {
+    versions: amountCols.map((c, k) => ({ label: c.label, lines: [...by[k].values()] })).filter(v => v.lines.length),
+    year: Number.isFinite(yy) ? (yy < 100 ? 2000 + yy : yy) : null,
+  };
 }
+/** Compatibilità: righe della sola colonna di budget (o della prima versione). */
+export function parseBudgetRows(rows: (string | null)[][]): ParsedLine[] { return parseBudget(rows).versions[0]?.lines ?? []; }
 function readRows(data: Uint8Array): (string | null)[][] {
   if (isXlsx(data)) return parseXlsx(data);
   const head = new TextDecoder("utf-8").decode(data.subarray(0, 400));
@@ -66,25 +88,45 @@ function readRows(data: Uint8Array): (string | null)[][] {
   return parseCsvRows(new TextDecoder("utf-8").decode(data).replace(/^\uFEFF/, ""));
 }
 
-export async function importBudget(user: User, year: number, label: string, fileName: string, data: Uint8Array): Promise<MpVersion> {
+export interface BudgetImport { year: number; created: MpVersion[]; updated: MpVersion[] }
+/**
+ * Carica il file di Finance. Con le colonne di versione (MP26, R3, R5…) ogni colonna è una versione: quelle già presenti
+ * si aggiornano, le nuove si aggiungono in ordine. Con una sola colonna "Budget" si aggiunge una nuova versione.
+ */
+export async function importBudget(user: User, yearIn: number, label: string, fileName: string, data: Uint8Array): Promise<BudgetImport> {
   if (!canUploadBudget(user)) throw new HttpError(403, "Il Master Plan lo caricano Manager e Finance");
-  if (!Number.isInteger(year) || year < 2020 || year > 2100) bad("Anno non valido");
   if (!data.length) bad("Il file è vuoto");
   if (data.length > 8 * 1024 * 1024) bad("Il file è troppo grande");
-  const lines = parseBudgetRows(readRows(data));
-  if (!lines.length) bad("Nessuna riga di budget trovata nel file");
+  const parsed = parseBudget(readRows(data));
+  if (!parsed.versions.length) bad("Nessuna riga di budget trovata nel file");
+  const year = parsed.year ?? yearIn;
+  if (!Number.isInteger(year) || year < 2020 || year > 2100) bad("Anno non valido");
+  const multi = parsed.versions.some(v => v.label);
   return inTransaction(async db => {
-    const n = ((await db.query("select coalesce(max(version), 0)::int as n from mp_versions where year = $1", [year])).rows[0].n as number) + 1;
-    const lab = label.trim().slice(0, 60) || `MP${String(year).slice(2)} v${n}`;
-    const v = (await db.query("insert into mp_versions (year, version, label, file_name, uploaded_by) values ($1,$2,$3,$4,$5) returning *", [year, n, lab, fileName.slice(0, 200), user.name])).rows[0];
-    for (let i = 0; i < lines.length; i += 1000) {
-      const p = lines.slice(i, i + 1000);
-      await db.query(`insert into mp_lines (version_id, io, description, function, cost_center, gl_account, category, amount)
-        select $1, * from unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::numeric[])`,
-        [v.id, p.map(l => l.io), p.map(l => l.description), p.map(l => l.function), p.map(l => l.costCenter), p.map(l => l.glAccount), p.map(l => l.category), p.map(l => l.amount)]);
+    const out: BudgetImport = { year, created: [], updated: [] };
+    for (const pv of parsed.versions) {
+      const lab = (multi ? pv.label : label.trim()).slice(0, 60);
+      const existing = multi ? (await db.query("select * from mp_versions where year = $1 and upper(label) = upper($2)", [year, lab])).rows[0] : undefined;
+      let v: Row;
+      if (existing) {
+        v = (await db.query("update mp_versions set file_name = $2, uploaded_by = $3, uploaded_at = now() where id = $1 returning *", [existing.id, fileName.slice(0, 200), user.name])).rows[0];
+        await db.query("delete from mp_lines where version_id = $1", [v.id]);
+      } else {
+        const n = ((await db.query("select coalesce(max(version), 0)::int as n from mp_versions where year = $1", [year])).rows[0].n as number) + 1;
+        v = (await db.query("insert into mp_versions (year, version, label, file_name, uploaded_by) values ($1,$2,$3,$4,$5) returning *", [year, n, lab || `MP${String(year).slice(2)} v${n}`, fileName.slice(0, 200), user.name])).rows[0];
+      }
+      for (let i = 0; i < pv.lines.length; i += 1000) {
+        const p = pv.lines.slice(i, i + 1000);
+        await db.query(`insert into mp_lines (version_id, io, description, function, cost_center, gl_account, category, amount)
+          select $1, * from unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::numeric[])`,
+          [v.id, p.map(l => l.io), p.map(l => l.description), p.map(l => l.function), p.map(l => l.costCenter), p.map(l => l.glAccount), p.map(l => l.category), p.map(l => l.amount)]);
+      }
+      const total = r2(pv.lines.reduce((a, l) => a + l.amount, 0));
+      const info: MpVersion = { id: v.id, year, version: v.version, label: v.label, fileName: v.file_name, uploadedBy: user.name, uploadedAt: new Date(v.uploaded_at).toISOString(), lines: pv.lines.length, total };
+      (existing ? out.updated : out.created).push(info);
+      await db.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'budget',$2,$3,$4)", [user.name, existing ? "update" : "create", v.label, `${existing ? "Aggiornata" : "Caricata"} la versione ${v.label} del Master Plan ${year} (n. ${v.version}): ${pv.lines.length} internal order, totale ${Math.round(total).toLocaleString("it-IT")} €`]);
     }
-    await db.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'budget','create',$2,$3)", [user.name, lab, `Caricata versione ${n} del Master Plan ${year}: ${lines.length} internal order, totale ${Math.round(lines.reduce((a, l) => a + l.amount, 0)).toLocaleString("it-IT")} €`]);
-    return { id: v.id, year, version: n, label: lab, fileName: v.file_name, uploadedBy: user.name, uploadedAt: new Date(v.uploaded_at).toISOString(), lines: lines.length, total: r2(lines.reduce((a, l) => a + l.amount, 0)) };
+    return out;
   });
 }
 
@@ -194,4 +236,4 @@ export async function budgetIo(user: User, io: string, yearIn?: number): Promise
 }
 
 /** Modello da compilare (CSV con ";", si apre con Excel). */
-export const BUDGET_TEMPLATE = "\uFEFFInternal order;Descrizione;Funzione;Centro di costo;Conto;Categoria;Budget\n520100000075;Manutenzione software MES;ICT;HQ21PRWEB;N14219;Software;120000\n";
+export const BUDGET_TEMPLATE = "\uFEFFRow Labels;CDC;CDC NAME;NAME;CATEGORIA;MP26;R3;R5\nHQ2505245001;5245;R&D Agro;MARTANI - CONTRATTO;OTHERS;61000;61000;58000\n";

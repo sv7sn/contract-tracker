@@ -195,7 +195,7 @@ async function handle(request: Request): Promise<Response> {
     if (op === "budget-io" && method === "GET") return json(await budgetIo(user, url.searchParams.get("io") ?? "", Number(url.searchParams.get("year")) || undefined));
     if (op === "budget-import" && method === "POST") {
       const name = decodeURIComponent(request.headers.get("x-file-name") ?? "") || "master-plan.xlsx";
-      return json({ version: await importBudget(user, Number(url.searchParams.get("year")), url.searchParams.get("label") ?? "", name, new Uint8Array(await request.arrayBuffer())) }, { status: 201 });
+      return json(await importBudget(user, Number(url.searchParams.get("year")), url.searchParams.get("label") ?? "", name, new Uint8Array(await request.arrayBuffer())), { status: 201 });
     }
     if (op === "budget-version" && method === "DELETE") { await deleteBudgetVersion(user, idOf(url)); return json({ ok: true }); }
     if (op === "budget-template" && method === "GET") return new Response(BUDGET_TEMPLATE, { headers: { ...noStore, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="modello-master-plan.csv"' } });

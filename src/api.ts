@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type Kpis, type MpVersion, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type Kpis, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -134,9 +134,9 @@ export async function importSapFile(file: File, force = false): Promise<ImportRe
 }
 
 /** Carica una versione del Master Plan (Excel .xlsx, CSV o XML di Excel) per l'anno indicato. */
-export async function importBudgetFile(file: File, year: number, label: string): Promise<MpVersion> {
+export async function importBudgetFile(file: File, year: number, label: string): Promise<BudgetImport> {
   const res = await fetch(`/api/portal?op=budget-import&year=${year}&label=${encodeURIComponent(label)}`, { method: "POST", headers: { "x-file-name": encodeURIComponent(file.name) }, body: file });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, data?.error ?? `Errore ${res.status}`, data);
-  return (data as { version: MpVersion }).version;
+  return data as BudgetImport;
 }
