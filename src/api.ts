@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type Kpis, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type Kpis, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -77,6 +77,8 @@ export const portalApi = {
   addRating: (id: number, input: { quality: number; delivery: number; service: number; price: number; comment: string; po: string }) => post<{ scorecard: Scorecard }>(portal("vendor-rating-add", `&id=${id}`), input).then(r => r.scorecard),
   deleteRating: (id: number) => request<{ scorecard: Scorecard }>(portal("vendor-rating", `&id=${id}`), { method: "DELETE" }).then(r => r.scorecard),
   ratings: () => request<{ ratings: Record<number, { overall: number; count: number }> }>(portal("vendor-ratings")).then(r => r.ratings),
+  resetPreview: () => request<{ counts: ResetPreview }>(portal("reset-preview")).then(r => r.counts),
+  resetRun: (areas: ResetArea[]) => post<{ deleted: Partial<Record<ResetArea, number>> }>(portal("reset-run"), { areas, confirm: "ELIMINA" }).then(r => r.deleted),
   myWork: () => request<{ items: WorkItem[] }>(portal("my-work")).then(r => r.items),
   rfqs: (taskId: number) => request<{ rfqs: Rfq[] }>(portal("rfqs", `&taskId=${taskId}`)).then(r => r.rfqs),
   createRfq: (input: { taskId: number; title: string; description: string; deadline: string; supplierIds: number[]; specName?: string; specPath?: string }) => post<{ rfqs: Rfq[] }>(portal("rfq-create"), input).then(r => r.rfqs),

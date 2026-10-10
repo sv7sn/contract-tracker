@@ -317,3 +317,7 @@ export interface WorkItem {
   days: number | null;
   target: { view: View; taskId?: number; vendorId?: number };
 }
+
+// ─── Pulizia dei dati di prova ───────────────────────────────
+export type ResetArea = "tasks" | "contracts" | "suppliers_test" | "suppliers_all" | "sap" | "budget" | "categories";
+export type ResetPreview = Record<ResetArea, number>;
