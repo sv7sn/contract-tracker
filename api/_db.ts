@@ -58,6 +58,7 @@ create table if not exists users (
 create unique index if not exists users_email_key on users (lower(email));
 alter table users add column if not exists sap_user text not null default '';
 alter table contracts add column if not exists owner_id integer references users(id) on delete set null;
+alter table contracts add column if not exists bo_user_id integer references users(id) on delete set null;
 -- Messaggi tra Business Owner e buyer su un contratto (richieste di chiarimento e risposte).
 create table if not exists bo_messages (
   id serial primary key, contract_id integer not null references contracts(id) on delete cascade, author_id integer references users(id) on delete set null,
@@ -120,6 +121,8 @@ end $$;
 -- Il nome è unico solo tra il personale interno (i fornitori possono avere nomi uguali o simili).
 drop index if exists users_name_key;
 create unique index if not exists users_name_staff_key on users (lower(name)) where role <> 'supplier';
+-- Business Owner dei contratti già presenti: si collega all'utente con la stessa email.
+update contracts c set bo_user_id = u.id from users u where c.bo_user_id is null and c.bo_email <> '' and lower(u.email) = lower(c.bo_email) and u.role = 'bo';
 -- Contratti già presenti: il responsabile si collega all'utente con lo stesso nome.
 update contracts c set owner_id = u.id from users u where c.owner_id is null and lower(u.name) = lower(c.owner) and u.role in ('manager','buyer');
 create table if not exists doc_types (
@@ -330,7 +333,7 @@ function cleanContract(c: unknown): ContractInput {
     id: Number.isInteger(r.id) ? (r.id as number) : undefined,
     supplier: str(r.supplier, 200), object: str(r.object, 300), category: str(r.category, 100), country: str(r.country, 100),
     value: Number.isFinite(value) ? value : 0, currency: str(r.currency, 3) || "EUR",
-    start: str(r.start, 10), end: r.end as string, owner: str(r.owner, 100), boEmail: str(r.boEmail, 200).toLowerCase(),
+    start: str(r.start, 10), end: r.end as string, owner: str(r.owner, 100), boEmail: str(r.boEmail, 200).toLowerCase(), boUserId: Number.isInteger(r.boUserId) && (r.boUserId as number) > 0 ? r.boUserId as number : null,
     renewal: str(r.renewal, 100) || "Non definito", type: str(r.type, 100), notes: str(r.notes, 4000),
     ceased: r.ceased === true, fileName: nstr(r.fileName), noticeDays, noticeDate: noticeDate as string,
     supplierId: Number.isInteger(r.supplierId) && (r.supplierId as number) > 0 ? r.supplierId as number : null,
@@ -488,6 +491,7 @@ function rowToContract(r: Record<string, unknown>): Contract {
     closedAt: r.closed_at ? new Date(r.closed_at as string).toISOString() : null, replaces: (r.replaces as number | null) ?? null, replacedBy: (r.replaced_by as number | null) ?? null,
     supplierId: (r.supplier_id as number | null) ?? null, internalOrder: (r.internal_order as string) ?? "",
     boLeadDays: (r.bo_lead_days as number | null) ?? null, ownerId: (r.owner_id as number | null) ?? null,
+    boUserId: (r.bo_user_id as number | null) ?? null, boName: (r.bo_name as string | null) ?? "",
   };
 }
 function rowToStep(r: Record<string, unknown>): PlanStep {
@@ -514,7 +518,9 @@ export async function linkContractSuppliers(db: Queryable): Promise<void> {
 export async function loadState(user: User): Promise<AppState> {
   const db = getPool();
   await linkContractSuppliers(db);
-  const contracts = (await db.query("select * from contracts order by id")).rows.map(rowToContract).filter(c => canViewContract(user, c));
+  // Un Business Owner creato dopo il contratto: si collega all'email già indicata.
+  await db.query("update contracts c set bo_user_id = u.id from users u where c.bo_user_id is null and c.bo_email <> '' and lower(u.email) = lower(c.bo_email) and u.role = 'bo' and u.active");
+  const contracts = (await db.query("select c.*, bu.name as bo_name from contracts c left join users bu on bu.id = c.bo_user_id order by c.id")).rows.map(rowToContract).filter(c => canViewContract(user, c));
   const state: AppState = { contracts, plans: {}, auditLogs: {} };
   if (!contracts.length) return state;
   const ids = contracts.map(c => c.id);
@@ -533,7 +539,7 @@ export type Queryable = Pick<pg.PoolClient, "query">;
 export async function getContract(id: number): Promise<Contract | undefined> { return fetchContract(getPool(), id); }
 
 async function fetchContract(db: Queryable, id: number): Promise<Contract | undefined> {
-  const r = (await db.query("select * from contracts where id = $1", [id])).rows[0];
+  const r = (await db.query("select c.*, bu.name as bo_name from contracts c left join users bu on bu.id = c.bo_user_id where c.id = $1", [id])).rows[0];
   return r ? rowToContract(r) : undefined;
 }
 export async function fetchPlan(db: Queryable, id: number): Promise<PlanStep[]> {
@@ -544,16 +550,23 @@ async function upsertContract(db: Queryable, c: ContractInput): Promise<number> 
   const cols = [c.supplier, c.object, c.category, c.country, c.value, c.currency, c.start, c.end, c.owner, c.boEmail, c.renewal, c.type, c.notes, c.ceased, c.fileName, c.filePath, c.noticeDays, c.noticeDate, c.supplierId ?? null, c.internalOrder ?? ""];
   if (c.supplierId && !(await db.query("select 1 from suppliers where id = $1", [c.supplierId])).rows.length) bad("Fornitore non trovato in anagrafica");
   const ownerId = (await db.query("select id from users where lower(name) = lower($1) and role in ('manager','buyer')", [c.owner])).rows[0]?.id ?? null;
-  cols.push(ownerId);
+  // Business Owner: si sceglie tra gli utenti con quel ruolo; l'email segue l'utente. Un'email sola (contratti vecchi) resta valida e si collega all'utente se esiste.
+  let boUserId: number | null = c.boUserId ?? null;
+  if (boUserId) {
+    const bu = (await db.query("select email from users where id = $1 and active and role = 'bo'", [boUserId])).rows[0];
+    if (!bu) bad("Il Business Owner deve essere un utente attivo con ruolo Business Owner");
+    cols[9] = bu.email as string;
+  } else if (c.boEmail) boUserId = (await db.query("select id from users where lower(email) = lower($1) and active and role = 'bo'", [c.boEmail])).rows[0]?.id ?? null;
+  cols.push(ownerId, boUserId);
   if (c.id === undefined) {
     const r = await db.query(
-      `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path, notice_days, notice_date, supplier_id, internal_order, owner_id)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) returning id`, cols);
+      `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path, notice_days, notice_date, supplier_id, internal_order, owner_id, bo_user_id)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) returning id`, cols);
     return r.rows[0].id;
   }
   const r = await db.query(
     `update contracts set supplier=$1, object=$2, category=$3, country=$4, value=$5, currency=$6, start_date=$7, end_date=$8,
-       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15, file_path=$16, notice_days=$17, notice_date=$18, supplier_id=$19, internal_order=$20, owner_id=$21 where id=$22`, [...cols, c.id]);
+       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15, file_path=$16, notice_days=$17, notice_date=$18, supplier_id=$19, internal_order=$20, owner_id=$21, bo_user_id=$22 where id=$23`, [...cols, c.id]);
   if (!r.rowCount) throw new HttpError(404, "Contratto non trovato");
   return c.id;
 }

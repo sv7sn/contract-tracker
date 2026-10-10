@@ -98,6 +98,9 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
   const [errors, setErrors] = useState<FormErrors>({});
   // Anagrafica fornitori (solo con il server): per collegare il contratto al fornitore registrato.
   const [vendors, setVendors] = useState<SupplierSummary[] | null>(null);
+  // Business Owner selezionabili (solo con il server).
+  const [boUsers, setBoUsers] = useState<{ id: number; name: string; email: string }[] | null>(null);
+  useEffect(() => { if (!canUpload) return; let off = false; portalApi.boUsers().then(x => { if (!off) setBoUsers(x); }).catch(() => { if (!off) setBoUsers([]); }); return () => { off = true; }; }, [canUpload]);
   useEffect(() => { let off = false; portalApi.vendors().then(v => { if (!off) setVendors(v); }).catch(() => undefined); return () => { off = true; }; }, []);
   // `file` è presente solo per un documento scelto ora (da caricare); `path` per uno già salvato.
   const [attachedFile, setAttachedFile] = useState<{ name: string; file?: File; path?: string | null } | null>(initial?.fileName ? { name: initial.fileName, path: initial.filePath } : null);
@@ -172,7 +175,16 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
           </Field>
         </div>
         <div style={two}>
-          <Field label="Email Business Owner" error={errors.boEmail} htmlFor="f-boEmail">{fi("boEmail", "bo@azienda.it", "email")}</Field>
+          {canUpload
+            ? <Field label="Business Owner" error={errors.boEmail} htmlFor="f-bo">
+                <select id="f-bo" value={form.boUserId ?? (form.boEmail ? "legacy" : "")} onChange={e => { const id = e.target.value; const u = boUsers?.find(x => String(x.id) === id); if (id === "legacy") return; setForm(f => ({ ...f, boUserId: u ? u.id : null, boEmail: u ? u.email : "" })); }} style={iStyle}>
+                  <option value="">— Nessuno —</option>
+                  {!form.boUserId && form.boEmail && <option value="legacy">{form.boEmail} (nessun utente: scegli un Business Owner)</option>}
+                  {(boUsers ?? []).map(u => <option key={u.id} value={u.id}>{u.name} · {u.email}</option>)}
+                </select>
+                <div style={{ ...sans, fontSize: 11.5, color: C.muted, marginTop: 4, lineHeight: 1.4 }}>{boUsers && boUsers.length === 0 ? "Non ci sono ancora Business Owner: il Manager li crea da Utenti, con ruolo Business Owner." : "Riceve gli avvisi e risponde dal sistema. Non lo trovi? Chiedi al Manager di creare l'utente."}</div>
+              </Field>
+            : <Field label="Email Business Owner" error={errors.boEmail} htmlFor="f-boEmail">{fi("boEmail", "bo@azienda.it", "email")}</Field>}
           <Field label="Stato rinnovo" htmlFor="f-renewal">{sel("renewal", RENEWAL_OPTIONS)}</Field>
         </div>
         <Field label="Note" htmlFor="f-notes"><textarea id="f-notes" value={form.notes} onChange={e => up("notes")(e.target.value)} style={{ ...iStyle, height: 60, resize: "vertical" }} /></Field>

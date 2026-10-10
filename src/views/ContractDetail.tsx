@@ -20,7 +20,7 @@ export function ContractDetail({ contract, contracts, auditLog, currentUser, can
   const startMs = new Date(contract.start).getTime(), endMs = new Date(contract.end).getTime();
   const prog = contract.start && endMs > startMs ? Math.min(100, Math.max(0, ((NOW.getTime() - startMs) / (endMs - startMs)) * 100)) : 0;
   const uc = URGENCY_COLORS[u];
-  const rows: [string, React.ReactNode][] = [["Categoria", contract.category || "—"], ["Tipo", contract.type || "—"], ["Paese", contract.country || "—"], ["Contract owner", contract.owner ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><Avatar name={contract.owner} size={22} />{contract.owner}</span> : "—"], ["Business Owner", contract.boEmail || "—"], ["Internal order", contract.internalOrder || "—"], ["Stato del rinnovo", <RenewalBadge status={contract.renewal} />]];
+  const rows: [string, React.ReactNode][] = [["Categoria", contract.category || "—"], ["Tipo", contract.type || "—"], ["Paese", contract.country || "—"], ["Contract owner", contract.owner ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><Avatar name={contract.owner} size={22} />{contract.owner}</span> : "—"], ["Business Owner", contract.boName ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><Avatar name={contract.boName} size={22} />{contract.boName}</span> : contract.boEmail || "—"], ["Internal order", contract.internalOrder || "—"], ["Stato del rinnovo", <RenewalBadge status={contract.renewal} />]];
   const action = (color: string, filled: boolean): React.CSSProperties => ({ ...sans, display: "inline-flex", alignItems: "center", gap: 7, background: filled ? color : "#fff", border: `1px solid ${color}`, borderRadius: 10, color: filled ? "#fff" : color, cursor: "pointer", fontSize: 13, fontWeight: 650, padding: "8px 14px" });
 
   return (
@@ -89,7 +89,7 @@ export function ContractDetail({ contract, contracts, auditLog, currentUser, can
             </div>
           ))}
           {canOpenDocuments && (currentUser.role === "bo" || canEditContract(currentUser, contract)) && contract.boEmail && <BoMessages contractId={contract.id} isBo={currentUser.role === "bo"} />}
-          {canOpenDocuments && canEditContract(currentUser, contract) && <BoNoticeCard contract={contract} onChanged={() => onPlanChanged?.()} />}
+          {canOpenDocuments && canEditContract(currentUser, contract) && <BoNoticeCard key={`${contract.id}-${contract.boUserId ?? contract.boEmail}`} contract={contract} onChanged={() => onPlanChanged?.()} />}
           {contract.notes && <Card style={{ background: C.yellowBg, borderColor: "#f3dca0" }}><div style={{ ...sans, display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: C.yellow, fontWeight: 650, marginBottom: 6 }}><StickyNote size={15} />Note</div><div style={{ ...sans, fontSize: 13.5, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{contract.notes}</div></Card>}
         </div>
         <AuditTrail entries={auditLog} />
