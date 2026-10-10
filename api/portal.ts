@@ -9,6 +9,7 @@ import { listConfigAudit, logConfigChange } from "./_audit.js";
 import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
 import { computeKpis } from "./_kpi.js";
 import { spendLines, spendView } from "./_spend.js";
+import { boInfo, loadBoSettings, runBoNotices, saveBoSettings, sendBoNotice, setBoLead } from "./_bo.js";
 import { resetData, resetPreview } from "./_reset.js";
 import { myWork } from "./_work.js";
 import { addRating, deleteRating, ratingSummary, supplierScorecard } from "./_rating.js";
@@ -78,7 +79,8 @@ async function handle(request: Request): Promise<Response> {
       await deleteDocuments(staleFiles);
       // Liste sanzioni: un errore di download non deve bloccare reminder e pulizia.
       const sanctions = await refreshIfStale().catch(err => ({ error: err instanceof Error ? err.message : "errore" }));
-      return json({ ...reminders, retention, sanctions });
+      const boNotices = await runBoNotices(originOf(request)).catch(err => ({ error: err instanceof Error ? err.message : "errore" }));
+      return json({ ...reminders, retention, sanctions, boNotices });
     }
 
     // ── Ingresso automatico dei file SAP (es. da una regola sulla casella che riceve le mail di SAP) ──
@@ -231,6 +233,11 @@ async function handle(request: Request): Promise<Response> {
     if (op === "category-seed" && method === "POST") return json(await seedCategoriesFromMp(user));
     if (op === "reset-preview" && method === "GET") return json({ counts: await resetPreview(user) });
     if (op === "reset-run" && method === "POST") { const b = (await readJson(request)) as { areas?: unknown; confirm?: unknown }; return json({ deleted: await resetData(user, b.areas, b.confirm) }); }
+    if (op === "bo-info" && method === "GET") return json({ info: await boInfo(user, idOf(url)) });
+    if (op === "bo-notice-send" && method === "POST") return json({ info: await sendBoNotice(user, idOf(url), (await readJson(request)) as Record<string, unknown>, originOf(request)) });
+    if (op === "bo-lead" && method === "POST") return json({ info: await setBoLead(user, idOf(url), ((await readJson(request)) as { days?: unknown }).days) });
+    if (op === "bo-settings" && method === "GET") return json({ settings: await loadBoSettings(getPool()) });
+    if (op === "bo-settings-save" && method === "POST") return json({ settings: await saveBoSettings(user, (await readJson(request)) as Record<string, unknown>) });
     if (op === "my-work" && method === "GET") return json({ items: await myWork(user) });
     // ── Spesa dai file ordini SAP ──
     if (op === "spend" && method === "GET") return json(await spendView(user, Number(url.searchParams.get("year")) || undefined));

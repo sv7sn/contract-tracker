@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AppState, AuditEntry, CommitPayload, Contract, ContractData, NewUserInput, PlanStep, Role, User, View } from "./types.ts";
-import { api, ApiError } from "./api.ts";
+import { api, ApiError, portalApi } from "./api.ts";
 import { C, font, iStyle, ROLE_LABELS, sans, shadow } from "./theme.ts";
 import { fmtDate, keyDate, tsNow } from "./lib/format.ts";
 import { clearLocal, DEMO_PASSWORD, DEMO_USERS, demoState, loadLocal, saveLocal } from "./lib/demo.ts";
@@ -151,7 +151,7 @@ export default function App() {
       const audit = [entry("Contratto modificato", `Da ${currentUser.name}`)];
       let plan: PlanStep[] | undefined;
       if (keyDate(form) !== keyDate(editingContract)) {
-        plan = reschedulePlan(plans[id] || [], id, keyDate(form));
+        plan = reschedulePlan(plans[id] || [], id, keyDate(form), (editingContract.boLeadDays ?? 75) - 75);
         audit.push(entry("Piano ricalcolato", form.noticeDate ? `Nuovo termine di disdetta: ${fmtDate(form.noticeDate)} (scadenza ${fmtDate(form.end)})` : `Nuova scadenza: ${fmtDate(form.end)}`, "Sistema"));
       }
       if (!(await persist({ contract: { ...form, id }, plan, audit })).ok) return;
@@ -179,6 +179,11 @@ export default function App() {
   const handleSendBO = async (id: number) => {
     const c = contracts.find(x => x.id === id);
     if (!c) return;
+    if (mode === "api") {
+      try { await portalApi.sendBoNotice(id); if (currentUser) await loadAll(currentUser); showToast(`✉️ Avviso inviato a ${c.boEmail}`); }
+      catch (err) { if (!handleApiError(err)) showToast(`⚠️ ${err instanceof Error ? err.message : "Invio non riuscito"}`); }
+      return;
+    }
     const plan = (plans[id] || []).map(s => s.stepId === "bo_notify" ? { ...s, status: "done" as const, completedAt: fmtDate(new Date()), completedBy: "Sistema" } : s.stepId === "bo_response" ? { ...s, status: "pending_bo" as const } : s);
     if (await updatePlan(id, plan, [entry("Notifica BO inviata", `A: ${c.boEmail || "—"}`, "Sistema")]))
       showToast(c.boEmail ? `✉️ Notifica registrata per ${c.boEmail}` : "⚠️ Nessuna email BO impostata per questo contratto");
@@ -397,7 +402,7 @@ export default function App() {
           {view === "bo" && currentUser.role === "bo" && <BOView contracts={contracts} plans={plans} currentUser={currentUser} onOpenBOForm={setBOFormContract} />}
           {view === "notifiche" && currentUser.role !== "bo" && <AlertsView contracts={contracts} users={users} />}
           {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} onPurge={handlePurge} />}
-          {view === "hub" && hubAvailable && <HubView user={currentUser} modules={modules} contracts={contracts} plans={plans} onOpen={(v, f) => { setFocus(f?.taskId || f?.vendorId ? f : null); setView(v); }} />}
+          {view === "hub" && hubAvailable && <HubView user={currentUser} modules={modules} contracts={contracts} plans={plans} onOpen={(v, f) => { if (f?.contractId) { setSelectedId(f.contractId); setView("detail"); return; } setFocus(f?.taskId || f?.vendorId ? f : null); setView(v); }} />}
           {view === "tasks" && mode === "api" && (currentUser.role === "manager" || currentUser.role === "buyer") && <TasksView initialOpenId={focus?.taskId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} contracts={contracts} plans={plans} onCompleteStep={handleCompleteStep} onSendBO={handleSendBO} onOpenContract={openDetail} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "vendors" && mode === "api" && <VendorsView initialOpenId={focus?.vendorId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "expiries" && mode === "api" && <ExpiryView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
@@ -405,7 +410,7 @@ export default function App() {
           {view === "spend" && mode === "api" && ["manager", "buyer", "finance"].includes(currentUser.role) && <SpendView onSessionExpired={sessionExpired} />}
           {view === "kpi" && mode === "api" && currentUser.role === "manager" && <KpiView onSessionExpired={sessionExpired} />}
           {view === "config" && mode === "api" && currentUser.role === "manager" && <ConfigView notify={showToast} onSessionExpired={sessionExpired} />}
-          {view === "detail" && selected && <ContractDetail contract={selected} contracts={contracts} onOpen={openDetail} auditLog={auditLogs[selected.id] || []} currentUser={currentUser} canOpenDocuments={mode === "api"} onBack={() => setView("list")} onEdit={() => { setEditingContract(selected); setShowForm(true); }} onDelete={handleDelete} />}
+          {view === "detail" && selected && <ContractDetail onPlanChanged={() => { if (currentUser) void loadAll(currentUser); }} contract={selected} contracts={contracts} onOpen={openDetail} auditLog={auditLogs[selected.id] || []} currentUser={currentUser} canOpenDocuments={mode === "api"} onBack={() => setView("list")} onEdit={() => { setEditingContract(selected); setShowForm(true); }} onDelete={handleDelete} />}
         </main>
       </div>
 

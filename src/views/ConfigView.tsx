@@ -8,6 +8,7 @@ import { AlertTriangle, Bell, Building2, History, Lock, RotateCcw, ShieldCheck, 
 import { Notice, Portal } from "../components/vendorUi.tsx";
 import { CategoriesCard } from "./CategoriesCard.tsx";
 import { ResetCard } from "./ResetCard.tsx";
+import { BoSettingsCard } from "./BoSettingsCard.tsx";
 
 type Entity = "company" | "industry" | "payment_term";
 type Draft = { entity: Entity; item: Record<string, unknown>; isNew: boolean };
@@ -180,6 +181,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
         <button onClick={saveSap} disabled={busy} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}Salva parametri SAP</button>
       </Card>
 
+      <BoSettingsCard fail={fail} notify={notify} />
       <CategoriesCard fail={fail} notify={notify} />
       <SanctionsCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
       <PrivacyCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />

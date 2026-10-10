@@ -8,7 +8,7 @@ import { Card, Grid } from "../components/ui.tsx";
 import { ArrowRight } from "../components/icons.tsx";
 import { WorkList } from "./WorkList.tsx";
 
-interface Props { user: User; modules: ModuleDef[]; contracts: Contract[]; plans: Record<number, PlanStep[]>; onOpen: (view: View, focus?: { taskId?: number; vendorId?: number }) => void }
+interface Props { user: User; modules: ModuleDef[]; contracts: Contract[]; plans: Record<number, PlanStep[]>; onOpen: (view: View, focus?: { taskId?: number; vendorId?: number; contractId?: number }) => void }
 interface Metric { label: string; value: number | string; tone?: "bad" | "warn" | "good" }
 interface Live { tasks: TaskSummary | null; vendorsToReview: number | null; lapsed: number | null; unresponsive: number | null }
 
