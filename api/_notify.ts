@@ -3,10 +3,10 @@ import type { Queryable } from "./_db.js";
 // Email del portale. Ogni messaggio viene salvato nella tabella `notifications`; l'invio reale avviene se sono
 // configurati RESEND_API_KEY e MAIL_FROM (servizio Resend), altrimenti lo stato resta "logged" (non inviato).
 
-export type Template = "invitation" | "new_registration" | "supplier_modified" | "revision_requested" | "rejection" | "buyer_approved" | "vendor_created" | "sap_code" | "doc_reminder" | "doc_unresponsive" | "bank_change_alert";
+export type Template = "invitation" | "new_registration" | "supplier_modified" | "revision_requested" | "rejection" | "buyer_approved" | "vendor_created" | "sap_code" | "doc_reminder" | "doc_unresponsive" | "bank_change_alert" | "rfq_invite" | "rfq_quote";
 export type Lang = "IT" | "EN";
 
-interface Vars { items?: string; name?: string; link?: string; reason?: string; sapCode?: string; expires?: string; companies?: string }
+interface Vars { items?: string; name?: string; link?: string; reason?: string; sapCode?: string; expires?: string; companies?: string; deadline?: string; detail?: string }
 
 const T: Record<Template, Record<Lang, (v: Vars) => { subject: string; body: string }>> = {
   invitation: {
@@ -52,6 +52,14 @@ const T: Record<Template, Record<Lang, (v: Vars) => { subject: string; body: str
   bank_change_alert: {
     IT: v => ({ subject: "Richiesta di modifica delle coordinate bancarie", body: `Gentile ${v.name},\n\nabbiamo ricevuto dal portale fornitori una richiesta di modifica delle coordinate bancarie della vostra azienda.\n\nSe la richiesta è stata fatta da voi non serve fare nulla: vi contatteremo per una verifica prima di applicarla.\nSe NON l'avete fatta voi, rispondete subito a questa email: potrebbe trattarsi di un tentativo di frode.` }),
     EN: v => ({ subject: "Bank details change request", body: `Dear ${v.name},\n\nwe received through the supplier portal a request to change your company's bank details.\n\nIf you made this request, no action is needed: we will contact you to verify it before applying it.\nIf you did NOT make it, reply to this email immediately: it could be a fraud attempt.` }),
+  },
+  rfq_invite: {
+    IT: v => ({ subject: `Richiesta di offerta: ${v.reason}`, body: `Gentile ${v.name},\n\nvi chiediamo di presentare un'offerta per: ${v.reason}.\n${v.detail ? `\n${v.detail}\n` : ""}\nL'offerta si inserisce nella vostra area personale entro il ${v.deadline}: ${v.link}\n\nPer chiarimenti rispondete a questa email.` }),
+    EN: v => ({ subject: `Request for quotation: ${v.reason}`, body: `Dear ${v.name},\n\nwe kindly ask you to submit a quotation for: ${v.reason}.\n${v.detail ? `\n${v.detail}\n` : ""}\nYou can enter your quotation in your personal area by ${v.deadline}: ${v.link}\n\nFor any questions, just reply to this email.` }),
+  },
+  rfq_quote: {
+    IT: v => ({ subject: `Offerta ricevuta: ${v.reason}`, body: `${v.name} ha risposto alla richiesta di offerta "${v.reason}": ${v.detail}.\n\nApri la pratica: ${v.link}` }),
+    EN: v => ({ subject: `Quotation received: ${v.reason}`, body: `${v.name} replied to the request for quotation "${v.reason}": ${v.detail}.\n\nOpen it: ${v.link}` }),
   },
 };
 

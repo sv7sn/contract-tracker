@@ -9,6 +9,7 @@ import { stepTemplate } from "../lib/plan.ts";
 import { Avatar, Card, CardTitle, EmptyState, Field, Grid, StatCard } from "../components/ui.tsx";
 import { AlertTriangle, Check, CheckCircle2, Clock, FileText, Inbox, Loader2, Paperclip, Plus, RotateCcw, Scale, Search, Send, Trash2, Upload } from "../components/icons.tsx";
 import { CloseButton, KV, Notice, Portal, SupplierPicker } from "../components/vendorUi.tsx";
+import { RfqCard } from "./RfqCard.tsx";
 
 interface Props {
   currentUser: User; contracts: Contract[]; plans: Record<number, PlanStep[]>;
@@ -360,6 +361,7 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
             {renewal && <OutcomeCard t={t} contracts={contracts} fail={fail} onOpenContract={onOpenContract} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
             {purchase && <OutcomeCard t={t} contracts={contracts} fail={fail} onOpenContract={onOpenContract} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
             {(rda || renewal || purchase) && <PraticaCard t={t} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
+            {(rda || renewal || purchase) && t.status === "open" && (t.sourcingRequired || t.sourcing) && <RfqCard t={t} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} notify={notify} />}
             {(rda || renewal || purchase) && (t.sourcingRequired || t.sourcing) && <SourcingCard t={t} threshold={threshold} isManager={isManager} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
 
             {t.pos.length > 0 && (
