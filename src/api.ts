@@ -79,11 +79,11 @@ export const portalApi = {
   ratings: () => request<{ ratings: Record<number, { overall: number; count: number }> }>(portal("vendor-ratings")).then(r => r.ratings),
   myWork: () => request<{ items: WorkItem[] }>(portal("my-work")).then(r => r.items),
   rfqs: (taskId: number) => request<{ rfqs: Rfq[] }>(portal("rfqs", `&taskId=${taskId}`)).then(r => r.rfqs),
-  createRfq: (input: { taskId: number; title: string; description: string; deadline: string; supplierIds: number[] }) => post<{ rfqs: Rfq[] }>(portal("rfq-create"), input).then(r => r.rfqs),
+  createRfq: (input: { taskId: number; title: string; description: string; deadline: string; supplierIds: number[]; specName?: string; specPath?: string }) => post<{ rfqs: Rfq[] }>(portal("rfq-create"), input).then(r => r.rfqs),
   closeRfq: (id: number) => post<{ rfqs: Rfq[] }>(portal("rfq-close", `&id=${id}`), {}).then(r => r.rfqs),
   useRfq: (id: number, input: { supplierId: number; justification: string }) => post<{ task: TaskDetail }>(portal("rfq-use", `&id=${id}`), input).then(r => r.task),
   myRfqs: () => request<{ rfqs: SupplierRfq[] }>(portal("supplier-rfqs")).then(r => r.rfqs),
-  quoteRfq: (id: number, input: { amount?: number; notes?: string; declined?: boolean }) => post<{ rfqs: SupplierRfq[] }>(portal("supplier-rfq-quote", `&id=${id}`), input).then(r => r.rfqs),
+  quoteRfq: (id: number, input: { amount?: number; notes?: string; declined?: boolean; fileName?: string; filePath?: string; removeFile?: boolean }) => post<{ rfqs: SupplierRfq[] }>(portal("supplier-rfq-quote", `&id=${id}`), input).then(r => r.rfqs),
   categories: () => request<CategoriesView>(portal("categories")),
   saveCategory: (name: string, id?: number) => post<CategoriesView>(portal("category-save"), { id, name }),
   deleteCategory: (id: number) => request<CategoriesView>(portal("category", `&id=${id}`), { method: "DELETE" }),
@@ -129,6 +129,8 @@ export const portalApi = {
 
 export const demoSapFileUrl = (kind: "pr" | "po") => `/api/portal?op=budget-demo-file&kind=${kind}`;
 export const budgetTemplateUrl = "/api/portal?op=budget-template";
+export const rfqFileUrl = (id: number, kind: "spec" | "quote", supplierId?: number) => `/api/portal?op=rfq-file&id=${id}&kind=${kind}${supplierId ? `&supplier=${supplierId}` : ""}`;
+export const supplierRfqSpecUrl = (id: number) => `/api/portal?op=supplier-rfq-spec&id=${id}`;
 export const taskDocUrl = (docId: number) => `/api/portal?op=task-doc-download&id=${docId}`;
 export const vendorExportUrl = (id: number) => `/api/portal?op=vendor-export&id=${id}`;
 export const myDataExportUrl = "/api/portal?op=supplier-export";

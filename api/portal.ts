@@ -11,7 +11,7 @@ import { computeKpis } from "./_kpi.js";
 import { spendLines, spendView } from "./_spend.js";
 import { myWork } from "./_work.js";
 import { addRating, deleteRating, ratingSummary, supplierScorecard } from "./_rating.js";
-import { closeRfq, createRfq, listMyRfqs, listTaskRfqs, submitQuote, applyRfq } from "./_rfq.js";
+import { closeRfq, createRfq, listMyRfqs, rfqFile, listTaskRfqs, submitQuote, applyRfq } from "./_rfq.js";
 import { deleteCategory, listCategories, saveCategory, seedCategoriesFromMp, setCategoryMap } from "./_categories.js";
 import { createDemoSupplier } from "./_demo.js";
 import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_budget-demo.js";
@@ -30,6 +30,14 @@ import type { VendorAction } from "../src/types.ts";
 // Router unico del portale fornitori (un solo file = una sola funzione Vercel). Si sceglie l'operazione con ?op=...
 const VENDOR_ACTIONS: VendorAction[] = ["approve", "reject", "request_revision", "set_payment_terms", "change_status", "block", "deactivate", "exclude", "reactivate", "sanctions_manual"];
 const STAFF = ["manager", "buyer", "finance"] as const;
+
+/** Risposta di download per un allegato: PDF e immagini si aprono nel browser, il resto si scarica. */
+function fileDownload(stream: ReadableStream<Uint8Array>, fileName: string): Response {
+  const ext = fileName.toLowerCase().split(".").pop() ?? "";
+  const type = DOC_MIME[ext] ?? "application/octet-stream";
+  const inline = type === "application/pdf" || type.startsWith("image/");
+  return new Response(stream, { headers: { ...noStore, "Content-Type": type, "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(fileName.replace(/[\r\n"\\/]/g, "_"))}`, "X-Content-Type-Options": "nosniff" } });
+}
 
 function originOf(request: Request) {
   const fixed = process.env.APP_URL?.trim().replace(/\/+$/, "");
@@ -87,6 +95,12 @@ async function handle(request: Request): Promise<Response> {
       const origin = originOf(request);
       if (op === "supplier-me" && method === "GET") return json({ supplier: await getMySupplier(user) });
       if (op === "supplier-export" && method === "GET") return download(await exportSupplier(getPool(), (await getMySupplier(user)).id), "i-miei-dati.json");
+      if (op === "supplier-rfq-spec" && method === "GET") {
+        const doc = await rfqFile(user, idOf(url), "spec");
+        const blob = await openDocument(doc.filePath);
+        if (!blob) throw new HttpError(404, "Documento non trovato");
+        return fileDownload(blob.stream, doc.fileName);
+      }
       if (op === "supplier-rfqs" && method === "GET") return json({ rfqs: await listMyRfqs(user) });
       if (op === "supplier-rfq-quote" && method === "POST") return json({ rfqs: await submitQuote(user, idOf(url), (await readJson(request)) as Record<string, unknown>, origin) });
       if (op === "supplier-save" && method === "POST") return json({ supplier: await saveMyData(user, await readJson(request), origin) });
@@ -157,6 +171,12 @@ async function handle(request: Request): Promise<Response> {
       if (op === "task-update" && method === "POST") return json({ task: await updateTask(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-sourcing" && method === "POST") return json({ task: await saveSourcing(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-sourcing-approve" && method === "POST") return json({ task: await decideSourcingException(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "rfq-file" && method === "GET") {
+        const doc = await rfqFile(user, idOf(url), url.searchParams.get("kind") === "spec" ? "spec" : "quote", Number(url.searchParams.get("supplier")) || undefined);
+        const blob = await openDocument(doc.filePath);
+        if (!blob) throw new HttpError(404, "Documento non trovato");
+        return fileDownload(blob.stream, doc.fileName);
+      }
       if (op === "rfqs" && method === "GET") return json({ rfqs: await listTaskRfqs(user, Number(url.searchParams.get("taskId"))) });
       if (op === "rfq-create" && method === "POST") return json({ rfqs: await createRfq(user, (await readJson(request)) as Record<string, unknown>, originOf(request)) }, { status: 201 });
       if (op === "rfq-close" && method === "POST") return json({ rfqs: await closeRfq(user, idOf(url)) });
