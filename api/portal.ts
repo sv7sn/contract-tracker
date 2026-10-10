@@ -8,6 +8,7 @@ import { runExternalChecks } from "./_governance.js";
 import { listConfigAudit, logConfigChange } from "./_audit.js";
 import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
 import { computeKpis } from "./_kpi.js";
+import { spendLines, spendView } from "./_spend.js";
 import { createDemoSupplier } from "./_demo.js";
 import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_budget-demo.js";
 import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudget } from "./_budget.js";
@@ -191,6 +192,9 @@ async function handle(request: Request): Promise<Response> {
       return json({ supplier: await getVendor(user, owner) });
     }
     if (op === "kpis" && method === "GET") return json(await computeKpis(user));
+    // ── Spesa dai file ordini SAP ──
+    if (op === "spend" && method === "GET") return json(await spendView(user, Number(url.searchParams.get("year")) || undefined));
+    if (op === "spend-lines" && method === "GET") return json(await spendLines(user, Number(url.searchParams.get("year")), url.searchParams.get("supplier") ?? ""));
     // ── Master Plan (budget per internal order) ──
     if (op === "budget" && method === "GET") return json(await budgetView(user, Number(url.searchParams.get("year")) || undefined));
     if (op === "budget-io" && method === "GET") return json(await budgetIo(user, url.searchParams.get("io") ?? "", Number(url.searchParams.get("year")) || undefined));

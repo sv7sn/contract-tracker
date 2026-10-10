@@ -181,6 +181,18 @@ create table if not exists sap_pos (
   doc_date date, pgr text not null default '', created_by text not null default '', seen_at timestamptz not null default now(), primary key (po, pr)
 );
 create index if not exists sap_pos_pr_idx on sap_pos (pr);
+-- Tutte le righe d'ordine arrivate dai file SAP (anche senza RDA): base per l'analisi della spesa e della copertura contrattuale.
+create table if not exists po_lines (
+  po text not null, item text not null, doc_date date, created_on date, doc_type text not null default '', supplier_code text not null default '', supplier_name text not null default '',
+  pr text not null default '', pr_value numeric not null default 0, net_value numeric, gr_amount numeric not null default 0, ir_amount numeric not null default 0,
+  value numeric not null default 0, value_source text not null default 'none', currency text not null default 'EUR',
+  matl_group text not null default '', matl_group_desc text not null default '', agreement text not null default '', internal_order text not null default '',
+  cost_center text not null default '', gl_account text not null default '', short_text text not null default '', pgr text not null default '',
+  created_by text not null default '', requested_by text not null default '', first_seen timestamptz not null default now(), seen_at timestamptz not null default now(),
+  primary key (po, item)
+);
+create index if not exists po_lines_date_idx on po_lines (doc_date);
+create index if not exists po_lines_supplier_idx on po_lines (supplier_code);
 create table if not exists pgr_assignments (pgr text primary key, user_id integer references users(id) on delete set null, note text not null default '');
 create table if not exists sap_imports (
   id serial primary key, kind text not null, file_name text not null, rows integer not null default 0, result jsonb not null default '{}'::jsonb,

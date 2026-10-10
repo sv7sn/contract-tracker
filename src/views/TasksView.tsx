@@ -111,7 +111,7 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
         }
         notify(r.kind === "pr"
           ? `RDA importate: ${r.prs} (${r.created} nuove${r.reopened ? `, ${r.reopened} riaperte` : ""}${r.closedPo + r.closedGone ? `, ${r.closedPo} chiuse per PO e ${r.closedGone} non più aperte` : ""})`
-          : `Ordini importati: ${r.linked} collegamenti con RDA${r.closedPo ? `, ${r.closedPo} task chiusi` : ""}`);
+          : `Ordini importati: ${r.poLines ?? r.rows} righe per l'analisi della spesa, ${r.linked} collegamenti con RDA${r.closedPo ? `, ${r.closedPo} task chiusi` : ""}`);
       } catch (err) { notify(`⚠️ ${f.name}: ${fail(err)}`); }
     }
     await reload(); setImporting(false);

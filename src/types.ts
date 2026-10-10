@@ -2,7 +2,7 @@
 export type Role = "manager" | "buyer" | "finance" | "bo" | "supplier";
 export type Urgency = "green" | "yellow" | "red" | "gray";
 export type StepStatus = "upcoming" | "done" | "pending_bo";
-export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub" | "kpi" | "budget";
+export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub" | "kpi" | "budget" | "spend";
 
 /** Utente autenticato, come restituito dall'API (mai con la password). */
 export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean }
@@ -216,7 +216,7 @@ export interface TaskDocument { id: number; kind: TaskDocKind; fileName: string;
 export interface TaskLine { item: string; shortText: string; qty: number; unit: string; price: number; per: number; currency: string; delivDate: string | null; costCenter: string; glAccount: string; value: number; internalOrder: string }
 export interface TaskDetail extends Task { lines: TaskLine[] }
 export interface TaskList { tasks: Task[]; sapUpdatedAt: { pr: string | null; po: string | null } }
-export interface ImportResult { kind: "pr" | "po"; fileName: string; rows: number; prs: number; created: number; updated: number; reopened: number; closedPo: number; closedGone: number; linked: number }
+export interface ImportResult { kind: "pr" | "po"; fileName: string; rows: number; prs: number; created: number; updated: number; reopened: number; closedPo: number; closedGone: number; linked: number; /** Righe d'ordine salvate per l'analisi della spesa (solo file ordini). */ poLines?: number }
 export interface RdaGroup { pgr: string; userId: number | null; note: string; openTasks: number }
 export interface RdaConfig { slaDays: number; sourcingThreshold: number; renewalLeadDays: number; groups: RdaGroup[]; ingestConfigured: boolean; lastImports: { kind: string; fileName: string; rows: number; at: string; by: string }[] }
 export interface TaskSummary { open: number; overdue: number; dueSoon: number; unassigned: number; sourcingMissing: number; exceptionsPending: number }
@@ -255,4 +255,28 @@ export interface BudgetView {
   canUpload: boolean;
   /** La simulazione (dati di prova MP26/MP27) è caricata. */
   demo: boolean;
+}
+
+// ─── Spesa dai file ordini SAP ───────────────────────────────
+/** Copertura contrattuale di una riga d'ordine: accordo quadro SAP (Agmt), contratto del registro valido alla data del PO, nessuna. */
+export type SpendCoverage = "agreement" | "contract" | "none";
+export interface SpendSupplier { code: string; name: string; supplierId: number | null; value: number; pos: number; share: number; agreement: number; contract: number; none: number }
+export interface SpendGroup { label: string; value: number; pos: number; suppliers: number }
+export interface SpendPo { po: string; item: string; docDate: string | null; supplierCode: string; supplierName: string; value: number; valueSource: string; prValue: number; netValue: number | null; shortText: string; category: string; internalOrder: string; costCenter: string; pr: string }
+export interface SpendView {
+  year: number | null; years: number[]; from: string | null; to: string | null; firstImport: string | null; threshold: number;
+  total: number; lines: number; pos: number; suppliers: number;
+  /** Da dove viene il valore delle righe: netto PO, valore RDA, entrata merci, nessun valore. */
+  valued: { net: number; pr: number; gr: number; none: number };
+  otherCurrency: { lines: number; currencies: string[] };
+  concentration: { top1: number; top5: number; top10: number; coreSuppliers: number; tailSuppliers: number; tailValue: number; tailShare: number };
+  coverage: { agreement: number; contract: number; none: number; coveredShare: number };
+  monthly: { month: string; value: number; pos: number }[];
+  bySupplier: SpendSupplier[]; byCategory: SpendGroup[]; byFunction: SpendGroup[];
+  /** Ordini senza RDA, senza accordo quadro e senza contratto. */
+  noRda: { lines: number; value: number; items: SpendPo[] };
+  /** Fornitori sopra la soglia senza contratto né accordo quadro: candidati a un contratto. */
+  candidates: SpendSupplier[];
+  /** Ordini con valore netto oltre quello della RDA (solo se l'estrazione ha il valore netto). */
+  overRda: { available: boolean; items: SpendPo[] };
 }

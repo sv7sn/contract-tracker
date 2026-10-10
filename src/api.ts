@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type Kpis, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type Kpis, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -73,6 +73,8 @@ export const portalApi = {
   kpis: () => request<Kpis>(portal("kpis")),
   sanctionsRefresh: () => post<{ updated: string[]; errors: string[]; rescreened: number; newHits: number; config: PortalConfig }>(portal("sanctions-refresh"), {}),
   demoSupplier: () => post<{ id: number; name: string; email: string; password: string }>(portal("vendor-demo"), {}),
+  spend: (year?: number) => request<SpendView>(portal("spend", year ? `&year=${year}` : "")),
+  spendLines: (year: number, supplier: string) => request<SpendPo[]>(portal("spend-lines", `&year=${year}&supplier=${encodeURIComponent(supplier)}`)),
   budget: (year?: number) => request<BudgetView>(portal("budget", year ? `&year=${year}` : "")),
   budgetIo: (io: string, year?: number) => request<{ line: BudgetLine | null; items: BudgetItem[]; year: number }>(portal("budget-io", `&io=${encodeURIComponent(io)}${year ? `&year=${year}` : ""}`)),
   loadBudgetDemo: () => post<{ years: number[]; tasks: number; contracts: number; suppliers: number }>(portal("budget-demo"), {}),

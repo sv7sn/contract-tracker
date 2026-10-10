@@ -67,15 +67,26 @@ export function parsePrLines(rows: (string | null)[][]): PrLine[] {
   return out;
 }
 
-export interface PoLine { po: string; pr: string; supplierCode: string; supplierName: string; docDate: string | null; pgr: string; createdBy: string }
-/** Righe d'ordine con il riferimento alla RDA (le righe senza RDA non servono ai task). */
+export interface PoLine { po: string; item: string; pr: string; supplierCode: string; supplierName: string; docDate: string | null; createdOn: string | null; pgr: string; createdBy: string; docType: string;
+  /** Valore della riga di RDA collegata, valore netto dell'ordine (solo se l'estrazione ha la colonna) e importo già ricevuto (entrata merci). */
+  prValue: number; netValue: number | null; grAmount: number; irAmount: number; currency: string;
+  matlGroup: string; matlGroupDesc: string; agreement: string; internalOrder: string; costCenter: string; glAccount: string; shortText: string; requestedBy: string }
+/** Colonne con il valore netto del PO: l'estrazione standard non lo ha, ma se IT lo aggiunge viene usato al posto del valore della RDA. */
+const NET_COLS = ["Net Order Value", "Net Value", "Net value", "Net Ord.Val.", "PO Value", "PO VALUE", "Valore netto"];
+/** Tutte le righe d'ordine: quelle con RDA servono anche ai task, tutte servono alla spesa. */
 export function parsePoLines(rows: (string | null)[][]): PoLine[] {
-  const col = columns(rows[0] ?? []);
+  const header = rows[0] ?? [];
+  const col = columns(header);
+  const net = NET_COLS.find(c => header.some(h => (h ?? "").trim() === c));
   const out: PoLine[] = [];
   for (const r of rows.slice(1)) {
     const po = col(r, "Purch.Doc.");
     if (!po) continue; // riga dei totali
-    out.push({ po, pr: col(r, "Purch.Req.") ?? "", supplierCode: col(r, "Supplier") ?? "", supplierName: col(r, "Name 1") ?? "", docDate: date(col(r, "Doc. Date")), pgr: col(r, "PGr") ?? "", createdBy: col(r, "Created by") ?? "" });
+    const t = (name: string) => (col(r, name) ?? "").trim();
+    out.push({ po, item: t("Item") || "0", pr: t("Purch.Req."), supplierCode: t("Supplier"), supplierName: t("Name 1"), docDate: date(col(r, "Doc. Date")), createdOn: date(col(r, "Created on")), pgr: t("PGr"), createdBy: t("Created by"), docType: t("Type"),
+      prValue: num(col(r, "PR VALUE")), netValue: net ? num(col(r, net)) : null, grAmount: num(col(r, "TOTAL GR Amount in Loc Curr")), irAmount: num(col(r, "TOTAL IR amount in loc curr")), currency: t("Crcy") || "EUR",
+      matlGroup: t("Matl Group") || t("Material Group"), matlGroupDesc: t("Material Group Desc."), agreement: t("Agmt"), internalOrder: t("Order Number"), costCenter: t("Cost Center"), glAccount: t("G/L Account Number"),
+      shortText: t("Short Text"), requestedBy: t("Requested By") });
   }
   return out;
 }
