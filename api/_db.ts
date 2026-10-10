@@ -164,6 +164,18 @@ create table if not exists rda_lines (
   plant text not null default '', cost_center text not null default '', gl_account text not null default '', value numeric not null default 0
 );
 create index if not exists rda_lines_pr_idx on rda_lines (pr);
+alter table rda_lines add column if not exists internal_order text not null default '';
+alter table contracts add column if not exists internal_order text not null default '';
+create table if not exists mp_versions (
+  id serial primary key, year integer not null, version integer not null, label text not null, file_name text not null default '',
+  uploaded_by text not null default '', uploaded_at timestamptz not null default now(), unique (year, version)
+);
+create table if not exists mp_lines (
+  id serial primary key, version_id integer not null references mp_versions(id) on delete cascade, io text not null,
+  description text not null default '', function text not null default '', cost_center text not null default '', gl_account text not null default '',
+  category text not null default '', amount numeric not null default 0
+);
+create index if not exists mp_lines_version_idx on mp_lines (version_id, io);
 create table if not exists sap_pos (
   po text not null, pr text not null, supplier_code text not null default '', supplier_name text not null default '',
   doc_date date, pgr text not null default '', created_by text not null default '', seen_at timestamptz not null default now(), primary key (po, pr)
@@ -257,6 +269,7 @@ function cleanContract(c: unknown): ContractInput {
     renewal: str(r.renewal, 100) || "Non definito", type: str(r.type, 100), notes: str(r.notes, 4000),
     ceased: r.ceased === true, fileName: nstr(r.fileName), noticeDays, noticeDate: noticeDate as string,
     supplierId: Number.isInteger(r.supplierId) && (r.supplierId as number) > 0 ? r.supplierId as number : null,
+    internalOrder: str(r.internalOrder, 40).replace(/\s+/g, ""),
     filePath: r.filePath == null ? null : typeof r.filePath === "string" && FILE_PATH_RE.test(r.filePath) ? r.filePath : bad("Documento non valido"),
   };
 }
@@ -406,7 +419,7 @@ function rowToContract(r: Record<string, unknown>): Contract {
     noticeDays: r.notice_days as number | null, noticeDate: (r.notice_date as string) ?? "",
     status: (r.status as Contract["status"]) ?? "active", outcome: (r.outcome as Contract["outcome"]) ?? "", outcomeNote: (r.outcome_note as string) ?? "",
     closedAt: r.closed_at ? new Date(r.closed_at as string).toISOString() : null, replaces: (r.replaces as number | null) ?? null, replacedBy: (r.replaced_by as number | null) ?? null,
-    supplierId: (r.supplier_id as number | null) ?? null,
+    supplierId: (r.supplier_id as number | null) ?? null, internalOrder: (r.internal_order as string) ?? "",
   };
 }
 function rowToStep(r: Record<string, unknown>): PlanStep {
@@ -460,17 +473,17 @@ async function fetchPlan(db: Queryable, id: number): Promise<PlanStep[]> {
 }
 
 async function upsertContract(db: Queryable, c: ContractInput): Promise<number> {
-  const cols = [c.supplier, c.object, c.category, c.country, c.value, c.currency, c.start, c.end, c.owner, c.boEmail, c.renewal, c.type, c.notes, c.ceased, c.fileName, c.filePath, c.noticeDays, c.noticeDate, c.supplierId ?? null];
+  const cols = [c.supplier, c.object, c.category, c.country, c.value, c.currency, c.start, c.end, c.owner, c.boEmail, c.renewal, c.type, c.notes, c.ceased, c.fileName, c.filePath, c.noticeDays, c.noticeDate, c.supplierId ?? null, c.internalOrder ?? ""];
   if (c.supplierId && !(await db.query("select 1 from suppliers where id = $1", [c.supplierId])).rows.length) bad("Fornitore non trovato in anagrafica");
   if (c.id === undefined) {
     const r = await db.query(
-      `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path, notice_days, notice_date, supplier_id)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) returning id`, cols);
+      `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path, notice_days, notice_date, supplier_id, internal_order)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) returning id`, cols);
     return r.rows[0].id;
   }
   const r = await db.query(
     `update contracts set supplier=$1, object=$2, category=$3, country=$4, value=$5, currency=$6, start_date=$7, end_date=$8,
-       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15, file_path=$16, notice_days=$17, notice_date=$18, supplier_id=$19 where id=$20`, [...cols, c.id]);
+       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15, file_path=$16, notice_days=$17, notice_date=$18, supplier_id=$19, internal_order=$20 where id=$21`, [...cols, c.id]);
   if (!r.rowCount) throw new HttpError(404, "Contratto non trovato");
   return c.id;
 }

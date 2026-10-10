@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type ImportResult, type Kpis, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type Kpis, type MpVersion, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -73,6 +73,9 @@ export const portalApi = {
   kpis: () => request<Kpis>(portal("kpis")),
   sanctionsRefresh: () => post<{ updated: string[]; errors: string[]; rescreened: number; newHits: number; config: PortalConfig }>(portal("sanctions-refresh"), {}),
   demoSupplier: () => post<{ id: number; name: string; email: string; password: string }>(portal("vendor-demo"), {}),
+  budget: (year?: number) => request<BudgetView>(portal("budget", year ? `&year=${year}` : "")),
+  budgetIo: (io: string, year?: number) => request<{ line: BudgetLine | null; items: BudgetItem[]; year: number }>(portal("budget-io", `&io=${encodeURIComponent(io)}${year ? `&year=${year}` : ""}`)),
+  deleteBudgetVersion: (id: number) => request<{ ok: true }>(portal("budget-version", `&id=${id}`), { method: "DELETE" }),
   configAudit: () => request<{ entries: ConfigAuditEntry[] }>(portal("config-audit")).then(r => r.entries),
   anonymize: (id: number, reason: string) => post<{ supplier: Supplier }>(portal("vendor-anonymize", `&id=${id}`), { reason }).then(r => r.supplier),
   vendors: () => request<{ vendors: SupplierSummary[] }>(portal("vendors")).then(r => r.vendors),
@@ -96,7 +99,7 @@ export const portalApi = {
   decideSourcing: (id: number, approve: boolean, note: string) => post<{ task: TaskDetail }>(portal("task-sourcing-approve", `&id=${id}`), { approve, note }).then(r => r.task),
   setOutcome: (id: number, input: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-outcome", `&id=${id}`), input).then(r => r.task),
   registerContract: (id: number, input: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-contract", `&id=${id}`), input).then(r => r.task),
-  setTaskLinks: (id: number, input: { poNumbers?: string[]; rdaNumbers?: string[]; noPoReason?: string }) => post<{ task: TaskDetail }>(portal("task-links", `&id=${id}`), input).then(r => r.task),
+  setTaskLinks: (id: number, input: { poNumbers?: string[]; rdaNumbers?: string[]; noPoReason?: string; internalOrder?: string }) => post<{ task: TaskDetail }>(portal("task-links", `&id=${id}`), input).then(r => r.task),
   addTaskDoc: (id: number, doc: { kind: string; fileName: string; filePath: string; size: number }) => post<{ task: TaskDetail }>(portal("task-doc", `&id=${id}`), doc).then(r => r.task),
   removeTaskDoc: (id: number, docId: number) => request<{ task: TaskDetail }>(portal("task-doc", `&id=${id}&doc=${docId}`), { method: "DELETE" }).then(r => r.task),
   deleteTask: (id: number) => request<{ ok: true }>(portal("task", `&id=${id}`), { method: "DELETE" }),
@@ -104,6 +107,7 @@ export const portalApi = {
   saveConfig: (entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders" | "rda" | "pgr" | "privacy", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
 };
 
+export const budgetTemplateUrl = "/api/portal?op=budget-template";
 export const taskDocUrl = (docId: number) => `/api/portal?op=task-doc-download&id=${docId}`;
 export const vendorExportUrl = (id: number) => `/api/portal?op=vendor-export&id=${id}`;
 export const myDataExportUrl = "/api/portal?op=supplier-export";
@@ -127,4 +131,12 @@ export async function importSapFile(file: File, force = false): Promise<ImportRe
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, data?.error ?? `Errore ${res.status}`, data);
   return data as ImportResult;
+}
+
+/** Carica una versione del Master Plan (Excel .xlsx, CSV o XML di Excel) per l'anno indicato. */
+export async function importBudgetFile(file: File, year: number, label: string): Promise<MpVersion> {
+  const res = await fetch(`/api/portal?op=budget-import&year=${year}&label=${encodeURIComponent(label)}`, { method: "POST", headers: { "x-file-name": encodeURIComponent(file.name) }, body: file });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(res.status, data?.error ?? `Errore ${res.status}`, data);
+  return (data as { version: MpVersion }).version;
 }

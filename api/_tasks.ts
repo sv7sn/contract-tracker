@@ -66,8 +66,8 @@ async function importPr(db: Queryable, lines: PrLine[], res: ImportResult, force
   // L'elenco è la fotografia completa delle RDA aperte: si sostituisce tutto.
   await db.query("delete from rda_lines");
   for (const l of lines) {
-    await db.query("insert into rda_lines (pr, item, pgr, short_text, qty, unit, price, per, currency, req_date, deliv_date, release_date, requested_by, created_by, plant, cost_center, gl_account, value) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)",
-      [l.pr, l.item, l.pgr, l.shortText, l.qty, l.unit, l.price, l.per, l.currency, l.reqDate, l.delivDate, l.releaseDate, l.requestedBy, l.createdBy, l.plant, l.costCenter, l.glAccount, l.value]);
+    await db.query("insert into rda_lines (pr, item, pgr, short_text, qty, unit, price, per, currency, req_date, deliv_date, release_date, requested_by, created_by, plant, cost_center, gl_account, value, internal_order) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)",
+      [l.pr, l.item, l.pgr, l.shortText, l.qty, l.unit, l.price, l.per, l.currency, l.reqDate, l.delivDate, l.releaseDate, l.requestedBy, l.createdBy, l.plant, l.costCenter, l.glAccount, l.value, l.internalOrder]);
   }
   const maps = new Map((await db.query("select pgr, user_id from pgr_assignments where user_id is not null")).rows.map(r => [r.pgr as string, r.user_id as number]));
   for (const [pr, ls] of prs) {
@@ -75,7 +75,10 @@ async function importPr(db: Queryable, lines: PrLine[], res: ImportResult, force
     const release = ls.map(l => l.releaseDate).filter(Boolean).sort()[0] ?? ls.map(l => l.reqDate).filter(Boolean).sort()[0] ?? null;
     const deliv = ls.map(l => l.delivDate).filter(Boolean).sort()[0] ?? null;
     const currencies = [...new Set(ls.map(l => l.currency))];
-    const meta: RdaMeta = { pgr: first.pgr, requestedBy: first.requestedBy, createdBy: first.createdBy, value: Math.round(ls.reduce((a, l) => a + l.value, 0) * 100) / 100, currency: currencies.length === 1 ? currencies[0] : "EUR", lines: ls.length, releaseDate: release, delivDate: deliv, plant: first.plant };
+    // Valore per internal order: resta sul task anche quando la RDA esce dall'elenco SAP (serve al Master Plan).
+    const io: Record<string, number> = {};
+    for (const l of ls) if (l.internalOrder) io[l.internalOrder] = Math.round(((io[l.internalOrder] ?? 0) + l.value) * 100) / 100;
+    const meta: RdaMeta = { io, costCenter: first.costCenter, pgr: first.pgr, requestedBy: first.requestedBy, createdBy: first.createdBy, value: Math.round(ls.reduce((a, l) => a + l.value, 0) * 100) / 100, currency: currencies.length === 1 ? currencies[0] : "EUR", lines: ls.length, releaseDate: release, delivDate: deliv, plant: first.plant };
     const title = `RDA ${pr} · ${first.shortText || "senza descrizione"}${ls.length > 1 ? ` (+${ls.length - 1})` : ""}`.slice(0, 200);
     const due = release ? addDays(release, sla) : null;
     const cur = (await db.query("select * from tasks where source = 'rda' and source_key = $1 for update", [pr])).rows[0];
@@ -185,7 +188,7 @@ export async function getTask(user: User, id: number): Promise<TaskDetail> {
   if (!r) throw new HttpError(404, "Task non trovato");
   const pos = r.source === "rda" ? (await db.query("select * from sap_pos where pr = $1 order by doc_date", [r.source_key])).rows : [];
   const lines: TaskLine[] = r.source === "rda" ? (await db.query("select * from rda_lines where pr = $1 order by item, id", [r.source_key])).rows.map(l => ({
-    item: l.item, shortText: l.short_text, qty: Number(l.qty), unit: l.unit, price: Number(l.price), per: Number(l.per), currency: l.currency, delivDate: day(l.deliv_date), costCenter: l.cost_center, glAccount: l.gl_account, value: Number(l.value) })) : [];
+    item: l.item, shortText: l.short_text, qty: Number(l.qty), unit: l.unit, price: Number(l.price), per: Number(l.per), currency: l.currency, delivDate: day(l.deliv_date), costCenter: l.cost_center, glAccount: l.gl_account, value: Number(l.value), internalOrder: l.internal_order ?? "" })) : [];
   const docs = (await db.query("select * from task_documents where task_id = $1 order by id", [id])).rows;
   return { ...mapTask(r, pos, (await loadRdaSettings(db)).sourcingThreshold, docs), lines };
 }
@@ -432,7 +435,7 @@ async function attachDoc(db: Queryable, taskId: number, kind: TaskDocKind, doc: 
 const audit = (db: Queryable, contractId: number, user: string, action: string, detail: string) =>
   db.query("insert into audit_log (contract_id, ts, user_name, action, detail) values ($1,$2,$3,$4,$5)", [contractId, nowTs(), user, action, detail]);
 
-interface ContractDefaults { supplier: string; object: string; category: string; country: string; currency: string; owner: string; boEmail: string; type: string; supplierId: number | null; replaces: number | null }
+interface ContractDefaults { internalOrder?: string; supplier: string; object: string; category: string; country: string; currency: string; owner: string; boEmail: string; type: string; supplierId: number | null; replaces: number | null }
 /** Crea un contratto nel registro (con il suo piano di rinnovo) a partire dal form dell'esito o della pratica d'acquisto. */
 async function insertContract(db: Queryable, c: Row, note: string, d: ContractDefaults): Promise<{ id: number; supplier: string; end: string; value: number; fileName: string; filePath: string }> {
   const end = isoDay(c.end); if (!end) bad("Indica la scadenza del contratto");
@@ -455,6 +458,8 @@ async function insertContract(db: Queryable, c: Row, note: string, d: ContractDe
   const id = (await db.query(`insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path, notice_days, notice_date, replaces, supplier_id)
     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Non definito',$11,$12,false,$13,$14,$15,$16,$17,$18) returning id`,
     [supplier, str(c.object, 300) || d.object, d.category, d.country, value, str(c.currency, 3) || d.currency, start, end, d.owner, str(c.boEmail, 200).toLowerCase() || d.boEmail, d.type, note, fileName, filePath, noticeDays, noticeDate, d.replaces, supplierId])).rows[0].id as number;
+  const io = str(c.internalOrder, 40).replace(/\s+/g, "") || d.internalOrder;
+  if (io) await db.query("update contracts set internal_order = $2 where id = $1", [id, io]);
   for (const s of makePlan(id, noticeDate || end!))
     await db.query(`insert into plan_steps (contract_id, step_id, scheduled_date, original_date, status, completed_at, completed_by, bo_decision, bo_notes, bo_responded_at, modified, modified_reason) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
       [id, s.stepId, s.scheduledDate, s.originalDate, s.status, s.completedAt, s.completedBy, s.boDecision, s.boNotes, s.boRespondedAt, s.modified, s.modifiedReason]);
@@ -470,7 +475,7 @@ export async function registerPurchaseContract(user: User, id: number, input: Ro
   await inTransaction(async db => {
     const owner = (await db.query("select name from users where id = $1 and active and role in ('buyer','manager')", [t.assigneeId])).rows[0]?.name ?? user.name;
     const c = (input?.contract ?? {}) as Row;
-    const nc = await insertContract(db, c, note, { supplier: t.meta.supplier ?? "", object: t.title, category: str(c.category, 100), country: str(c.country, 100) || "Italia", currency: t.meta.currency ?? "EUR", owner, boEmail: "", type: str(c.type, 100) || "Servizi", supplierId: t.meta.supplierId ?? null, replaces: null });
+    const nc = await insertContract(db, c, note, { supplier: t.meta.supplier ?? "", object: t.title, category: str(c.category, 100), country: str(c.country, 100) || "Italia", currency: t.meta.currency ?? "EUR", owner, boEmail: "", type: str(c.type, 100) || "Servizi", supplierId: t.meta.supplierId ?? null, replaces: null, internalOrder: t.meta.internalOrder || Object.keys(t.meta.io ?? {})[0] || "" });
     await db.query("update tasks set outcome = 'new_contract', new_contract_id = $2, meta = meta || jsonb_build_object('value', $3::numeric, 'supplier', $4::text), updated_at = now() where id = $1", [id, nc.id, nc.value, nc.supplier]);
     await db.query("insert into task_documents (task_id, kind, file_name, file_path, uploaded_by) values ($1,'contract',$2,$3,$4)", [id, nc.fileName, nc.filePath, user.name]);
     await audit(db, nc.id, user.name, "Contratto creato", `Da pratica d'acquisto: ${t.title}${note ? ` · ${note}` : ""}`);
@@ -493,7 +498,7 @@ export async function setRenewalOutcome(user: User, id: number, input: Row): Pro
     if (old.status !== "active") throw new HttpError(409, "Il contratto è già chiuso");
     if (outcome === "renewed" || outcome === "replaced") {
       const c = (input?.contract ?? {}) as Row;
-      const { id: nc, supplier, end, value, fileName, filePath } = await insertContract(db, c, note, { supplier: old.supplier, object: old.object, category: old.category, country: old.country, currency: old.currency, owner: old.owner, boEmail: old.bo_email, type: old.type, supplierId: old.supplier_id ?? null, replaces: old.id });
+      const { id: nc, supplier, end, value, fileName, filePath } = await insertContract(db, c, note, { supplier: old.supplier, object: old.object, category: old.category, country: old.country, currency: old.currency, owner: old.owner, boEmail: old.bo_email, type: old.type, supplierId: old.supplier_id ?? null, replaces: old.id, internalOrder: t.meta.internalOrder || old.internal_order || "" });
       await db.query("update contracts set status = 'closed', outcome = $2, outcome_note = $3, closed_at = now(), replaced_by = $4, renewal = $5 where id = $1", [old.id, outcome, note, nc, OUTCOME_LABEL[outcome]]);
       // Da qui la soglia del confronto vale sul nuovo contratto; il valore precedente resta come riferimento per il saving.
       await db.query("update tasks set outcome = $2, new_contract_id = $3, meta = meta || jsonb_build_object('previousValue', meta->'value', 'value', $4::numeric), updated_at = now() where id = $1", [id, outcome, nc, value]);
@@ -539,6 +544,12 @@ export async function setTaskLinks(user: User, id: number, input: Row): Promise<
   const sets: string[] = [], vals: unknown[] = [id];
   if (input?.poNumbers !== undefined) { const p = list(input.poNumbers); if (p.some(x => !/^[A-Za-z0-9/-]{3,30}$/.test(x))) bad("Numero di PO non valido"); vals.push(p); sets.push(`po_numbers = $${vals.length}`); }
   if (input?.rdaNumbers !== undefined) { const p = list(input.rdaNumbers); if (p.some(x => !/^[A-Za-z0-9/-]{3,30}$/.test(x))) bad("Numero di RDA non valido"); vals.push(p); sets.push(`rda_numbers = $${vals.length}`); }
+  if (input?.internalOrder !== undefined) {
+    const io = str(input.internalOrder, 40).replace(/\s+/g, "");
+    if (io && !/^[A-Za-z0-9/._-]{3,40}$/.test(io)) bad("Internal order non valido");
+    if (t.source === "rda" && t.meta.io && Object.keys(t.meta.io).length) bad("Questa RDA ha già l'internal order da SAP");
+    vals.push(io); sets.push(`meta = meta || jsonb_build_object('internalOrder', $${vals.length}::text)`);
+  }
   if (input?.noPoReason !== undefined) { const r = str(input.noPoReason, 500); if (r && r.length < 5) bad("Spiega perché il PO non serve"); vals.push(r); sets.push(`no_po_reason = $${vals.length}`); }
   if (!sets.length) return t;
   // Una RDA già arrivata da SAP come task a sé viene unita a questa pratica, per non lavorarla due volte.
