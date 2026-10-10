@@ -6,8 +6,9 @@ import { daysToDeadline } from "../lib/format.ts";
 import type { ModuleDef } from "../lib/modules.tsx";
 import { Card, Grid } from "../components/ui.tsx";
 import { ArrowRight } from "../components/icons.tsx";
+import { WorkList } from "./WorkList.tsx";
 
-interface Props { user: User; modules: ModuleDef[]; contracts: Contract[]; plans: Record<number, PlanStep[]>; onOpen: (view: View) => void }
+interface Props { user: User; modules: ModuleDef[]; contracts: Contract[]; plans: Record<number, PlanStep[]>; onOpen: (view: View, focus?: { taskId?: number; vendorId?: number }) => void }
 interface Metric { label: string; value: number | string; tone?: "bad" | "warn" | "good" }
 interface Live { tasks: TaskSummary | null; vendorsToReview: number | null; lapsed: number | null; unresponsive: number | null }
 
@@ -65,8 +66,9 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
     <div>
       <div style={{ marginBottom: 18 }}>
         <div style={{ ...font, fontSize: 24, fontWeight: 700, color: C.text }}>{hour < 13 ? "Buongiorno" : hour < 18 ? "Buon pomeriggio" : "Buonasera"}, {first}</div>
-        <div style={{ ...sans, fontSize: 13.5, color: C.muted, marginTop: 2 }}>Scegli un modulo per iniziare.</div>
+        <div style={{ ...sans, fontSize: 13.5, color: C.muted, marginTop: 2 }}>{user.role === "manager" || user.role === "buyer" ? "Ecco cosa richiede la tua attenzione. Sotto trovi i moduli." : "Scegli un modulo per iniziare."}</div>
       </div>
+      {(user.role === "manager" || user.role === "buyer") && <WorkList onOpen={onOpen} />}
       <Grid min={300} gap={14} fill>
         {modules.map(m => (
           <Card key={m.key} className="lift" onClick={() => onOpen(m.pages[0].key)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") onOpen(m.pages[0].key); }} style={{ cursor: "pointer", padding: 20, borderRadius: radius.lg, display: "flex", flexDirection: "column", gap: 12 }}>

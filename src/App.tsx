@@ -42,6 +42,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [view, setView] = useState<View>("dashboard");
+  /** Pratica o fornitore da aprire subito dopo un clic su "Da fare adesso". */
+  const [focus, setFocus] = useState<{ taskId?: number; vendorId?: number } | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [data, setData] = useState<AppState>(EMPTY);
   const { contracts, plans, auditLogs } = data;
@@ -395,9 +397,9 @@ export default function App() {
           {view === "bo" && currentUser.role === "bo" && <BOView contracts={contracts} plans={plans} currentUser={currentUser} onOpenBOForm={setBOFormContract} />}
           {view === "notifiche" && currentUser.role !== "bo" && <AlertsView contracts={contracts} users={users} />}
           {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} onPurge={handlePurge} />}
-          {view === "hub" && hubAvailable && <HubView user={currentUser} modules={modules} contracts={contracts} plans={plans} onOpen={setView} />}
-          {view === "tasks" && mode === "api" && (currentUser.role === "manager" || currentUser.role === "buyer") && <TasksView currentUser={currentUser} contracts={contracts} plans={plans} onCompleteStep={handleCompleteStep} onSendBO={handleSendBO} onOpenContract={openDetail} notify={showToast} onSessionExpired={sessionExpired} />}
-          {view === "vendors" && mode === "api" && <VendorsView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
+          {view === "hub" && hubAvailable && <HubView user={currentUser} modules={modules} contracts={contracts} plans={plans} onOpen={(v, f) => { setFocus(f?.taskId || f?.vendorId ? f : null); setView(v); }} />}
+          {view === "tasks" && mode === "api" && (currentUser.role === "manager" || currentUser.role === "buyer") && <TasksView initialOpenId={focus?.taskId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} contracts={contracts} plans={plans} onCompleteStep={handleCompleteStep} onSendBO={handleSendBO} onOpenContract={openDetail} notify={showToast} onSessionExpired={sessionExpired} />}
+          {view === "vendors" && mode === "api" && <VendorsView initialOpenId={focus?.vendorId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "expiries" && mode === "api" && <ExpiryView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "budget" && mode === "api" && ["manager", "buyer", "finance"].includes(currentUser.role) && <BudgetView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "spend" && mode === "api" && ["manager", "buyer", "finance"].includes(currentUser.role) && <SpendView onSessionExpired={sessionExpired} />}

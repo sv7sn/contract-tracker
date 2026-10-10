@@ -308,3 +308,12 @@ export interface Scorecard {
   rfq: { invited: number; answered: number; declined: number };
   spend12m: number; pos12m: number;
 }
+
+// ─── Il mio lavoro ───────────────────────────────────────────
+export type WorkKind = "task_late" | "task_soon" | "sourcing_missing" | "exception" | "unassigned" | "rfq_answers" | "rfq_compare" | "vendor_review" | "vendor_lapsed" | "vendor_unresponsive" | "splits";
+export interface WorkItem {
+  kind: WorkKind; urgency: 1 | 2 | 3; title: string; detail: string;
+  /** Giorni di ritardo (positivo) o mancanti (negativo), se la voce ha una scadenza. */
+  days: number | null;
+  target: { view: View; taskId?: number; vendorId?: number };
+}
