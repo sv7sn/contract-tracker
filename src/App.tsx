@@ -26,6 +26,7 @@ import { ExpiryView } from "./views/ExpiryView.tsx";
 import { TasksView } from "./views/TasksView.tsx";
 import { KpiView } from "./views/KpiView.tsx";
 import { BudgetView } from "./views/BudgetView.tsx";
+import { SpendView } from "./views/SpendView.tsx";
 import { HubView } from "./views/HubView.tsx";
 import { moduleOfView, modulesFor } from "./lib/modules.tsx";
 
@@ -311,7 +312,7 @@ export default function App() {
   const activeModule = modules.find(m => m.key === curModule);
   const navItems = activeModule?.pages ?? [];
   const inContracts = curModule === "contracts";
-  const titles: Record<View, string> = { dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", vendors: "Fornitori", expiries: "Scadenze documenti", tasks: "Task", kpi: "Indicatori di processo", budget: "Master Plan", hub: "Home", config: "Configurazione", supplier: "Area fornitore", detail: selected?.supplier ?? "" };
+  const titles: Record<View, string> = { dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", vendors: "Fornitori", expiries: "Scadenze documenti", tasks: "Task", kpi: "Indicatori di processo", budget: "Master Plan", spend: "Spesa", hub: "Home", config: "Configurazione", supplier: "Area fornitore", detail: selected?.supplier ?? "" };
   const eyebrow = curModule === "hub" ? "Procurement Lab" : activeModule?.label ?? ROLE_LABELS[currentUser.role];
   const activeNav = view === "detail" ? "list" : view;
   const goModule = (m: { pages: { key: View }[] }) => { setView(m.pages[0].key); setShowModules(false); };
@@ -399,6 +400,7 @@ export default function App() {
           {view === "vendors" && mode === "api" && <VendorsView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "expiries" && mode === "api" && <ExpiryView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "budget" && mode === "api" && ["manager", "buyer", "finance"].includes(currentUser.role) && <BudgetView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
+          {view === "spend" && mode === "api" && ["manager", "buyer", "finance"].includes(currentUser.role) && <SpendView onSessionExpired={sessionExpired} />}
           {view === "kpi" && mode === "api" && currentUser.role === "manager" && <KpiView onSessionExpired={sessionExpired} />}
           {view === "config" && mode === "api" && currentUser.role === "manager" && <ConfigView notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "detail" && selected && <ContractDetail contract={selected} contracts={contracts} onOpen={openDetail} auditLog={auditLogs[selected.id] || []} currentUser={currentUser} canOpenDocuments={mode === "api"} onBack={() => setView("list")} onEdit={() => { setEditingContract(selected); setShowForm(true); }} onDelete={handleDelete} />}

@@ -103,6 +103,27 @@ async function importPr(db: Queryable, lines: PrLine[], res: ImportResult, force
 async function importPo(db: Queryable, rows: (string | null)[][], res: ImportResult) {
   const lines = parsePoLines(rows);
   res.rows = lines.length;
+  // Valore della riga: netto del PO se l'estrazione lo ha, altrimenti quello della RDA collegata, altrimenti l'importo già ricevuto.
+  // Si scrive a blocchi (un'estrazione storica può avere decine di migliaia di righe); a parità di PO e posizione vale l'ultima riga.
+  const recs = [...new Map(lines.map(l => {
+    const [value, source] = l.netValue !== null && l.netValue > 0 ? [l.netValue, "net"] : l.prValue > 0 ? [l.prValue, "pr"] : l.grAmount > 0 ? [l.grAmount, "gr"] : [0, "none"];
+    return [`${l.po}|${l.item}`, { ...l, shortText: l.shortText.slice(0, 200), value: Math.round(value * 100) / 100, source }];
+  })).values()];
+  for (let i = 0; i < recs.length; i += 500) {
+    await db.query(`insert into po_lines (po, item, doc_date, created_on, doc_type, supplier_code, supplier_name, pr, pr_value, net_value, gr_amount, ir_amount, value, value_source, currency,
+        matl_group, matl_group_desc, agreement, internal_order, cost_center, gl_account, short_text, pgr, created_by, requested_by)
+      select x.po, x.item, x."docDate"::date, x."createdOn"::date, x."docType", x."supplierCode", x."supplierName", x.pr, x."prValue", x."netValue", x."grAmount", x."irAmount", x.value, x.source, x.currency,
+        x."matlGroup", x."matlGroupDesc", x.agreement, x."internalOrder", x."costCenter", x."glAccount", x."shortText", x.pgr, x."createdBy", x."requestedBy"
+      from jsonb_to_recordset($1::jsonb) as x(po text, item text, "docDate" text, "createdOn" text, "docType" text, "supplierCode" text, "supplierName" text, pr text, "prValue" numeric, "netValue" numeric,
+        "grAmount" numeric, "irAmount" numeric, value numeric, source text, currency text, "matlGroup" text, "matlGroupDesc" text, agreement text, "internalOrder" text, "costCenter" text,
+        "glAccount" text, "shortText" text, pgr text, "createdBy" text, "requestedBy" text)
+      on conflict (po, item) do update set doc_date = excluded.doc_date, created_on = excluded.created_on, doc_type = excluded.doc_type, supplier_code = excluded.supplier_code, supplier_name = excluded.supplier_name,
+        pr = excluded.pr, pr_value = excluded.pr_value, net_value = excluded.net_value, gr_amount = excluded.gr_amount, ir_amount = excluded.ir_amount, value = excluded.value, value_source = excluded.value_source,
+        currency = excluded.currency, matl_group = excluded.matl_group, matl_group_desc = excluded.matl_group_desc, agreement = excluded.agreement, internal_order = excluded.internal_order,
+        cost_center = excluded.cost_center, gl_account = excluded.gl_account, short_text = excluded.short_text, pgr = excluded.pgr, created_by = excluded.created_by, requested_by = excluded.requested_by, seen_at = now()`,
+      [JSON.stringify(recs.slice(i, i + 500))]);
+  }
+  res.poLines = recs.length;
   const withPr = lines.filter(l => l.pr);
   const seen = new Set<string>();
   for (const l of withPr) {
