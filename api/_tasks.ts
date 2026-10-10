@@ -484,6 +484,7 @@ async function insertContract(db: Queryable, c: Row, note: string, d: ContractDe
     values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Non definito',$11,$12,false,$13,$14,$15,$16,$17,$18) returning id`,
     [supplier, str(c.object, 300) || d.object, d.category, d.country, value, str(c.currency, 3) || d.currency, start, end, d.owner, str(c.boEmail, 200).toLowerCase() || d.boEmail, d.type, note, fileName, filePath, noticeDays, noticeDate, d.replaces, supplierId])).rows[0].id as number;
   await db.query("update contracts set owner_id = (select u.id from users u where lower(u.name) = lower(contracts.owner) and u.role in ('manager','buyer')) where id = $1", [id]);
+  await db.query("update contracts set bo_user_id = (select u.id from users u where lower(u.email) = lower(contracts.bo_email) and u.role = 'bo' and u.active) where id = $1 and bo_email <> ''", [id]);
   const io = str(c.internalOrder, 40).replace(/\s+/g, "") || d.internalOrder;
   if (io) await db.query("update contracts set internal_order = $2 where id = $1", [id, io]);
   for (const s of makePlan(id, noticeDate || end!))

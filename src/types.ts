@@ -25,6 +25,8 @@ export interface Contract {
   boLeadDays?: number | null;
   /** Utente buyer o manager responsabile del contratto (il nome in `owner` resta per la visualizzazione). */
   ownerId?: number | null;
+  /** Business Owner: utente con ruolo Business Owner (la sua email resta in `boEmail`, per i contratti più vecchi anche da sola). */
+  boUserId?: number | null; boName?: string;
   /** Fornitore in anagrafica (portale fornitori), se collegato. */
   supplierId?: number | null;
   /** Riga del Master Plan su cui pesa il contratto. */
@@ -34,7 +36,7 @@ export interface Contract {
   /** Percorso del documento nell'archivio privato; null se il file non è stato salvato. */
   filePath: string | null;
 }
-export type ContractData = Omit<Contract, "id">;
+export type ContractData = Omit<Contract, "id" | "boName">;
 export type ContractStatus = "active" | "closed";
 /** renewed = rinnovato/rinegoziato con lo stesso fornitore; replaced = sostituito (gara o altro fornitore); extended = prorogato; ceased = cessato. */
 export type ContractOutcome = "renewed" | "replaced" | "extended" | "ceased";

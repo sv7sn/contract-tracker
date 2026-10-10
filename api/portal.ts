@@ -261,6 +261,7 @@ async function handle(request: Request): Promise<Response> {
     if (op === "bo-lead" && method === "POST") return json({ info: await setBoLead(user, idOf(url), ((await readJson(request)) as { days?: unknown }).days) });
     if (op === "bo-settings" && method === "GET") return json({ settings: await loadBoSettings(getPool()) });
     if (op === "bo-settings-save" && method === "POST") return json({ settings: await saveBoSettings(user, (await readJson(request)) as Record<string, unknown>) });
+    if (op === "bo-users" && method === "GET") return json({ users: (await getPool().query("select id, name, email from users where active and role = 'bo' order by name")).rows });
     if (op === "my-work" && method === "GET") return json({ items: await myWork(user) });
     // ── Spesa dai file ordini SAP ──
     // ── Master Plan (budget per internal order) ──

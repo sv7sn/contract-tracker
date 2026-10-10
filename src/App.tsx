@@ -158,6 +158,8 @@ export default function App() {
       if (!(await persist({ contract: { ...form, id }, plan, audit })).ok) return;
       setData(s => pushAudit({ ...s, contracts: s.contracts.map(c => c.id === id ? { ...c, ...form, owner: currentUser.role === "buyer" ? c.owner : form.owner } : c), plans: plan ? { ...s.plans, [id]: plan } : s.plans }, id, audit));
       showToast("💾 Aggiornato");
+      // Con il server si rilegge tutto: nome e collegamento del Business Owner li calcola lui.
+      if (mode === "api") void loadAll(currentUser);
     } else {
       const audit = [entry("Contratto creato", `${form.supplier} · ${form.object}`)];
       const plan = makePlan(0, keyDate(form));
@@ -167,6 +169,7 @@ export default function App() {
       const owner = currentUser.role === "buyer" ? currentUser.name : form.owner;
       setData(s => pushAudit({ ...s, contracts: [...s.contracts, { ...form, owner, id: newId }], plans: { ...s.plans, [newId]: plan.map(st => ({ ...st, contractId: newId })) } }, newId, audit));
       showToast("✅ Contratto aggiunto");
+      if (mode === "api") void loadAll(currentUser);
     }
     setShowForm(false); setEditingContract(null);
   };

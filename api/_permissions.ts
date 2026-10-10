@@ -15,8 +15,11 @@ const isOwner = (u: Subject, c: Pick<Contract, "owner" | "ownerId">) => {
 };
 
 /** Controlling / CFO (viewer) vedono tutti i contratti ma non modificano nulla. */
-export const canViewContract = (u: Subject, c: Pick<Contract, "owner" | "ownerId" | "boEmail">) =>
-  u.role === "manager" || u.role === "viewer" || (u.role === "buyer" && isOwner(u, c)) || (u.role === "bo" && !!c.boEmail && same(c.boEmail, u.email));
+/** Il Business Owner del contratto: per utente collegato (boUserId) o, per i contratti più vecchi, per email. */
+const isBo = (u: Subject, c: Pick<Contract, "boUserId" | "boEmail">) => (c.boUserId != null && u.id !== undefined ? c.boUserId === u.id : !!c.boEmail && same(c.boEmail, u.email));
+
+export const canViewContract = (u: Subject, c: Pick<Contract, "owner" | "ownerId" | "boEmail" | "boUserId">) =>
+  u.role === "manager" || u.role === "viewer" || (u.role === "buyer" && isOwner(u, c)) || (u.role === "bo" && isBo(u, c));
 
 /** Modificare dati, piano e stato di un contratto. */
 export const canEditContract = (u: Subject, c: Pick<Contract, "owner" | "ownerId">) =>
@@ -26,8 +29,8 @@ export const canCreateContract = (u: Subject) => u.role === "manager" || u.role 
 export const canDeleteContract = (u: Subject) => u.role === "manager";
 
 /** Registrare la decisione del Business Owner: il BO del contratto (o un manager per suo conto). */
-export const canRespondBO = (u: Subject, c: Pick<Contract, "boEmail">) =>
-  u.role === "manager" || (u.role === "bo" && !!c.boEmail && same(c.boEmail, u.email));
+export const canRespondBO = (u: Subject, c: Pick<Contract, "boEmail" | "boUserId">) =>
+  u.role === "manager" || (u.role === "bo" && isBo(u, c));
 
 export const canManageUsers = (u: Subject) => u.role === "manager";
 export const canViewTeam = (u: Subject) => u.role === "manager";

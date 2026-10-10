@@ -43,7 +43,7 @@ export async function myRequests(user: User): Promise<Requests> {
       (select coalesce(u.name, '') from tasks t left join users u on u.id = t.assignee_id where t.contract_id = c.id order by t.id desc limit 1) as buyer,
       (select count(*)::int from bo_messages m where m.contract_id = c.id and m.author_role <> 'bo' and m.seen_at is null) as unread
     from contracts c left join plan_steps r on r.contract_id = c.id and r.step_id = 'bo_response' left join plan_steps n on n.contract_id = c.id and n.step_id = 'bo_notify'
-    where lower(c.bo_email) = lower($1) and c.status = 'active' and not c.ceased order by (r.status = 'pending_bo') desc, key_date`, [user.email])).rows;
+    where (c.bo_user_id = $2 or (c.bo_user_id is null and lower(c.bo_email) = lower($1))) and c.status = 'active' and not c.ceased order by (r.status = 'pending_bo') desc, key_date`, [user.email, user.id])).rows;
   const contracts: RequesterContract[] = cr.map(r => ({ contractId: r.id, title: `${r.supplier} — ${r.object}`, keyDate: String(r.key_date), state: r.resp_status === "pending_bo" ? "to_answer" : r.resp_status === "done" ? "answered" : "upcoming",
     decision: r.resp_status === "done" ? r.bo_decision ?? "" : "", noticeDate: r.notify_date ?? "", task: r.task_status ? { status: r.task_status, buyerName: r.buyer ?? "", outcome: r.outcome ?? "" } : null, unreadMessages: r.unread }));
   return { sapUser: sap, rdas, contracts };

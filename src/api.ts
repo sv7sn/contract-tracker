@@ -81,6 +81,7 @@ export const portalApi = {
   myRequests: () => request<{ requests: Requests }>(portal("my-requests")).then(r => r.requests),
   boMessages: (contractId: number) => request<{ messages: BoMessage[] }>(portal("bo-messages", `&id=${contractId}`)).then(r => r.messages),
   sendBoMessage: (contractId: number, body: string) => post<{ messages: BoMessage[] }>(portal("bo-message-send", `&id=${contractId}`), { body }).then(r => r.messages),
+  boUsers: () => request<{ users: { id: number; name: string; email: string }[] }>(portal("bo-users")).then(r => r.users),
   cover: () => request<CoverView>(portal("cover")),
   addCover: (input: { userId?: number; substituteId: number; from: string; to: string }) => post<CoverView>(portal("cover-add"), input),
   deleteCover: (id: number) => request<CoverView>(portal("cover", `&id=${id}`), { method: "DELETE" }),
