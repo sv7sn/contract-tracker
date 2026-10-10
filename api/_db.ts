@@ -193,6 +193,17 @@ create table if not exists po_lines (
 );
 create index if not exists po_lines_date_idx on po_lines (doc_date);
 create index if not exists po_lines_supplier_idx on po_lines (supplier_code);
+-- Richieste di offerta ai fornitori registrati, legate a una pratica; le offerte arrivano dall'area fornitore.
+create table if not exists rfqs (
+  id serial primary key, task_id integer not null references tasks(id) on delete cascade, title text not null, description text not null default '',
+  deadline date not null, status text not null default 'open', created_by integer references users(id) on delete set null, created_by_name text not null default '',
+  created_at timestamptz not null default now(), closed_at timestamptz
+);
+create index if not exists rfqs_task_idx on rfqs (task_id);
+create table if not exists rfq_invites (
+  rfq_id integer not null references rfqs(id) on delete cascade, supplier_id integer not null references suppliers(id) on delete cascade,
+  amount numeric, notes text not null default '', quoted_at timestamptz, declined boolean not null default false, primary key (rfq_id, supplier_id)
+);
 -- Categorie merceologiche unificate: collegano i gruppi merci SAP e le categorie del Master Plan.
 create table if not exists categories (id serial primary key, name text not null unique);
 create table if not exists category_map (

@@ -9,6 +9,7 @@ import { listConfigAudit, logConfigChange } from "./_audit.js";
 import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
 import { computeKpis } from "./_kpi.js";
 import { spendLines, spendView } from "./_spend.js";
+import { closeRfq, createRfq, listMyRfqs, listTaskRfqs, submitQuote, applyRfq } from "./_rfq.js";
 import { deleteCategory, listCategories, saveCategory, seedCategoriesFromMp, setCategoryMap } from "./_categories.js";
 import { createDemoSupplier } from "./_demo.js";
 import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_budget-demo.js";
@@ -84,6 +85,8 @@ async function handle(request: Request): Promise<Response> {
       const origin = originOf(request);
       if (op === "supplier-me" && method === "GET") return json({ supplier: await getMySupplier(user) });
       if (op === "supplier-export" && method === "GET") return download(await exportSupplier(getPool(), (await getMySupplier(user)).id), "i-miei-dati.json");
+      if (op === "supplier-rfqs" && method === "GET") return json({ rfqs: await listMyRfqs(user) });
+      if (op === "supplier-rfq-quote" && method === "POST") return json({ rfqs: await submitQuote(user, idOf(url), (await readJson(request)) as Record<string, unknown>, origin) });
       if (op === "supplier-save" && method === "POST") return json({ supplier: await saveMyData(user, await readJson(request), origin) });
       if (op === "supplier-submit" && method === "POST") return json({ supplier: await submitMyRegistration(user, origin) });
       if (op === "supplier-upload-token" && method === "POST") {
@@ -143,7 +146,7 @@ async function handle(request: Request): Promise<Response> {
     const user = await requireRole(request, [...STAFF]);
     const origin = originOf(request);
     // ── Task (Manager e Buyer) ──
-    if (op.startsWith("task") || op === "rda-import") {
+    if (op.startsWith("task") || op.startsWith("rfq") || op === "rda-import") {
       if (user.role !== "manager" && user.role !== "buyer") throw new HttpError(403, "Operazione non consentita");
       if (op === "tasks" && method === "GET") return json(await listTasks(user));
       if (op === "task-summary" && method === "GET") return json(await taskSummary(user));
@@ -152,6 +155,10 @@ async function handle(request: Request): Promise<Response> {
       if (op === "task-update" && method === "POST") return json({ task: await updateTask(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-sourcing" && method === "POST") return json({ task: await saveSourcing(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-sourcing-approve" && method === "POST") return json({ task: await decideSourcingException(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "rfqs" && method === "GET") return json({ rfqs: await listTaskRfqs(user, Number(url.searchParams.get("taskId"))) });
+      if (op === "rfq-create" && method === "POST") return json({ rfqs: await createRfq(user, (await readJson(request)) as Record<string, unknown>, originOf(request)) }, { status: 201 });
+      if (op === "rfq-close" && method === "POST") return json({ rfqs: await closeRfq(user, idOf(url)) });
+      if (op === "rfq-use" && method === "POST") return json({ task: await applyRfq(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-outcome" && method === "POST") return json({ task: await setRenewalOutcome(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-contract" && method === "POST") return json({ task: await registerPurchaseContract(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-links" && method === "POST") return json({ task: await setTaskLinks(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });

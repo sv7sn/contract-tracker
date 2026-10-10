@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type Kpis, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type Kpis, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -73,6 +73,12 @@ export const portalApi = {
   kpis: () => request<Kpis>(portal("kpis")),
   sanctionsRefresh: () => post<{ updated: string[]; errors: string[]; rescreened: number; newHits: number; config: PortalConfig }>(portal("sanctions-refresh"), {}),
   demoSupplier: () => post<{ id: number; name: string; email: string; password: string }>(portal("vendor-demo"), {}),
+  rfqs: (taskId: number) => request<{ rfqs: Rfq[] }>(portal("rfqs", `&taskId=${taskId}`)).then(r => r.rfqs),
+  createRfq: (input: { taskId: number; title: string; description: string; deadline: string; supplierIds: number[] }) => post<{ rfqs: Rfq[] }>(portal("rfq-create"), input).then(r => r.rfqs),
+  closeRfq: (id: number) => post<{ rfqs: Rfq[] }>(portal("rfq-close", `&id=${id}`), {}).then(r => r.rfqs),
+  useRfq: (id: number, input: { supplierId: number; justification: string }) => post<{ task: TaskDetail }>(portal("rfq-use", `&id=${id}`), input).then(r => r.task),
+  myRfqs: () => request<{ rfqs: SupplierRfq[] }>(portal("supplier-rfqs")).then(r => r.rfqs),
+  quoteRfq: (id: number, input: { amount?: number; notes?: string; declined?: boolean }) => post<{ rfqs: SupplierRfq[] }>(portal("supplier-rfq-quote", `&id=${id}`), input).then(r => r.rfqs),
   categories: () => request<CategoriesView>(portal("categories")),
   saveCategory: (name: string, id?: number) => post<CategoriesView>(portal("category-save"), { id, name }),
   deleteCategory: (id: number) => request<CategoriesView>(portal("category", `&id=${id}`), { method: "DELETE" }),

@@ -292,3 +292,9 @@ export interface SpendView {
 // ─── Categorie unificate ─────────────────────────────────────
 export interface CategorySource { kind: "sap" | "mp"; key: string; label: string; amount: number; categoryId: number | null }
 export interface CategoriesView { categories: { id: number; name: string }[]; sources: CategorySource[] }
+
+// ─── Richieste di offerta ────────────────────────────────────
+export interface RfqInvite { supplierId: number; supplierName: string; sapCode: string; amount: number | null; notes: string; quotedAt: string | null; declined: boolean }
+export interface Rfq { id: number; taskId: number; title: string; description: string; deadline: string; status: "open" | "closed"; createdBy: string; createdAt: string; invites: RfqInvite[] }
+/** Vista del fornitore: solo la propria offerta, mai quelle degli altri. */
+export interface SupplierRfq { id: number; title: string; description: string; deadline: string; status: "open" | "closed"; myQuote: { amount: number | null; notes: string; quotedAt: string | null; declined: boolean } }
