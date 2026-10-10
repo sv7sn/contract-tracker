@@ -11,17 +11,18 @@ import { AiResult, VendorFlags, CloseButton, DocLink, KV, Notice, ReasonDialog, 
 import { CHECK_STYLE, fmtSize, STATUS_STYLE, supplierTimeline } from "../lib/vendors.ts";
 import { Summary } from "./SupplierPortal.tsx";
 
-interface Props { currentUser: User; notify: (m: string) => void; onSessionExpired: () => void }
+interface Props { initialOpenId?: number; onFocusUsed?: () => void; currentUser: User; notify: (m: string) => void; onSessionExpired: () => void }
 
 const copyText = async (t: string) => { try { await navigator.clipboard.writeText(t); return true; } catch { return false; } };
 
-export function VendorsView({ currentUser, notify, onSessionExpired }: Props) {
+export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, onSessionExpired }: Props) {
   const [vendors, setVendors] = useState<SupplierSummary[] | null>(null);
   const [config, setConfig] = useState<PortalConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<SupplierStatus | "all" | "lapsed" | "flags" | "dups">("all");
   const [search, setSearch] = useState("");
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useState<number | null>(initialOpenId ?? null);
+  useEffect(() => { if (initialOpenId) onFocusUsed?.(); }, [initialOpenId, onFocusUsed]);
   const [inviting, setInviting] = useState(false);
   const [demo, setDemo] = useState<{ name: string; email: string; password: string } | null>(null);
   const [demoBusy, setDemoBusy] = useState(false);

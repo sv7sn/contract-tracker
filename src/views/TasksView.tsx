@@ -12,6 +12,7 @@ import { CloseButton, KV, Notice, Portal, SupplierPicker } from "../components/v
 import { RfqCard } from "./RfqCard.tsx";
 
 interface Props {
+  initialOpenId?: number; onFocusUsed?: () => void;
   currentUser: User; contracts: Contract[]; plans: Record<number, PlanStep[]>;
   onCompleteStep: (contractId: number, stepId: string) => void; onSendBO: (contractId: number) => void; onOpenContract: (c: Contract) => void;
   notify: (m: string) => void; onSessionExpired: () => void;
@@ -46,7 +47,7 @@ const dueText = (it: Item) => {
 const overdue = (it: Item) => it.status !== "done" && !!it.due && daysFrom(it.due) < 0;
 
 /** Task del team: RDA da SAP, task creati a mano e attività dei piani di rinnovo dei contratti. */
-export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSendBO, onOpenContract, notify, onSessionExpired }: Props) {
+export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, plans, onCompleteStep, onSendBO, onOpenContract, notify, onSessionExpired }: Props) {
   const [data, setData] = useState<TaskList | null>(null);
   const [buyers, setBuyers] = useState<{ id: number; name: string; active: boolean }[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -55,7 +56,8 @@ export function TasksView({ currentUser, contracts, plans, onCompleteStep, onSen
   const [threshold, setThreshold] = useState(10000);
   const [who, setWho] = useState("all");
   const [search, setSearch] = useState("");
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useState<number | null>(initialOpenId ?? null);
+  useEffect(() => { if (initialOpenId) onFocusUsed?.(); }, [initialOpenId, onFocusUsed]);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const input = useRef<HTMLInputElement>(null);
