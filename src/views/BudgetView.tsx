@@ -20,6 +20,7 @@ export function BudgetView({ currentUser, notify, onSessionExpired }: { currentU
   const [onlyOver, setOnlyOver] = useState(false);
   const [openIo, setOpenIo] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [demoBusy, setDemoBusy] = useState(false);
   const [label, setLabel] = useState("");
   const [upYear, setUpYear] = useState<number>(new Date().getFullYear());
   const fileRef = useRef<HTMLInputElement>(null);
@@ -61,6 +62,17 @@ export function BudgetView({ currentUser, notify, onSessionExpired }: { currentU
     catch (err) { notify(`⚠️ ${fail(err)}`); }
     setUploading(false); if (fileRef.current) fileRef.current.value = "";
   };
+  const loadDemo = async () => {
+    setDemoBusy(true);
+    try { const r = await portalApi.loadBudgetDemo(); notify(`Simulazione caricata: MP26 e MP27, ${r.tasks} pratiche, ${r.contracts} contratti`); setYear(2026); await load(2026); } catch (err) { notify(`⚠️ ${fail(err)}`); }
+    setDemoBusy(false);
+  };
+  const dropDemo = async () => {
+    if (!window.confirm("Eliminare tutti i dati della simulazione (Master Plan di prova, pratiche e contratti finti)?")) return;
+    setDemoBusy(true);
+    try { await portalApi.deleteBudgetDemo(); notify("Simulazione eliminata"); setYear(undefined); await load(); } catch (err) { notify(`⚠️ ${fail(err)}`); }
+    setDemoBusy(false);
+  };
   const removeLast = async () => {
     const last = v.versions[v.versions.length - 1]; if (!last) return;
     if (!window.confirm(`Eliminare ${last.label}?${last.version === 1 ? " È la versione di riferimento per il saving." : ""}`)) return;
@@ -75,9 +87,14 @@ export function BudgetView({ currentUser, notify, onSessionExpired }: { currentU
           <div style={{ ...font, fontSize: 18, fontWeight: 700, color: C.text }}>Master Plan {v.year}</div>
           <div style={{ ...sans, fontSize: 12, color: C.muted }}>{v.versions.length ? `Riferimento per il saving: ${v.versions[0].label} · in uso: ${v.versions[v.versions.length - 1].label}` : "Nessuna versione caricata per quest'anno"}</div>
         </div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        {currentUser.role === "manager" && (v.demo
+          ? <button onClick={dropDemo} disabled={demoBusy} style={{ ...btnGhost, padding: "8px 12px", fontSize: 12.5, color: C.red }}>Elimina simulazione</button>
+          : <button onClick={loadDemo} disabled={demoBusy} title="Carica MP26 (con R3–R9) e MP27 di prova, con RDA, acquisti e contratti finti" style={{ ...btnGhost, padding: "8px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>{demoBusy && <Loader2 className="spin" size={14} />}Carica simulazione</button>)}
         <select value={v.year} onChange={e => setYear(Number(e.target.value))} aria-label="Anno" style={{ ...iStyle, width: "auto", minWidth: 120 }}>
           {[...new Set([...v.years, v.currentYear + 1])].sort((a, b) => b - a).map(y => <option key={y} value={y}>MP{String(y).slice(2)} · {y}</option>)}
         </select>
+        </div>
       </div>
 
       <Grid min={170} gap={12} fill style={{ marginBottom: 14 }}>
@@ -89,6 +106,7 @@ export function BudgetView({ currentUser, notify, onSessionExpired }: { currentU
         {outside > 0 && <StatCard label="Fuori Master Plan" value={eur(outside)} sub={`${outMp.length} internal order non a budget`} color={C.red} icon={<AlertTriangle size={18} />} />}
       </Grid>
 
+      {v.demo && <Notice kind="info"><b>Stai guardando una simulazione</b> con dati di prova (internal order SIM…, RDA SIM-…, contratti di categoria "Simulazione"). Eliminala dal pulsante in alto prima di caricare il Master Plan vero.</Notice>}
       {(noBudget > 0 || v.unassigned.length > 0) && <Notice kind="warn">{noBudget > 0 && <>{noBudget} internal order hanno impegni ma non sono nel Master Plan. </>}{v.unassigned.length > 0 && <>{v.unassigned.length} RDA o pratiche non hanno un internal order: collegale qui sotto.</>}</Notice>}
 
       <Card style={{ marginBottom: 14, padding: "14px 16px" }}>

@@ -253,4 +253,6 @@ export interface BudgetView {
   year: number; currentYear: number; years: number[]; versions: MpVersion[]; baselineId: number | null; currentId: number | null;
   lines: BudgetLine[]; unassigned: { taskId: number; title: string; value: number; costCenter: string; sourceKey: string | null }[];
   canUpload: boolean;
+  /** La simulazione (dati di prova MP26/MP27) è caricata. */
+  demo: boolean;
 }
