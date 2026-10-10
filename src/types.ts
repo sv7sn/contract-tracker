@@ -2,10 +2,10 @@
 export type Role = "manager" | "buyer" | "finance" | "bo" | "supplier";
 export type Urgency = "green" | "yellow" | "red" | "gray";
 export type StepStatus = "upcoming" | "done" | "pending_bo";
-export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub" | "kpi" | "budget" | "spend";
+export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub" | "kpi" | "budget" | "spend" | "requests";
 
 /** Utente autenticato, come restituito dall'API (mai con la password). */
-export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean }
+export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean; /** Codice utente SAP del richiedente (solo Business Owner): collega le RDA aperte in SAP a lui. */ sapUser?: string }
 export interface Contract {
   id: number; supplier: string; object: string; category: string; country: string;
   value: number; currency: string; start: string; end: string; owner: string; boEmail: string;
@@ -65,8 +65,8 @@ export interface CommitResult { contractId: number }
 export const MAX_DOCUMENT_BYTES = 25 * 1024 * 1024;
 export const DOCUMENT_EXTENSIONS = ["pdf", "doc", "docx"] as const;
 
-export interface NewUserInput { email: string; name: string; role: Role; title: string; password: string }
-export interface UpdateUserInput { id: number; role?: Role; title?: string; active?: boolean; password?: string }
+export interface NewUserInput { email: string; name: string; role: Role; title: string; password: string; sapUser?: string }
+export interface UpdateUserInput { id: number; role?: Role; title?: string; active?: boolean; password?: string; sapUser?: string }
 
 // ─── Onboarding fornitori ────────────────────────────────────
 
@@ -312,7 +312,7 @@ export interface Scorecard {
 }
 
 // ─── Il mio lavoro ───────────────────────────────────────────
-export type WorkKind = "bo_to_send" | "bo_waiting" | "task_late" | "task_soon" | "sourcing_missing" | "exception" | "unassigned" | "rfq_answers" | "rfq_compare" | "vendor_review" | "vendor_lapsed" | "vendor_unresponsive" | "splits";
+export type WorkKind = "bo_message" | "bo_to_send" | "bo_waiting" | "task_late" | "task_soon" | "sourcing_missing" | "exception" | "unassigned" | "rfq_answers" | "rfq_compare" | "vendor_review" | "vendor_lapsed" | "vendor_unresponsive" | "splits";
 export interface WorkItem {
   kind: WorkKind; urgency: 1 | 2 | 3; title: string; detail: string;
   /** Giorni di ritardo (positivo) o mancanti (negativo), se la voce ha una scadenza. */
@@ -334,3 +334,16 @@ export interface BoInfo {
   /** Stato della richiesta: da inviare, in attesa di risposta (da quanti giorni), risposta data. */
   state: "to_send" | "waiting" | "answered"; waitingDays: number | null; decision: string; notices: BoNotice[]; settings: BoSettings;
 }
+
+// ─── Area del Business Owner / Richiedente ───────────────────
+export type RdaStage = "received" | "working" | "rfq" | "chosen" | "ordered" | "closed";
+export interface RequesterRda {
+  pr: string; title: string; value: number; currency: string; releaseDate: string | null; buyerName: string; stage: RdaStage; stageLabel: string; pos: string[];
+  io: string; budget: { current: number | null; committed: number; residual: number | null } | null;
+}
+export interface RequesterContract {
+  contractId: number; title: string; keyDate: string; state: "to_answer" | "answered" | "upcoming"; decision: string; noticeDate: string;
+  task: { status: "open" | "done"; buyerName: string; outcome: string } | null; unreadMessages: number;
+}
+export interface Requests { sapUser: string; rdas: RequesterRda[]; contracts: RequesterContract[] }
+export interface BoMessage { id: number; authorName: string; authorRole: Role; body: string; createdAt: string; fromMe: boolean }

@@ -6,6 +6,7 @@ import { AuditTrail, Avatar, Card, DaysChip, Grid, RenewalBadge } from "../compo
 import { AlertTriangle, ArrowLeft, Download, ExternalLink, FileText, Pencil, StickyNote, Trash2 } from "../components/icons.tsx";
 import { documentUrl } from "../api.ts";
 import { BoNoticeCard } from "./BoNoticeCard.tsx";
+import { BoMessages } from "./BoMessages.tsx";
 
 const fact = (label: string, value: React.ReactNode) => (
   <div style={{ minWidth: 0 }}><div style={{ ...sans, fontSize: 11, color: "rgba(255,255,255,.55)", fontWeight: 600, marginBottom: 3 }}>{label}</div><div style={{ ...sans, fontSize: 14.5, fontWeight: 650, color: "#fff" }}>{value}</div></div>
@@ -87,6 +88,7 @@ export function ContractDetail({ contract, contracts, auditLog, currentUser, can
                 <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>{canOpenDocuments ? <>Il documento non è stato salvato (risulta solo il nome del file).{canEditContract(currentUser, contract) && " Usa Modifica per ricaricarlo."}</> : "In modalità demo i documenti non vengono salvati."}</div></div>
             </div>
           ))}
+          {canOpenDocuments && (currentUser.role === "bo" || canEditContract(currentUser, contract)) && contract.boEmail && <BoMessages contractId={contract.id} isBo={currentUser.role === "bo"} />}
           {canOpenDocuments && canEditContract(currentUser, contract) && <BoNoticeCard contract={contract} onChanged={() => onPlanChanged?.()} />}
           {contract.notes && <Card style={{ background: C.yellowBg, borderColor: "#f3dca0" }}><div style={{ ...sans, display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: C.yellow, fontWeight: 650, marginBottom: 6 }}><StickyNote size={15} />Note</div><div style={{ ...sans, fontSize: 13.5, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{contract.notes}</div></Card>}
         </div>

@@ -56,6 +56,13 @@ create table if not exists users (
   active boolean not null default true, created_at timestamptz not null default now()
 );
 create unique index if not exists users_email_key on users (lower(email));
+alter table users add column if not exists sap_user text not null default '';
+-- Messaggi tra Business Owner e buyer su un contratto (richieste di chiarimento e risposte).
+create table if not exists bo_messages (
+  id serial primary key, contract_id integer not null references contracts(id) on delete cascade, author_id integer references users(id) on delete set null,
+  author_name text not null, author_role text not null, body text not null, created_at timestamptz not null default now(), seen_at timestamptz
+);
+create index if not exists bo_messages_contract_idx on bo_messages (contract_id, created_at);
 create table if not exists settings (key text primary key, value jsonb not null);
 create table if not exists buying_companies (
   code text primary key, name text not null, sap_company_code text not null default '', purch_org text not null default ''
@@ -354,8 +361,8 @@ export function cleanPayload(body: unknown): CommitPayload {
 
 // ─── Utenti ──────────────────────────────────────────────────
 /** Solo i campi pubblici: mai l'hash della password. */
-export const publicUser = (u: User): User => ({ id: u.id, email: u.email, name: u.name, role: u.role, title: u.title, active: u.active });
-const toUser = (r: Record<string, unknown>): User => ({ id: r.id as number, email: r.email as string, name: r.name as string, role: r.role as Role, title: r.title as string, active: r.active as boolean });
+export const publicUser = (u: User): User => ({ id: u.id, email: u.email, name: u.name, role: u.role, title: u.title, active: u.active, sapUser: u.sapUser ?? "" });
+const toUser = (r: Record<string, unknown>): User => ({ id: r.id as number, email: r.email as string, name: r.name as string, role: r.role as Role, title: r.title as string, active: r.active as boolean, sapUser: (r.sap_user as string) ?? "" });
 
 export async function countUsers(): Promise<number> {
   return (await getPool().query("select count(*)::int as n from users")).rows[0].n;
@@ -388,6 +395,8 @@ export async function setPassword(userId: number, password: string) {
   await getPool().query("update users set password_hash = $1 where id = $2", [await hashPassword(password), userId]);
 }
 
+/** Codice utente SAP del richiedente (es. DANTADI001): serve a riconoscere le RDA che ha aperto. */
+const cleanSapUser = (v: unknown) => (typeof v === "string" ? v.trim().toUpperCase().replace(/[^A-Z0-9_.-]/g, "").slice(0, 30) : "");
 const uniqueViolation = (err: unknown) => (err as { code?: string })?.code === "23505";
 
 export async function createUser(input: unknown): Promise<User> {
@@ -398,8 +407,8 @@ export async function createUser(input: unknown): Promise<User> {
   if (!ROLES.includes(r.role as Role)) bad("Ruolo non valido");
   if (typeof r.password !== "string" || r.password.length < MIN_PASSWORD) bad(`La password deve avere almeno ${MIN_PASSWORD} caratteri`);
   try {
-    const { rows } = await getPool().query("insert into users (email, name, role, title, password_hash) values ($1,$2,$3,$4,$5) returning *",
-      [(r.email as string).trim().toLowerCase(), name, r.role, str(r.title, 100), await hashPassword(r.password as string)]);
+    const { rows } = await getPool().query("insert into users (email, name, role, title, password_hash, sap_user) values ($1,$2,$3,$4,$5,$6) returning *",
+      [(r.email as string).trim().toLowerCase(), name, r.role, str(r.title, 100), await hashPassword(r.password as string), cleanSapUser(r.sapUser)]);
     return toUser(rows[0]);
   } catch (err) {
     if (uniqueViolation(err)) throw new HttpError(409, "Esiste già un utente con questa email o questo nome");
@@ -449,8 +458,8 @@ export async function updateUser(actor: User, input: unknown): Promise<User> {
     const { rows } = await getPool().query("select count(*)::int as n from users where role = 'manager' and active and id <> $1", [target.id]);
     if (rows[0].n === 0) bad("Deve restare almeno un manager attivo");
   }
-  const { rows } = await getPool().query("update users set role = $1, title = $2, active = $3 where id = $4 returning *",
-    [role, r.title === undefined ? target.title : str(r.title, 100), active, target.id]);
+  const { rows } = await getPool().query("update users set role = $1, title = $2, active = $3, sap_user = $4 where id = $5 returning *",
+    [role, r.title === undefined ? target.title : str(r.title, 100), active, r.sapUser === undefined ? target.sapUser ?? "" : cleanSapUser(r.sapUser), target.id]);
   if (r.password !== undefined) await setPassword(target.id, r.password);
   return toUser(rows[0]);
 }

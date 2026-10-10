@@ -3,7 +3,7 @@ import type { Queryable } from "./_db.js";
 // Email del portale. Ogni messaggio viene salvato nella tabella `notifications`; l'invio reale avviene se sono
 // configurati RESEND_API_KEY e MAIL_FROM (servizio Resend), altrimenti lo stato resta "logged" (non inviato).
 
-export type Template = "invitation" | "new_registration" | "supplier_modified" | "revision_requested" | "rejection" | "buyer_approved" | "vendor_created" | "sap_code" | "doc_reminder" | "doc_unresponsive" | "bank_change_alert" | "rfq_invite" | "rfq_quote" | "bo_notice" | "bo_reminder";
+export type Template = "invitation" | "new_registration" | "supplier_modified" | "revision_requested" | "rejection" | "buyer_approved" | "vendor_created" | "sap_code" | "doc_reminder" | "doc_unresponsive" | "bank_change_alert" | "rfq_invite" | "rfq_quote" | "bo_notice" | "bo_reminder" | "bo_message";
 export type Lang = "IT" | "EN";
 
 interface Vars { items?: string; name?: string; link?: string; reason?: string; sapCode?: string; expires?: string; companies?: string; deadline?: string; detail?: string }
@@ -68,6 +68,10 @@ const T: Record<Template, Record<Lang, (v: Vars) => { subject: string; body: str
   bo_reminder: {
     IT: v => ({ subject: `Sollecito: serve la tua decisione sul contratto ${v.reason}`, body: `Gentile ${v.name},\n\nti ricordiamo che attendiamo la tua decisione sul contratto "${v.reason}" (${v.deadline}).\n${v.detail ? `\nMessaggio del buyer:\n${v.detail}\n` : ""}\nRispondi dal sistema: ${v.link}` }),
     EN: v => ({ subject: `Reminder: your decision is needed on the contract ${v.reason}`, body: `Dear ${v.name},\n\nthis is a reminder that we are waiting for your decision on the contract "${v.reason}" (${v.deadline}).\n${v.detail ? `\nMessage from the buyer:\n${v.detail}\n` : ""}\nReply in the system: ${v.link}` }),
+  },
+  bo_message: {
+    IT: v => ({ subject: `Nuovo messaggio sul contratto: ${v.reason}`, body: `${v.name} ha scritto sul contratto "${v.reason}":\n\n${v.detail}\n\nRispondi dal sistema: ${v.link}` }),
+    EN: v => ({ subject: `New message about the contract: ${v.reason}`, body: `${v.name} wrote about the contract "${v.reason}":\n\n${v.detail}\n\nReply in the system: ${v.link}` }),
   },
 };
 

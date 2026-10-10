@@ -9,6 +9,7 @@ import { listConfigAudit, logConfigChange } from "./_audit.js";
 import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
 import { computeKpis } from "./_kpi.js";
 import { spendLines, spendView } from "./_spend.js";
+import { listBoMessages, myRequests, postBoMessage } from "./_requests.js";
 import { boInfo, loadBoSettings, runBoNotices, saveBoSettings, sendBoNotice, setBoLead } from "./_bo.js";
 import { resetData, resetPreview } from "./_reset.js";
 import { myWork } from "./_work.js";
@@ -159,6 +160,14 @@ async function handle(request: Request): Promise<Response> {
           "Cache-Control": "private, no-store",
         },
       });
+    }
+
+    // ── Business Owner (richiedente) e buyer: area del BO e messaggi sui contratti ──
+    if (op === "my-requests" || op === "bo-messages" || op === "bo-message-send") {
+      const user = await requireRole(request, ["bo", "manager", "buyer"]);
+      if (op === "my-requests" && method === "GET") return json({ requests: await myRequests(user) });
+      if (op === "bo-messages" && method === "GET") return json({ messages: await listBoMessages(user, idOf(url)) });
+      if (op === "bo-message-send" && method === "POST") return json({ messages: await postBoMessage(user, idOf(url), ((await readJson(request)) as { body?: unknown }).body, originOf(request)) });
     }
 
     // ── Staff ──

@@ -28,6 +28,7 @@ import { KpiView } from "./views/KpiView.tsx";
 import { BudgetView } from "./views/BudgetView.tsx";
 import { SpendView } from "./views/SpendView.tsx";
 import { HubView } from "./views/HubView.tsx";
+import { RequestsView } from "./views/RequestsView.tsx";
 import { moduleOfView, modulesFor } from "./lib/modules.tsx";
 
 type Mode = "loading" | "api" | "local";
@@ -237,7 +238,7 @@ export default function App() {
   const handleCreateUser = async (input: NewUserInput): Promise<string | null> => {
     try { const u = await api.createUser(input); setUsers(list => [...list, u]); showToast(`✅ Utente ${u.name} creato`); return null; } catch (err) { return userError(err); }
   };
-  const handleUpdateUser = async (id: number, patch: { active?: boolean; password?: string; role?: Role; title?: string }): Promise<string | null> => {
+  const handleUpdateUser = async (id: number, patch: { active?: boolean; password?: string; role?: Role; title?: string; sapUser?: string }): Promise<string | null> => {
     try {
       const u = await api.updateUser({ id, ...patch });
       setUsers(list => list.map(x => x.id === id ? u : x));
@@ -319,7 +320,7 @@ export default function App() {
   const activeModule = modules.find(m => m.key === curModule);
   const navItems = activeModule?.pages ?? [];
   const inContracts = curModule === "contracts";
-  const titles: Record<View, string> = { dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", vendors: "Fornitori", expiries: "Scadenze documenti", tasks: "Task", kpi: "Indicatori di processo", budget: "Master Plan", spend: "Spesa", hub: "Home", config: "Configurazione", supplier: "Area fornitore", detail: selected?.supplier ?? "" };
+  const titles: Record<View, string> = { dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", vendors: "Fornitori", expiries: "Scadenze documenti", tasks: "Task", kpi: "Indicatori di processo", budget: "Master Plan", spend: "Spesa", requests: "Le mie RDA e i miei contratti", hub: "Home", config: "Configurazione", supplier: "Area fornitore", detail: selected?.supplier ?? "" };
   const eyebrow = curModule === "hub" ? "Procurement Lab" : activeModule?.label ?? ROLE_LABELS[currentUser.role];
   const activeNav = view === "detail" ? "list" : view;
   const goModule = (m: { pages: { key: View }[] }) => { setView(m.pages[0].key); setShowModules(false); };
@@ -400,6 +401,7 @@ export default function App() {
           {view === "planning" && <PlanningView contracts={contracts} plans={plans} auditLogs={auditLogs} currentUser={currentUser} onSendBO={handleSendBO} onCompleteStep={handleCompleteStep} onOpenBOForm={setBOFormContract} onUpdateStepDate={handleUpdateStepDate} />}
           {view === "team" && canViewTeam(currentUser) && <TeamView contracts={contracts} plans={plans} onApplySuggestion={handleApplySuggestion} />}
           {view === "bo" && currentUser.role === "bo" && <BOView contracts={contracts} plans={plans} currentUser={currentUser} onOpenBOForm={setBOFormContract} />}
+          {view === "requests" && mode === "api" && currentUser.role === "bo" && <RequestsView currentUser={currentUser} contracts={contracts} onOpenBOForm={setBOFormContract} onOpenContract={openDetail} onSessionExpired={sessionExpired} />}
           {view === "notifiche" && currentUser.role !== "bo" && <AlertsView contracts={contracts} users={users} />}
           {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} onPurge={handlePurge} />}
           {view === "hub" && hubAvailable && <HubView user={currentUser} modules={modules} contracts={contracts} plans={plans} onOpen={(v, f) => { if (f?.contractId) { setSelectedId(f.contractId); setView("detail"); return; } setFocus(f?.taskId || f?.vendorId ? f : null); setView(v); }} />}
