@@ -1,5 +1,6 @@
 // Tipi condivisi tra frontend (src/) e API (api/).
-export type Role = "manager" | "buyer" | "finance" | "bo" | "supplier";
+/** viewer = Controlling / CFO: consulta contratti, Master Plan, spesa e indicatori senza poter modificare nulla. */
+export type Role = "manager" | "buyer" | "finance" | "bo" | "supplier" | "viewer";
 export type Urgency = "green" | "yellow" | "red" | "gray";
 export type StepStatus = "upcoming" | "done" | "pending_bo";
 export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub" | "kpi" | "budget" | "spend" | "requests";
@@ -20,6 +21,8 @@ export interface Contract {
   replaces?: number | null; replacedBy?: number | null;
   /** Giorni prima della scadenza in cui partono gli avvisi al Business Owner (null = predefinito, 75). */
   boLeadDays?: number | null;
+  /** Utente buyer o manager responsabile del contratto (il nome in `owner` resta per la visualizzazione). */
+  ownerId?: number | null;
   /** Fornitore in anagrafica (portale fornitori), se collegato. */
   supplierId?: number | null;
   /** Riga del Master Plan su cui pesa il contratto. */

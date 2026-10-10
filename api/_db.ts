@@ -57,6 +57,7 @@ create table if not exists users (
 );
 create unique index if not exists users_email_key on users (lower(email));
 alter table users add column if not exists sap_user text not null default '';
+alter table contracts add column if not exists owner_id integer references users(id) on delete set null;
 -- Messaggi tra Business Owner e buyer su un contratto (richieste di chiarimento e risposte).
 create table if not exists bo_messages (
   id serial primary key, contract_id integer not null references contracts(id) on delete cascade, author_id integer references users(id) on delete set null,
@@ -108,16 +109,19 @@ create table if not exists sap_requests (
   payload jsonb not null, response jsonb, ok boolean not null, created_at timestamptz not null default now()
 );
 
--- Ruoli ammessi: aggiunti "finance" e "supplier" (si aggiorna il vincolo solo se non li include ancora).
+-- Ruoli ammessi (vincolo v3: aggiunge "viewer", Controlling / CFO); i vincoli precedenti si tolgono.
 alter table users drop constraint if exists users_role_check;
+alter table users drop constraint if exists users_role_check_v2;
 do $$ begin
-  if not exists (select 1 from pg_constraint where conname = 'users_role_check_v2') then
-    alter table users add constraint users_role_check_v2 check (role in ('manager','buyer','finance','bo','supplier'));
+  if not exists (select 1 from pg_constraint where conname = 'users_role_check_v3') then
+    alter table users add constraint users_role_check_v3 check (role in ('manager','buyer','finance','bo','supplier','viewer'));
   end if;
 end $$;
 -- Il nome è unico solo tra il personale interno (i fornitori possono avere nomi uguali o simili).
 drop index if exists users_name_key;
 create unique index if not exists users_name_staff_key on users (lower(name)) where role <> 'supplier';
+-- Contratti già presenti: il responsabile si collega all'utente con lo stesso nome.
+update contracts c set owner_id = u.id from users u where c.owner_id is null and lower(u.name) = lower(c.owner) and u.role in ('manager','buyer');
 create table if not exists doc_types (
   key text primary key, label text not null, help text not null default '',
   expires boolean not null default false, multiple boolean not null default false, position integer not null default 0
@@ -261,7 +265,7 @@ create index if not exists login_attempts_idx on login_attempts (email, at);
 `;
 
 /** Ruoli assegnabili dalla pagina Utenti: i fornitori si creano solo tramite invito. */
-export const ROLES: Role[] = ["manager", "buyer", "finance", "bo"];
+export const ROLES: Role[] = ["manager", "buyer", "finance", "bo", "viewer"];
 
 let ready: Promise<unknown> | undefined;
 /** Crea le tabelle e, se non esiste ancora nessun utente, il primo amministratore da ADMIN_EMAIL / ADMIN_PASSWORD. */
@@ -475,7 +479,7 @@ function rowToContract(r: Record<string, unknown>): Contract {
     status: (r.status as Contract["status"]) ?? "active", outcome: (r.outcome as Contract["outcome"]) ?? "", outcomeNote: (r.outcome_note as string) ?? "",
     closedAt: r.closed_at ? new Date(r.closed_at as string).toISOString() : null, replaces: (r.replaces as number | null) ?? null, replacedBy: (r.replaced_by as number | null) ?? null,
     supplierId: (r.supplier_id as number | null) ?? null, internalOrder: (r.internal_order as string) ?? "",
-    boLeadDays: (r.bo_lead_days as number | null) ?? null,
+    boLeadDays: (r.bo_lead_days as number | null) ?? null, ownerId: (r.owner_id as number | null) ?? null,
   };
 }
 function rowToStep(r: Record<string, unknown>): PlanStep {
@@ -531,15 +535,17 @@ export async function fetchPlan(db: Queryable, id: number): Promise<PlanStep[]> 
 async function upsertContract(db: Queryable, c: ContractInput): Promise<number> {
   const cols = [c.supplier, c.object, c.category, c.country, c.value, c.currency, c.start, c.end, c.owner, c.boEmail, c.renewal, c.type, c.notes, c.ceased, c.fileName, c.filePath, c.noticeDays, c.noticeDate, c.supplierId ?? null, c.internalOrder ?? ""];
   if (c.supplierId && !(await db.query("select 1 from suppliers where id = $1", [c.supplierId])).rows.length) bad("Fornitore non trovato in anagrafica");
+  const ownerId = (await db.query("select id from users where lower(name) = lower($1) and role in ('manager','buyer')", [c.owner])).rows[0]?.id ?? null;
+  cols.push(ownerId);
   if (c.id === undefined) {
     const r = await db.query(
-      `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path, notice_days, notice_date, supplier_id, internal_order)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) returning id`, cols);
+      `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path, notice_days, notice_date, supplier_id, internal_order, owner_id)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) returning id`, cols);
     return r.rows[0].id;
   }
   const r = await db.query(
     `update contracts set supplier=$1, object=$2, category=$3, country=$4, value=$5, currency=$6, start_date=$7, end_date=$8,
-       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15, file_path=$16, notice_days=$17, notice_date=$18, supplier_id=$19, internal_order=$20 where id=$21`, [...cols, c.id]);
+       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15, file_path=$16, notice_days=$17, notice_date=$18, supplier_id=$19, internal_order=$20, owner_id=$21 where id=$22`, [...cols, c.id]);
   if (!r.rowCount) throw new HttpError(404, "Contratto non trovato");
   return c.id;
 }

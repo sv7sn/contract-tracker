@@ -170,6 +170,17 @@ async function handle(request: Request): Promise<Response> {
       if (op === "bo-message-send" && method === "POST") return json({ messages: await postBoMessage(user, idOf(url), ((await readJson(request)) as { body?: unknown }).body, originOf(request)) });
     }
 
+    // ── Analisi in sola lettura: anche Controlling e CFO ──
+    if (["kpis", "categories", "spend", "spend-lines", "budget", "budget-io"].includes(op) && method === "GET") {
+      const user = await requireRole(request, [...STAFF, "viewer"]);
+      if (op === "kpis" && method === "GET") return json(await computeKpis(user));
+      if (op === "categories" && method === "GET") return json(await listCategories(user));
+      if (op === "spend" && method === "GET") return json(await spendView(user, Number(url.searchParams.get("year")) || undefined));
+      if (op === "spend-lines" && method === "GET") return json(await spendLines(user, Number(url.searchParams.get("year")), url.searchParams.get("supplier") ?? ""));
+      if (op === "budget" && method === "GET") return json(await budgetView(user, Number(url.searchParams.get("year")) || undefined));
+      if (op === "budget-io" && method === "GET") return json(await budgetIo(user, url.searchParams.get("io") ?? "", Number(url.searchParams.get("year")) || undefined));
+    }
+
     // ── Staff ──
     const user = await requireRole(request, [...STAFF]);
     const origin = originOf(request);
@@ -233,9 +244,7 @@ async function handle(request: Request): Promise<Response> {
       await checkStoredDocument(id, true);
       return json({ supplier: await getVendor(user, owner) });
     }
-    if (op === "kpis" && method === "GET") return json(await computeKpis(user));
     // ── Categorie unificate ──
-    if (op === "categories" && method === "GET") return json(await listCategories(user));
     if (op === "category-save" && method === "POST") { const b = (await readJson(request)) as { id?: unknown; name?: string }; return json(await saveCategory(user, b.id ? Number(b.id) : null, String(b.name ?? ""))); }
     if (op === "category" && method === "DELETE") return json(await deleteCategory(user, Number(url.searchParams.get("id"))));
     if (op === "category-map" && method === "POST") { const b = (await readJson(request)) as { kind?: string; key?: string; categoryId?: unknown }; return json(await setCategoryMap(user, String(b.kind ?? ""), String(b.key ?? ""), b.categoryId ? Number(b.categoryId) : null)); }
@@ -249,11 +258,7 @@ async function handle(request: Request): Promise<Response> {
     if (op === "bo-settings-save" && method === "POST") return json({ settings: await saveBoSettings(user, (await readJson(request)) as Record<string, unknown>) });
     if (op === "my-work" && method === "GET") return json({ items: await myWork(user) });
     // ── Spesa dai file ordini SAP ──
-    if (op === "spend" && method === "GET") return json(await spendView(user, Number(url.searchParams.get("year")) || undefined));
-    if (op === "spend-lines" && method === "GET") return json(await spendLines(user, Number(url.searchParams.get("year")), url.searchParams.get("supplier") ?? ""));
     // ── Master Plan (budget per internal order) ──
-    if (op === "budget" && method === "GET") return json(await budgetView(user, Number(url.searchParams.get("year")) || undefined));
-    if (op === "budget-io" && method === "GET") return json(await budgetIo(user, url.searchParams.get("io") ?? "", Number(url.searchParams.get("year")) || undefined));
     if (op === "budget-import" && method === "POST") {
       const name = decodeURIComponent(request.headers.get("x-file-name") ?? "") || "master-plan.xlsx";
       return json(await importBudget(user, Number(url.searchParams.get("year")), url.searchParams.get("label") ?? "", name, new Uint8Array(await request.arrayBuffer())), { status: 201 });

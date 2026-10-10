@@ -28,10 +28,10 @@ export const iStyle: CSSProperties = { fontFamily: FONT_STACK, width: "100%", bo
 export const radius = { sm: 8, md: 12, lg: 16 } as const;
 export const shadow = { sm: "0 1px 2px rgba(16,24,43,.05), 0 1px 1px rgba(16,24,43,.03)", md: "0 6px 20px rgba(16,24,43,.08)", lg: "0 18px 50px rgba(16,24,43,.18)" } as const;
 
-export const ROLE_LABELS: Record<Role, string> = { manager: "Manager", buyer: "Buyer", finance: "Finance", bo: "Business Owner", supplier: "Fornitore" };
-export const ROLE_COLORS: Record<Role, string> = { manager: C.accent, buyer: C.blue, finance: C.purple, bo: C.green, supplier: C.gray };
+export const ROLE_LABELS: Record<Role, string> = { manager: "Manager", buyer: "Buyer", finance: "Finance", bo: "Business Owner", supplier: "Fornitore", viewer: "Controlling / CFO" };
+export const ROLE_COLORS: Record<Role, string> = { manager: C.accent, buyer: C.blue, finance: C.purple, bo: C.green, supplier: C.gray, viewer: C.navy };
 /** Ruoli assegnabili dalla gestione utenti: i fornitori entrano solo tramite invito. */
-export const STAFF_ROLES: Role[] = ["manager", "buyer", "finance", "bo"];
+export const STAFF_ROLES: Role[] = ["manager", "buyer", "finance", "bo", "viewer"];
 
 const AVATAR_COLORS = ["#c8522a", "#2467c9", "#1f8a5b", "#6247d0", "#a46a06", "#0f766e", "#b0285f", "#4b5563"];
 /** Colore stabile derivato dal nome (gli utenti non hanno un colore salvato). */

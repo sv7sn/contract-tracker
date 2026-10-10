@@ -33,7 +33,8 @@ export function UsersView({ users, currentUser, onCreate, onUpdate, onDelete, on
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, color: C.text, fontWeight: 650 }}><ShieldCheck size={17} color={C.blue} />Cosa può fare ogni ruolo</div>
         <b>Manager</b>: vede e modifica tutti i contratti, gestisce utenti, team e piani.<br />
         <b>Buyer</b>: crea contratti e gestisce solo i propri (come contract owner).<br />
-        <b>Business Owner</b> (è anche il richiedente): vede i contratti indicati con la sua email e le RDA aperte in SAP con il suo codice utente, risponde agli avvisi del buyer e gli scrive per chiarimenti.
+        <b>Business Owner</b> (è anche il richiedente): vede i contratti indicati con la sua email e le RDA aperte in SAP con il suo codice utente, risponde agli avvisi del buyer e gli scrive per chiarimenti.<br />
+        <b>Controlling / CFO</b>: solo consultazione di contratti, Master Plan, spesa e indicatori; non modifica nulla.
       </Card>
 
       <Grid min={320} gap={10}>
