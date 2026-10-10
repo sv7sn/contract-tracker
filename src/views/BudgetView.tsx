@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { BudgetItem, BudgetLine, BudgetView as View, User } from "../types.ts";
-import { ApiError, budgetTemplateUrl, importBudgetFile, portalApi } from "../api.ts";
+import { ApiError, budgetTemplateUrl, demoSapFileUrl, importBudgetFile, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmt } from "../lib/format.ts";
 import { Card, CardTitle, EmptyState, Field, Grid, StatCard } from "../components/ui.tsx";
@@ -64,11 +64,11 @@ export function BudgetView({ currentUser, notify, onSessionExpired }: { currentU
   };
   const loadDemo = async () => {
     setDemoBusy(true);
-    try { const r = await portalApi.loadBudgetDemo(); notify(`Simulazione caricata: MP26 e MP27, ${r.tasks} pratiche, ${r.contracts} contratti`); setYear(2026); await load(2026); } catch (err) { notify(`⚠️ ${fail(err)}`); }
+    try { const r = await portalApi.loadBudgetDemo(); notify(`Simulazione caricata: MP26 e MP27, ${r.suppliers} fornitori, ${r.tasks} pratiche, ${r.contracts} contratti`); setYear(2026); await load(2026); } catch (err) { notify(`⚠️ ${fail(err)}`); }
     setDemoBusy(false);
   };
   const dropDemo = async () => {
-    if (!window.confirm("Eliminare tutti i dati della simulazione (Master Plan di prova, pratiche e contratti finti)?")) return;
+    if (!window.confirm("Eliminare tutti i dati della simulazione (Master Plan, fornitori, RDA, PO, pratiche e contratti di prova)?")) return;
     setDemoBusy(true);
     try { await portalApi.deleteBudgetDemo(); notify("Simulazione eliminata"); setYear(undefined); await load(); } catch (err) { notify(`⚠️ ${fail(err)}`); }
     setDemoBusy(false);
@@ -90,7 +90,7 @@ export function BudgetView({ currentUser, notify, onSessionExpired }: { currentU
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         {currentUser.role === "manager" && (v.demo
           ? <button onClick={dropDemo} disabled={demoBusy} style={{ ...btnGhost, padding: "8px 12px", fontSize: 12.5, color: C.red }}>Elimina simulazione</button>
-          : <button onClick={loadDemo} disabled={demoBusy} title="Carica MP26 (con R3–R9) e MP27 di prova, con RDA, acquisti e contratti finti" style={{ ...btnGhost, padding: "8px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>{demoBusy && <Loader2 className="spin" size={14} />}Carica simulazione</button>)}
+          : <button onClick={loadDemo} disabled={demoBusy} title="Carica dati di prova completi: MP26 (R3–R9) e MP27, fornitori, RDA aperte e ordinate con PO, acquisti, contratti" style={{ ...btnGhost, padding: "8px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>{demoBusy && <Loader2 className="spin" size={14} />}Carica simulazione</button>)}
         <select value={v.year} onChange={e => setYear(Number(e.target.value))} aria-label="Anno" style={{ ...iStyle, width: "auto", minWidth: 120 }}>
           {[...new Set([...v.years, v.currentYear + 1])].sort((a, b) => b - a).map(y => <option key={y} value={y}>MP{String(y).slice(2)} · {y}</option>)}
         </select>
@@ -106,7 +106,7 @@ export function BudgetView({ currentUser, notify, onSessionExpired }: { currentU
         {outside > 0 && <StatCard label="Fuori Master Plan" value={eur(outside)} sub={`${outMp.length} internal order non a budget`} color={C.red} icon={<AlertTriangle size={18} />} />}
       </Grid>
 
-      {v.demo && <Notice kind="info"><b>Stai guardando una simulazione</b> con dati di prova (internal order SIM…, RDA SIM-…, contratti di categoria "Simulazione"). Eliminala dal pulsante in alto prima di caricare il Master Plan vero.</Notice>}
+      {v.demo && <Notice kind="info"><b>Simulazione caricata</b>: internal order SIM…, fornitori con codice SAP SIMV…, RDA SIM-…, PO SIMPO…, contratti di categoria "Simulazione". La trovi anche in Task, Contratti, Fornitori e Indicatori. Per provare l'importazione da SAP scarica i file di prova <a href={demoSapFileUrl("pr")} style={{ color: "inherit", fontWeight: 650 }}>RDA aperte</a> e <a href={demoSapFileUrl("po")} style={{ color: "inherit", fontWeight: 650 }}>ordini</a> e caricali dal modulo Task (attenzione: il file RDA sostituisce l'elenco delle RDA aperte). Elimina la simulazione dal pulsante in alto prima di caricare i dati veri.</Notice>}
       {(noBudget > 0 || v.unassigned.length > 0) && <Notice kind="warn">{noBudget > 0 && <>{noBudget} internal order hanno impegni ma non sono nel Master Plan. </>}{v.unassigned.length > 0 && <>{v.unassigned.length} RDA o pratiche non hanno un internal order: collegale qui sotto.</>}</Notice>}
 
       <Card style={{ marginBottom: 14, padding: "14px 16px" }}>

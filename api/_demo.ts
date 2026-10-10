@@ -30,7 +30,7 @@ function ibanIT(): string {
 }
 const PDF = Buffer.from("%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj 3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n");
 
-export async function createDemoSupplier(user: User): Promise<{ id: number; name: string; email: string; password: string }> {
+export async function createDemoSupplier(user: User, opts: { name?: string; sapCode?: string } = {}): Promise<{ id: number; name: string; email: string; password: string }> {
   if (user.role !== "manager") throw new HttpError(403, "Solo il Manager crea fornitori di prova");
   const db = getPool();
   const company = (await db.query("select code from buying_companies order by code limit 1")).rows[0]?.code as string | undefined;
@@ -39,7 +39,7 @@ export async function createDemoSupplier(user: User): Promise<{ id: number; name
   const terms = (await db.query("select code from payment_terms order by code limit 1")).rows[0]?.code ?? null;
   const buyer = (await db.query("select user_id from industry_buyers where industry_code = $1 limit 1", [industry])).rows[0]?.user_id ?? user.id;
   const n = (await db.query("select count(*)::int + 1 as n from suppliers where name like 'Fornitore di Prova%'")).rows[0].n as number;
-  const name = `Fornitore di Prova ${n} Srl`, vat = vatIT(), tag = randomBytes(3).toString("hex");
+  const name = opts.name ?? `Fornitore di Prova ${n} Srl`, vat = vatIT(), tag = randomBytes(3).toString("hex");
   const email = `prova-${tag}@example.com`, now = new Date().toISOString();
   const data: SupplierData = {
     company: { legalName: name, vatCode: vat, fiscalCode: vat },
@@ -72,7 +72,7 @@ export async function createDemoSupplier(user: User): Promise<{ id: number; name
     const sid = (await tx.query(`insert into suppliers (email, name, company_codes, industry_code, reference_buyer_id, status, data, payment_terms, sap_code, sap_account_group,
         user_id, invited_by, submitted_at, approved_data, approved_at, compliance, lifecycle)
       values ($1,$2,$3,$4,$5,'registered',$6,$7,$8,$9,$10,$11,now(),$6,now(),$12,'active') returning id`,
-      [email, name, [company], industry, buyer, JSON.stringify(data), terms, `PROVA${String(n).padStart(4, "0")}`, accountGroup(data), u, user.id, JSON.stringify(compliance)])).rows[0].id as number;
+      [email, name, [company], industry, buyer, JSON.stringify(data), terms, opts.sapCode ?? `PROVA${String(n).padStart(4, "0")}`, accountGroup(data), u, user.id, JSON.stringify(compliance)])).rows[0].id as number;
     for (const f of files)
       await tx.query("insert into supplier_documents (supplier_id, type, file_name, file_path, size, valid_until, uploaded_by) values ($1,$2,$3,$4,$5,$6,$7)", [sid, f.type, f.name, f.path, PDF.length, f.expires ? validUntil : null, user.name]);
     await tx.query("insert into supplier_events (supplier_id, actor, action, detail) values ($1,$2,'Fornitore di prova creato',$3)", [sid, user.name, "Registrato direttamente, con dati e documenti di prova, per provare le funzionalità"]);
