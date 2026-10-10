@@ -15,7 +15,7 @@ const FIELD_LABEL: Record<string, string> = {
   escalateAfter: "Escalation dopo", slaDays: "Giorni di lavorazione", sourcingThreshold: "Soglia confronto fornitori", renewalLeadDays: "Anticipo task di rinnovo (giorni)", userId: "Buyer", note: "Nota",
   tradingPartner: "Trading partner", sortKey: "Chiave di ordinamento", cashManagementGroup: "Gruppo cash management", releaseGroup: "Gruppo di rilascio",
   reconciliationAccounts: "Conti di riconciliazione", role: "Ruolo", title: "Titolo", active: "Attivo", email: "Email",
-  notice: "Testo informativa", inviteDays: "Inviti non attivati (giorni)", retentionMonths: "Conservazione fornitori non attivi (mesi)",
+  notice: "Testo informativa", buyer: "Buyer assegnati", inviteDays: "Inviti non attivati (giorni)", retentionMonths: "Conservazione fornitori non attivi (mesi)",
 };
 
 const show = (v: unknown): string => {

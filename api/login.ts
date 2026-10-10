@@ -1,4 +1,5 @@
-import { clearAttempts, ensureSchema, findUserByEmail, publicUser, recordFailedAttempt, tooManyAttempts } from "./_db.js";
+import { loadActing } from "./_cover.js";
+import { clearAttempts, ensureSchema, findUserByEmail, getPool, publicUser, recordFailedAttempt, tooManyAttempts } from "./_db.js";
 import { createSessionToken, sessionCookie, verifyPassword } from "./_crypto.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
 
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
     }
     await clearAttempts(email);
     const user = publicUser(row);
+    if (user.role === "buyer") user.acting = await loadActing(getPool(), user);
     return Response.json({ user }, { headers: { "Set-Cookie": sessionCookie(request, createSessionToken(user.id)), "Cache-Control": "no-store" } });
   } catch (err) {
     return errorResponse(err);

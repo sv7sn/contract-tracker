@@ -5,6 +5,7 @@ import { canSeeBudget } from "./_budget.js";
 import { getPool } from "./_db.js";
 import { HttpError } from "./_http.js";
 import { findSplits, SPLIT_WINDOW_DAYS, type SplitItem } from "./_splits.js";
+import { categoryScope } from "./_scope.js";
 import { loadRdaSettings } from "./_tasks.js";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -22,7 +23,9 @@ export async function spendView(user: User, yearIn?: number): Promise<SpendView>
   const years = (await db.query("select distinct extract(year from doc_date)::int as y from po_lines where doc_date is not null order by 1 desc")).rows.map(r => r.y as number);
   const year = yearIn && years.includes(yearIn) ? yearIn : years[0] ?? null;
   const [range] = (await db.query("select min(doc_date)::text as \"from\", max(doc_date)::text as \"to\", min(first_seen) as first from po_lines")).rows;
-  const rows: Row[] = year === null ? [] : (await db.query(`
+  // Un buyer con categorie assegnate vede solo quelle (spesa non classificata esclusa).
+  const scope = await categoryScope(user);
+  const allRows: Row[] = year === null ? [] : (await db.query(`
     select l.*, l.doc_date::text as day,
       case when l.agreement <> '' then 'agreement'
         when l.supplier_code <> '' and exists (select 1 from contracts c join suppliers s on s.id = c.supplier_id where s.sap_code = l.supplier_code
@@ -33,6 +36,7 @@ export async function spendView(user: User, yearIn?: number): Promise<SpendView>
       (select s.id from suppliers s where s.sap_code = l.supplier_code and l.supplier_code <> '' limit 1) as supplier_id
     from po_lines l where extract(year from l.doc_date) = $1`, [year])).rows;
 
+  const rows = scope ? allRows.filter(r => r.cat_name && scope.has(r.cat_name)) : allRows;
   const eur = rows.filter(r => (r.currency || "EUR") === "EUR");
   const other = rows.filter(r => (r.currency || "EUR") !== "EUR");
   const val = (r: Row) => Number(r.value) || 0;
@@ -95,10 +99,10 @@ export async function spendView(user: User, yearIn?: number): Promise<SpendView>
     if (!who || !where) continue;
     const k = `${who}|${where}`; const a = rdaGroups.get(k) ?? []; a.push({ id: t.source_key, date: String(t.d).slice(0, 10), value: Number(m.value) || 0, label: String(t.title ?? "").replace(/^RDA \S+ · /, "") }); rdaGroups.set(k, a);
   }
-  for (const c of findSplits(rdaGroups, threshold)) { const [who, where] = c.key.split("|"); cases.push({ kind: "rda", who: `${who} · ${where}`, detail: "RDA dello stesso richiedente e internal order", total: c.total, from: c.from, to: c.to, items: c.items }); }
+  for (const c of scope ? [] : findSplits(rdaGroups, threshold)) { const [who, where] = c.key.split("|"); cases.push({ kind: "rda", who: `${who} · ${where}`, detail: "RDA dello stesso richiedente e internal order", total: c.total, from: c.from, to: c.to, items: c.items }); }
   cases.sort((a, b) => b.total - a.total);
   // Categorie unificate: budget del Master Plan (versione in uso) contro spesa.
-  const cats = (await db.query("select id, name from categories order by name")).rows;
+  const cats = (await db.query("select id, name from categories order by name")).rows.filter(c => !scope || scope.has(c.name));
   const categoryBudget = !cats.length || year === null ? [] : await (async () => {
     const mp = (await db.query(`select c.name, sum(m.amount)::float as budget from mp_lines m join mp_versions v on v.id = m.version_id join category_map cm on cm.kind = 'mp' and cm.key = m.category join categories c on c.id = cm.category_id
       where v.year = $1 and v.version = (select max(version) from mp_versions where year = $1) group by c.name`, [year])).rows;
@@ -128,8 +132,10 @@ export async function spendView(user: User, yearIn?: number): Promise<SpendView>
 /** Righe d'ordine di un fornitore nell'anno (dettaglio dalla tabella fornitori). */
 export async function spendLines(user: User, year: number, supplier: string): Promise<SpendPo[]> {
   if (!canSeeBudget(user)) throw new HttpError(403, "Operazione non consentita");
-  const rows = (await getPool().query(`select l.*, l.doc_date::text as day from po_lines l where extract(year from l.doc_date) = $1 and (l.supplier_code = $2 or (l.supplier_code = '' and l.supplier_name = $2))
+  const scope = await categoryScope(user);
+  const found = (await getPool().query(`select l.*, l.doc_date::text as day, (select c.name from category_map cm join categories c on c.id = cm.category_id where cm.kind = 'sap' and cm.key = l.matl_group) as cat_name from po_lines l where extract(year from l.doc_date) = $1 and (l.supplier_code = $2 or (l.supplier_code = '' and l.supplier_name = $2))
     order by l.doc_date desc, l.po, l.item limit 500`, [year, supplier])).rows;
+  const rows = scope ? found.filter(r => r.cat_name && scope.has(r.cat_name)) : found;
   return rows.map(r => ({ po: r.po, item: r.item, docDate: r.day ?? null, supplierCode: r.supplier_code, supplierName: r.supplier_name, value: Number(r.value) || 0, valueSource: r.value_source, prValue: Number(r.pr_value) || 0,
     netValue: r.net_value === null ? null : Number(r.net_value), shortText: r.short_text, category: r.matl_group_desc || r.matl_group || "Non indicata", internalOrder: r.internal_order, costCenter: r.cost_center, pr: r.pr }));
 }

@@ -7,6 +7,7 @@ import type { ModuleDef } from "../lib/modules.tsx";
 import { Card, Grid } from "../components/ui.tsx";
 import { ArrowRight } from "../components/icons.tsx";
 import { WorkList } from "./WorkList.tsx";
+import { CoverCard } from "./CoverCard.tsx";
 
 interface Props { user: User; modules: ModuleDef[]; contracts: Contract[]; plans: Record<number, PlanStep[]>; onOpen: (view: View, focus?: { taskId?: number; vendorId?: number; contractId?: number }) => void }
 interface Metric { label: string; value: number | string; tone?: "bad" | "warn" | "good" }
@@ -68,7 +69,9 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
         <div style={{ ...font, fontSize: 24, fontWeight: 700, color: C.text }}>{hour < 13 ? "Buongiorno" : hour < 18 ? "Buon pomeriggio" : "Buonasera"}, {first}</div>
         <div style={{ ...sans, fontSize: 13.5, color: C.muted, marginTop: 2 }}>{user.role === "manager" || user.role === "buyer" ? "Ecco cosa richiede la tua attenzione. Sotto trovi i moduli." : "Scegli un modulo per iniziare."}</div>
       </div>
+      {user.acting && user.acting.covering.length > 0 && <Card style={{ marginBottom: 14, background: C.blueBg, borderColor: "#c9dcf5", ...sans, fontSize: 13.5, color: C.blue }}>Stai sostituendo {user.acting.covering.map(c => `${c.name} (fino al ${new Date(c.until).toLocaleDateString("it-IT")})`).join(", ")}: vedi e gestisci anche le sue pratiche.</Card>}
       {(user.role === "manager" || user.role === "buyer") && <WorkList onOpen={onOpen} />}
+      {(user.role === "manager" || user.role === "buyer") && <CoverCard user={user} />}
       <Grid min={300} gap={14} fill>
         {modules.map(m => (
           <Card key={m.key} className="lift" onClick={() => onOpen(m.pages[0].key)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") onOpen(m.pages[0].key); }} style={{ cursor: "pointer", padding: 20, borderRadius: radius.lg, display: "flex", flexDirection: "column", gap: 12 }}>

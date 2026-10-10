@@ -11,11 +11,12 @@ import { computeKpis } from "./_kpi.js";
 import { spendLines, spendView } from "./_spend.js";
 import { listBoMessages, myRequests, postBoMessage } from "./_requests.js";
 import { boInfo, loadBoSettings, runBoNotices, saveBoSettings, sendBoNotice, setBoLead } from "./_bo.js";
+import { addCover, deleteCover, listCover } from "./_cover.js";
 import { resetData, resetPreview } from "./_reset.js";
 import { myWork } from "./_work.js";
 import { addRating, deleteRating, ratingSummary, supplierScorecard } from "./_rating.js";
 import { closeRfq, createRfq, listMyRfqs, rfqFile, listTaskRfqs, submitQuote, applyRfq } from "./_rfq.js";
-import { deleteCategory, listCategories, saveCategory, seedCategoriesFromMp, setCategoryMap } from "./_categories.js";
+import { deleteCategory, listCategories, saveCategory, seedCategoriesFromMp, setCategoryBuyers, setCategoryMap } from "./_categories.js";
 import { createDemoSupplier, resetTestSupplierAccess } from "./_demo.js";
 import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_budget-demo.js";
 import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudget } from "./_budget.js";
@@ -248,7 +249,11 @@ async function handle(request: Request): Promise<Response> {
     if (op === "category-save" && method === "POST") { const b = (await readJson(request)) as { id?: unknown; name?: string }; return json(await saveCategory(user, b.id ? Number(b.id) : null, String(b.name ?? ""))); }
     if (op === "category" && method === "DELETE") return json(await deleteCategory(user, Number(url.searchParams.get("id"))));
     if (op === "category-map" && method === "POST") { const b = (await readJson(request)) as { kind?: string; key?: string; categoryId?: unknown }; return json(await setCategoryMap(user, String(b.kind ?? ""), String(b.key ?? ""), b.categoryId ? Number(b.categoryId) : null)); }
+    if (op === "category-buyers" && method === "POST") { const b = (await readJson(request)) as { categoryId?: unknown; userIds?: unknown }; return json(await setCategoryBuyers(user, Number(b.categoryId), b.userIds)); }
     if (op === "category-seed" && method === "POST") return json(await seedCategoriesFromMp(user));
+    if (op === "cover" && method === "GET") return json(await listCover(user));
+    if (op === "cover-add" && method === "POST") return json(await addCover(user, (await readJson(request)) as Record<string, unknown>));
+    if (op === "cover" && method === "DELETE") return json(await deleteCover(user, idOf(url)));
     if (op === "reset-preview" && method === "GET") return json({ counts: await resetPreview(user) });
     if (op === "reset-run" && method === "POST") { const b = (await readJson(request)) as { areas?: unknown; confirm?: unknown }; return json({ deleted: await resetData(user, b.areas, b.confirm) }); }
     if (op === "bo-info" && method === "GET") return json({ info: await boInfo(user, idOf(url)) });

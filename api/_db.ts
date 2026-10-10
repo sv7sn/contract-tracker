@@ -238,6 +238,14 @@ create table if not exists categories (id serial primary key, name text not null
 create table if not exists category_map (
   kind text not null check (kind in ('sap','mp')), key text not null, category_id integer not null references categories(id) on delete cascade, primary key (kind, key)
 );
+-- Categorie seguite da ciascun buyer: determinano quale spesa e quale budget vede (senza categorie assegnate vede tutto).
+create table if not exists category_buyers (category_id integer not null references categories(id) on delete cascade, user_id integer not null references users(id) on delete cascade, primary key (category_id, user_id));
+-- Assenze dei buyer: nel periodo indicato il sostituto vede e gestisce le pratiche dell'assente.
+create table if not exists buyer_cover (
+  id serial primary key, user_id integer not null references users(id) on delete cascade, substitute_id integer not null references users(id) on delete cascade,
+  from_date date not null, to_date date not null, created_by text not null default '', created_at timestamptz not null default now(), check (to_date >= from_date and user_id <> substitute_id)
+);
+create index if not exists buyer_cover_dates_idx on buyer_cover (substitute_id, from_date, to_date);
 create table if not exists pgr_assignments (pgr text primary key, user_id integer references users(id) on delete set null, note text not null default '');
 create table if not exists sap_imports (
   id serial primary key, kind text not null, file_name text not null, rows integer not null default 0, result jsonb not null default '{}'::jsonb,
