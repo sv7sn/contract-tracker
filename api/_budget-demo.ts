@@ -89,6 +89,10 @@ const CALL_OFFS: [string, string, string, string, string, number, number, string
   ["SIMPO4202", "TIPOGRAFIA BIANCHI SRL", "SIMV0102", "SIM2600000009", "Stampa brochure fiera", 1200, 4, ""],
   ["SIMPO4203", "CATERING VERDI SRL", "SIMV0103", "SIM2600000009", "Catering evento clienti", 3800, 9, ""],
   ["SIMPO4204", "STUDIO GRAFICO NERI", "SIMV0104", "SIM2600000009", "Impaginazione catalogo", 2400, 6, ""],
+  // Tre ordini ravvicinati dello stesso fornitore, ciascuno sotto soglia: possibile frazionamento.
+  ["SIMPO4206", "TIPOGRAFIA BIANCHI SRL", "SIMV0102", "SIM2600000009", "Stampa materiali fiera - lotto 1", 4500, 4, ""],
+  ["SIMPO4207", "TIPOGRAFIA BIANCHI SRL", "SIMV0102", "SIM2600000009", "Stampa materiali fiera - lotto 2", 4500, 4, ""],
+  ["SIMPO4208", "TIPOGRAFIA BIANCHI SRL", "SIMV0102", "SIM2600000009", "Stampa materiali fiera - lotto 3", 4500, 4, ""],
   ["SIMPO4205", "TRADUZIONI EXPRESS SRL", "SIMV0105", "SIM2600000010", "Traduzione contratto", 900, 5, ""],
 ];
 
