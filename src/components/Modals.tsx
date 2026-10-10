@@ -258,6 +258,7 @@ export function NewUserModal({ onSave, onClose }: { onSave: (input: NewUserInput
         <Field label="Ruolo" req htmlFor="u-role">
           <select id="u-role" value={f.role} onChange={e => setF({ ...f, role: e.target.value as Role })} style={iStyle}>{STAFF_ROLES.map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}</select>
         </Field>
+        {f.role === "bo" && <Field label="Codice utente SAP (richiedente)" htmlFor="u-sap"><input id="u-sap" value={f.sapUser ?? ""} onChange={e => setF({ ...f, sapUser: e.target.value })} placeholder="Es. DANTADI001" style={iStyle} /></Field>}
         <Field label="Funzione" htmlFor="u-title"><input id="u-title" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="Es. Buyer ICT" style={iStyle} /></Field>
         <Field label="Password iniziale (min. 8 caratteri)" req htmlFor="u-pw"><input id="u-pw" type="text" autoComplete="off" required minLength={8} value={f.password} onChange={e => setF({ ...f, password: e.target.value })} style={iStyle} /></Field>
         <p style={{ ...sans, fontSize: 11, color: C.muted, margin: "-6px 0 14px" }}>Comunicala all'utente in modo sicuro: potrà cambiarla dal suo account.</p>
@@ -290,10 +291,10 @@ export function ResetPasswordModal({ user, onSave, onClose }: { user: User; onSa
   );
 }
 
-export function EditUserModal({ user, isSelf, onSave, onClose }: { user: User; isSelf: boolean; onSave: (patch: { role: Role; title: string }) => Promise<string | null>; onClose: () => void }) {
-  const [role, setRole] = useState<Role>(user.role); const [title, setTitle] = useState(user.title);
+export function EditUserModal({ user, isSelf, onSave, onClose }: { user: User; isSelf: boolean; onSave: (patch: { role: Role; title: string; sapUser: string }) => Promise<string | null>; onClose: () => void }) {
+  const [role, setRole] = useState<Role>(user.role); const [title, setTitle] = useState(user.title); const [sapUser, setSapUser] = useState(user.sapUser ?? "");
   const [error, setError] = useState<string | null>(null); const [busy, setBusy] = useState(false);
-  const submit = async (e: React.FormEvent) => { e.preventDefault(); setBusy(true); setError(null); const err = await onSave({ role, title }); if (err) { setError(err); setBusy(false); } };
+  const submit = async (e: React.FormEvent) => { e.preventDefault(); setBusy(true); setError(null); const err = await onSave({ role, title, sapUser }); if (err) { setError(err); setBusy(false); } };
   return (
     <div className="dialog-overlay" role="dialog" aria-modal="true">
       <form className="dialog" onSubmit={submit}>
@@ -304,6 +305,7 @@ export function EditUserModal({ user, isSelf, onSave, onClose }: { user: User; i
           {isSelf && <div style={{ ...sans, fontSize: 11, color: C.muted, marginTop: 4 }}>Non puoi cambiare il tuo ruolo: chiedilo a un altro manager.</div>}
         </Field>
         <Field label="Funzione" htmlFor="e-title"><input id="e-title" value={title} onChange={e => setTitle(e.target.value)} style={iStyle} /></Field>
+        {role === "bo" && <Field label="Codice utente SAP (richiedente)" htmlFor="e-sap"><input id="e-sap" value={sapUser} onChange={e => setSapUser(e.target.value)} placeholder="Es. DANTADI001" style={iStyle} /><div style={{ ...sans, fontSize: 11, color: C.muted, marginTop: 4 }}>È il codice che SAP mostra come "Requested By" nelle RDA: serve a mostrargli le sue RDA.</div></Field>}
         {role !== user.role && <div style={{ ...sans, background: C.yellowBg, color: C.yellow, borderRadius: 8, padding: "10px 12px", fontSize: 12, lineHeight: 1.5, marginBottom: 14 }}>Cambiando ruolo cambiano subito i contratti visibili e le azioni consentite a questo utente.</div>}
         {error && <div role="alert" style={{ ...sans, background: C.redBg, color: C.red, borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 14 }}>{error}</div>}
         <div style={{ display: "flex", gap: 10 }}>

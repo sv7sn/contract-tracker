@@ -49,6 +49,13 @@ export async function myWork(user: User): Promise<WorkItem[]> {
     }
   });
 
+  // Messaggi del Business Owner non ancora letti.
+  await safe(async () => {
+    const rows = (await db.query(`select c.id, c.supplier, c.object, count(*)::int as n from bo_messages m join contracts c on c.id = m.contract_id
+      where m.author_role = 'bo' and m.seen_at is null and ${manager ? "true" : "lower(c.owner) = lower($1)"} group by c.id`, manager ? [] : [user.name])).rows;
+    for (const r of rows) items.push({ kind: "bo_message", urgency: 2, title: `${r.supplier} — ${r.object}`.slice(0, 120), detail: `Il Business Owner ha scritto (${r.n} ${plural(r.n, "messaggio", "messaggi")}): rispondigli`, days: null, target: { view: "list", contractId: r.id } });
+  });
+
   await safe(async () => {
     const rows = (await db.query(`select r.id, r.title, r.task_id, r.deadline::text as deadline, r.status, t.sourcing is null as no_sourcing,
         (select count(*)::int from rfq_invites i where i.rfq_id = r.id and i.amount is not null and not i.declined) as quotes, (select count(*)::int from rfq_invites i where i.rfq_id = r.id) as invited

@@ -8,7 +8,7 @@ import { EditUserModal, NewUserModal, ResetPasswordModal } from "../components/M
 interface Props {
   users: User[]; currentUser: User;
   onCreate: (input: NewUserInput) => Promise<string | null>;
-  onUpdate: (id: number, patch: { active?: boolean; password?: string; role?: Role; title?: string }) => Promise<string | null>;
+  onUpdate: (id: number, patch: { active?: boolean; password?: string; role?: Role; title?: string; sapUser?: string }) => Promise<string | null>;
   onDelete: (user: User) => void;
   onPurge: () => void;
 }
@@ -33,7 +33,7 @@ export function UsersView({ users, currentUser, onCreate, onUpdate, onDelete, on
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, color: C.text, fontWeight: 650 }}><ShieldCheck size={17} color={C.blue} />Cosa può fare ogni ruolo</div>
         <b>Manager</b>: vede e modifica tutti i contratti, gestisce utenti, team e piani.<br />
         <b>Buyer</b>: crea contratti e gestisce solo i propri (come contract owner).<br />
-        <b>Business Owner</b>: vede solo i contratti indicati con la sua email e registra la propria decisione di rinnovo.
+        <b>Business Owner</b> (è anche il richiedente): vede i contratti indicati con la sua email e le RDA aperte in SAP con il suo codice utente, risponde agli avvisi del buyer e gli scrive per chiarimenti.
       </Card>
 
       <Grid min={320} gap={10}>
@@ -45,6 +45,7 @@ export function UsersView({ users, currentUser, onCreate, onUpdate, onDelete, on
                 <div style={{ ...sans, fontSize: 14, fontWeight: 700, color: C.navy }}>{u.name}{u.id === currentUser.id && <span style={{ color: C.subtle, fontWeight: 400 }}> (tu)</span>}</div>
                 <div style={{ ...sans, fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis" }}>{u.email}</div>
                 {u.title && <div style={{ ...sans, fontSize: 11, color: C.subtle }}>{u.title}</div>}
+                {u.role === "bo" && <div style={{ ...sans, fontSize: 11, color: u.sapUser ? C.subtle : C.yellow }}>{u.sapUser ? `Codice SAP ${u.sapUser}` : "Codice utente SAP mancante"}</div>}
               </div>
               <div style={{ textAlign: "right" }}><RoleBadge role={u.role} /><div style={{ ...sans, fontSize: 10, marginTop: 4, color: u.active ? C.green : C.red, fontWeight: 600 }}>{u.active ? "● Attivo" : "● Disattivato"}</div></div>
             </div>

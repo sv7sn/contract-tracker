@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { User, View } from "../types.ts";
-import { BarChart3, Bell, PiggyBank, Wallet, Building2, CalendarClock, CalendarRange, ClipboardCheck, FileText, LayoutDashboard, ListChecks, ShieldCheck, SlidersHorizontal, Users } from "../components/icons.tsx";
+import { BarChart3, Bell, Inbox, PiggyBank, Wallet, Building2, CalendarClock, CalendarRange, ClipboardCheck, FileText, LayoutDashboard, ListChecks, ShieldCheck, SlidersHorizontal, Users } from "../components/icons.tsx";
 
 export type ModuleKey = "contracts" | "vendors" | "tasks" | "budget" | "spend" | "kpi" | "admin";
 export interface NavPage { key: View; label: string; icon: ReactNode }
@@ -18,7 +18,7 @@ export function modulesFor(user: User, apiMode: boolean): ModuleDef[] {
       ...(user.role === "manager" ? [page("team", "Team", <Users size={19} />)] : []), page("notifiche", "Avvisi", <Bell size={19} />),
     ] });
   } else if (user.role === "bo") {
-    mods.push({ key: "contracts", label: "Contratti", description: "Le tue richieste e i contratti di cui sei responsabile", icon: s => <FileText size={s} />, pages: [page("bo", "Richieste", <ClipboardCheck size={19} />), page("list", "Contratti", <FileText size={19} />)] });
+    mods.push({ key: "contracts", label: "Contratti", description: "Le tue richieste e i contratti di cui sei responsabile", icon: s => <FileText size={s} />, pages: [page("bo", "Richieste", <ClipboardCheck size={19} />), page("requests", "Le mie RDA", <Inbox size={19} />), page("list", "Contratti", <FileText size={19} />)] });
   }
   if (apiMode && (staff || user.role === "finance")) {
     mods.push({ key: "vendors", label: "Fornitori", description: "Registrazione, qualifica e scadenze dei documenti dei fornitori", icon: s => <Building2 size={s} />, pages: [page("vendors", "Fornitori", <Building2 size={19} />), page("expiries", "Scadenze", <CalendarClock size={19} />)] });
@@ -43,7 +43,7 @@ export function modulesFor(user: User, apiMode: boolean): ModuleDef[] {
 
 export function moduleOfView(v: View): ModuleKey | "hub" | null {
   switch (v) {
-    case "dashboard": case "list": case "planning": case "team": case "notifiche": case "bo": case "detail": return "contracts";
+    case "dashboard": case "list": case "planning": case "team": case "notifiche": case "bo": case "requests": case "detail": return "contracts";
     case "vendors": case "expiries": return "vendors";
     case "tasks": return "tasks";
     case "kpi": return "kpi";

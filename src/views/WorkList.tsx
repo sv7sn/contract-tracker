@@ -6,7 +6,7 @@ import { Card } from "../components/ui.tsx";
 import { AlertTriangle, Building2, CheckCircle2, Clock, Inbox, Loader2, Scale, Send, ShieldCheck } from "../components/icons.tsx";
 
 const ICON: Record<WorkKind, React.ReactNode> = {
-  bo_to_send: <Send size={17} />, bo_waiting: <Clock size={17} />, task_late: <Clock size={17} />, task_soon: <Clock size={17} />, sourcing_missing: <Scale size={17} />, exception: <ShieldCheck size={17} />, unassigned: <Inbox size={17} />,
+  bo_message: <Send size={17} />, bo_to_send: <Send size={17} />, bo_waiting: <Clock size={17} />, task_late: <Clock size={17} />, task_soon: <Clock size={17} />, sourcing_missing: <Scale size={17} />, exception: <ShieldCheck size={17} />, unassigned: <Inbox size={17} />,
   rfq_answers: <Send size={17} />, rfq_compare: <Send size={17} />, vendor_review: <Building2 size={17} />, vendor_lapsed: <AlertTriangle size={17} />, vendor_unresponsive: <AlertTriangle size={17} />, splits: <Scale size={17} />,
 };
 const URGENCY = { 3: { label: "Urgente", fg: C.red, bg: C.redBg }, 2: { label: "Da fare", fg: C.yellow, bg: C.yellowBg }, 1: { label: "Da seguire", fg: C.blue, bg: C.blueBg } } as const;
