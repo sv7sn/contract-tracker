@@ -164,6 +164,7 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
         {form.noticeDate && form.end && <div style={{ ...sans, fontSize: 12, color: C.muted, margin: "-4px 0 12px" }}>Con il preavviso il piano di rinnovo e gli avvisi si contano dalla data limite di disdetta, non dalla scadenza.</div>}
         <div style={two}>
           <Field label="Paese" htmlFor="f-country">{fi("country", "Es. Italia")}</Field>
+          <Field label="Internal order (Master Plan)" htmlFor="f-io"><input id="f-io" value={form.internalOrder ?? ""} onChange={e => setForm(f => ({ ...f, internalOrder: e.target.value }))} placeholder="Es. 520100000075" style={iStyle} /></Field>
           <Field label="Contract Owner" htmlFor="f-owner">
             {isBuyer
               ? <div style={{ ...iStyle, background: "#f0ece4", color: C.muted }}>{currentUser.name} (tu)</div>

@@ -55,6 +55,7 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
       ...(user.role === "manager" && live.tasks.exceptionsPending ? [{ label: "Eccezioni da approvare", value: live.tasks.exceptionsPending, tone: "warn" as const }] : []),
     ] : [],
     kpi: [],
+    budget: [],
     admin: [],
   };
   const hour = new Date().getHours();

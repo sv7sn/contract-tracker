@@ -49,7 +49,9 @@ function columns(header: (string | null)[]) {
   return (row: (string | null)[], name: string): string | null => { const i = idx.get(name); return i === undefined ? null : row[i] ?? null; };
 }
 
-export interface PrLine { pr: string; item: string; pgr: string; shortText: string; qty: number; unit: string; price: number; per: number; currency: string; reqDate: string | null; delivDate: string | null; releaseDate: string | null; requestedBy: string; createdBy: string; plant: string; costCenter: string; glAccount: string; value: number }
+export interface PrLine { pr: string; item: string; pgr: string; shortText: string; qty: number; unit: string; price: number; per: number; currency: string; reqDate: string | null; delivDate: string | null; releaseDate: string | null; requestedBy: string; createdBy: string; plant: string; costCenter: string; glAccount: string; value: number;
+  /** Internal order (riga del Master Plan) e tipo di imputazione SAP (F = ordine, K = centro di costo). */
+  internalOrder: string; accountAssignment: string }
 export function parsePrLines(rows: (string | null)[][]): PrLine[] {
   const col = columns(rows[0] ?? []);
   const out: PrLine[] = [];
@@ -59,7 +61,8 @@ export function parsePrLines(rows: (string | null)[][]): PrLine[] {
     const qty = num(col(r, "Qty Requested")), price = num(col(r, "Valn Price")), per = num(col(r, "Per")) || 1;
     out.push({ pr, item: col(r, "Item") ?? "0", pgr: col(r, "PGr") ?? "", shortText: col(r, "Short Text") ?? "", qty, unit: col(r, "Un") ?? "", price, per, currency: col(r, "Crcy") ?? "EUR",
       reqDate: date(col(r, "Req.Date")), delivDate: date(col(r, "Deliv. Date")), releaseDate: date(col(r, "Release Dt")), requestedBy: col(r, "Requested By") ?? "", createdBy: col(r, "Created By") ?? "",
-      plant: col(r, "Plnt") ?? "", costCenter: col(r, "Cost Ctr") ?? "", glAccount: col(r, "G/L Acct") ?? "", value: Math.round((qty * price / per) * 100) / 100 });
+      plant: col(r, "Plnt") ?? "", costCenter: col(r, "Cost Ctr") ?? "", glAccount: col(r, "G/L Acct") ?? "", value: Math.round((qty * price / per) * 100) / 100,
+      internalOrder: (col(r, "Order") ?? "").trim(), accountAssignment: (col(r, "A") ?? "").trim() });
   }
   return out;
 }

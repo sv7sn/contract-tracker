@@ -18,7 +18,7 @@ export function ContractDetail({ contract, contracts, auditLog, currentUser, can
   const startMs = new Date(contract.start).getTime(), endMs = new Date(contract.end).getTime();
   const prog = contract.start && endMs > startMs ? Math.min(100, Math.max(0, ((NOW.getTime() - startMs) / (endMs - startMs)) * 100)) : 0;
   const uc = URGENCY_COLORS[u];
-  const rows: [string, React.ReactNode][] = [["Categoria", contract.category || "—"], ["Tipo", contract.type || "—"], ["Paese", contract.country || "—"], ["Contract owner", contract.owner ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><Avatar name={contract.owner} size={22} />{contract.owner}</span> : "—"], ["Business Owner", contract.boEmail || "—"], ["Stato del rinnovo", <RenewalBadge status={contract.renewal} />]];
+  const rows: [string, React.ReactNode][] = [["Categoria", contract.category || "—"], ["Tipo", contract.type || "—"], ["Paese", contract.country || "—"], ["Contract owner", contract.owner ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><Avatar name={contract.owner} size={22} />{contract.owner}</span> : "—"], ["Business Owner", contract.boEmail || "—"], ["Internal order", contract.internalOrder || "—"], ["Stato del rinnovo", <RenewalBadge status={contract.renewal} />]];
   const action = (color: string, filled: boolean): React.CSSProperties => ({ ...sans, display: "inline-flex", alignItems: "center", gap: 7, background: filled ? color : "#fff", border: `1px solid ${color}`, borderRadius: 10, color: filled ? "#fff" : color, cursor: "pointer", fontSize: 13, fontWeight: 650, padding: "8px 14px" });
 
   return (

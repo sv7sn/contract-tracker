@@ -9,6 +9,7 @@ import { listConfigAudit, logConfigChange } from "./_audit.js";
 import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
 import { computeKpis } from "./_kpi.js";
 import { createDemoSupplier } from "./_demo.js";
+import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudget } from "./_budget.js";
 import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
 import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, setTaskLinks, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
@@ -189,6 +190,15 @@ async function handle(request: Request): Promise<Response> {
       return json({ supplier: await getVendor(user, owner) });
     }
     if (op === "kpis" && method === "GET") return json(await computeKpis(user));
+    // ── Master Plan (budget per internal order) ──
+    if (op === "budget" && method === "GET") return json(await budgetView(user, Number(url.searchParams.get("year")) || undefined));
+    if (op === "budget-io" && method === "GET") return json(await budgetIo(user, url.searchParams.get("io") ?? "", Number(url.searchParams.get("year")) || undefined));
+    if (op === "budget-import" && method === "POST") {
+      const name = decodeURIComponent(request.headers.get("x-file-name") ?? "") || "master-plan.xlsx";
+      return json({ version: await importBudget(user, Number(url.searchParams.get("year")), url.searchParams.get("label") ?? "", name, new Uint8Array(await request.arrayBuffer())) }, { status: 201 });
+    }
+    if (op === "budget-version" && method === "DELETE") { await deleteBudgetVersion(user, idOf(url)); return json({ ok: true }); }
+    if (op === "budget-template" && method === "GET") return new Response(BUDGET_TEMPLATE, { headers: { ...noStore, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="modello-master-plan.csv"' } });
     if (op === "vendor-demo" && method === "POST") return json(await createDemoSupplier(user), { status: 201 });
     if (op === "vendors" && method === "GET") return json({ vendors: await listVendors(user) });
     if (op === "vendor-checks" && method === "POST") {

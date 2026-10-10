@@ -2,7 +2,7 @@
 export type Role = "manager" | "buyer" | "finance" | "bo" | "supplier";
 export type Urgency = "green" | "yellow" | "red" | "gray";
 export type StepStatus = "upcoming" | "done" | "pending_bo";
-export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub" | "kpi";
+export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub" | "kpi" | "budget";
 
 /** Utente autenticato, come restituito dall'API (mai con la password). */
 export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean }
@@ -20,6 +20,8 @@ export interface Contract {
   replaces?: number | null; replacedBy?: number | null;
   /** Fornitore in anagrafica (portale fornitori), se collegato. */
   supplierId?: number | null;
+  /** Riga del Master Plan su cui pesa il contratto. */
+  internalOrder?: string;
   /** Nome del file mostrato all'utente. */
   fileName: string | null;
   /** Percorso del documento nell'archivio privato; null se il file non è stato salvato. */
@@ -176,6 +178,8 @@ export type TaskSource = "contract" | "rda" | "manual";
 export type TaskPriority = "low" | "normal" | "high";
 export interface TaskPo { po: string; supplierName: string; docDate: string | null }
 export interface RdaMeta { pgr?: string; requestedBy?: string; createdBy?: string; value?: number; currency?: string; lines?: number; releaseDate?: string | null; delivDate?: string | null; plant?: string; firstSeen?: string;
+  /** Valore per internal order (RDA da SAP) o internal order indicato a mano (pratiche, RDA senza ordine). */
+  io?: Record<string, number>; internalOrder?: string; costCenter?: string;
   /** Solo task di rinnovo: dati del contratto di origine al momento della creazione. */
   supplier?: string; object?: string; keyDate?: string; end?: string; noticeDate?: string;
   /** Valore del contratto in scadenza, dopo che l'esito ha registrato il nuovo valore. */
@@ -209,7 +213,7 @@ export interface Task {
 }
 export type TaskDocKind = "offer" | "contract" | "addendum" | "termination" | "other";
 export interface TaskDocument { id: number; kind: TaskDocKind; fileName: string; size: number; uploadedBy: string; uploadedAt: string }
-export interface TaskLine { item: string; shortText: string; qty: number; unit: string; price: number; per: number; currency: string; delivDate: string | null; costCenter: string; glAccount: string; value: number }
+export interface TaskLine { item: string; shortText: string; qty: number; unit: string; price: number; per: number; currency: string; delivDate: string | null; costCenter: string; glAccount: string; value: number; internalOrder: string }
 export interface TaskDetail extends Task { lines: TaskLine[] }
 export interface TaskList { tasks: Task[]; sapUpdatedAt: { pr: string | null; po: string | null } }
 export interface ImportResult { kind: "pr" | "po"; fileName: string; rows: number; prs: number; created: number; updated: number; reopened: number; closedPo: number; closedGone: number; linked: number }
@@ -231,4 +235,21 @@ export interface Kpis {
   onboarding: { inProgress: KpiCount[]; registered12m: number; medianDaysToRegister: number | null; stuckAtBuyer: number; stuckAtFinance: number };
   qualification: { valid: number; expiring: number; lapsed: number; blocked: number };
   contracts: { active: number; keyNext90: number; withNotice: number; withoutDecision: number; missedDeadline: number };
+}
+
+/** Master Plan (budget annuale per internal order): versioni caricate da Finance. La prima versione dell'anno è il riferimento per il saving. */
+export interface MpVersion { id: number; year: number; version: number; label: string; fileName: string; uploadedBy: string; uploadedAt: string; lines: number; total: number }
+export interface BudgetLine {
+  io: string; description: string; function: string; costCenter: string; glAccount: string; category: string;
+  /** Budget nella prima versione (riferimento) e nell'ultima versione dell'anno. */
+  baseline: number | null; current: number | null;
+  /** Impegnato: RDA approvate (aperte o già ordinate) e acquisti chiusi. In previsione: pratiche aperte senza RDA. Contratti: quota dell'anno dei contratti collegati. */
+  committed: number; pipeline: number; contracts: number;
+  residual: number | null; vsBaseline: number | null; items: number;
+}
+export interface BudgetItem { kind: "rda" | "purchase" | "contract"; id: number; title: string; value: number; status: string; date: string | null }
+export interface BudgetView {
+  year: number; currentYear: number; years: number[]; versions: MpVersion[]; baselineId: number | null; currentId: number | null;
+  lines: BudgetLine[]; unassigned: { taskId: number; title: string; value: number; costCenter: string; sourceKey: string | null }[];
+  canUpload: boolean;
 }

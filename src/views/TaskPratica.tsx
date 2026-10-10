@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { Contract, ContractOutcome, PlanStep, SupplierSummary, TaskDetail, TaskDocKind } from "../types.ts";
+import type { BudgetLine, Contract, ContractOutcome, PlanStep, SupplierSummary, TaskDetail, TaskDocKind } from "../types.ts";
 import { checkDocument, portalApi, taskDocUrl, uploadDocument } from "../api.ts";
 import { btnGhost, btnPrimary, C, iStyle, sans } from "../theme.ts";
 import { fmt, fmtDate } from "../lib/format.ts";
@@ -163,6 +163,16 @@ export function PraticaCard({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unk
   const [po, setPo] = useState(t.poNumbers.join(", "));
   const [noPo, setNoPo] = useState(t.noPoReason);
   const [noPoOn, setNoPoOn] = useState(!!t.noPoReason);
+  // Internal order: da SAP per le RDA che lo hanno, altrimenti indicato a mano (pesa sul Master Plan).
+  const sapIos = Object.keys(t.meta.io ?? {});
+  const [io, setIo] = useState(t.meta.internalOrder ?? "");
+  const shownIo = sapIos[0] ?? t.meta.internalOrder ?? "";
+  const [mp, setMp] = useState<BudgetLine | null>(null);
+  useEffect(() => {
+    let off = false;
+    if (shownIo) portalApi.budgetIo(shownIo).then(x => { if (!off) setMp(x.line); }).catch(() => undefined);
+    return () => { off = true; };
+  }, [shownIo]);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -176,7 +186,7 @@ export function PraticaCard({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unk
   const saveLinks = async () => {
     setBusy("links"); setErr(null);
     try {
-      const x = await portalApi.setTaskLinks(t.id, { rdaNumbers: t.source === "rda" ? splitList(rda) : splitList(rda), poNumbers: splitList(po), noPoReason: noPoOn ? noPo : "" });
+      const x = await portalApi.setTaskLinks(t.id, { rdaNumbers: splitList(rda), poNumbers: splitList(po), noPoReason: noPoOn ? noPo : "", ...(sapIos.length ? {} : { internalOrder: io }) });
       onSaved(x, x.status === "done" && t.status !== "done" ? "Pratica completa e chiusa" : "Pratica aggiornata");
     } catch (e) { setErr(fail(e)); }
     setBusy(null);
@@ -197,6 +207,11 @@ export function PraticaCard({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unk
   return (
     <Card>
       <CardTitle icon={<Paperclip size={16} />}>Pratica</CardTitle>
+      <Row ok={shownIo ? true : false} title="Budget (IO)">
+        {sapIos.length > 0 ? <div style={{ color: C.text }} className="tabular">{sapIos.join(", ")} <span style={{ color: C.subtle }}>da SAP</span></div>
+          : <input value={io} onChange={e => setIo(e.target.value)} placeholder="Internal order del Master Plan" aria-label="Internal order" style={{ ...iStyle, padding: "7px 10px", fontSize: 13 }} />}
+        {mp && <div style={{ fontSize: 12, marginTop: 4 }}>{mp.description ? `${mp.description} · ` : ""}budget {mp.current !== null ? fmt(mp.current) : "non presente nel Master Plan"}{mp.residual !== null && <> · residuo <b style={{ color: mp.residual < 0 ? C.red : C.green }}>{fmt(mp.residual)}</b></>}</div>}
+      </Row>
       <Row ok={(t.source === "rda" || t.rdaNumbers.length > 0) ? true : null} title="RDA">
         {t.source === "rda" && <div style={{ color: C.text }}>{t.sourceKey}</div>}
         <input value={rda} onChange={e => setRda(e.target.value)} placeholder={t.source === "rda" ? "Altre RDA collegate (opzionale)" : "Numero RDA, se c'è"} aria-label="Numeri RDA" style={{ ...iStyle, padding: "7px 10px", fontSize: 13, marginTop: t.source === "rda" ? 6 : 0 }} />
@@ -228,7 +243,7 @@ export function PraticaCard({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unk
         {!needPo && "Non serve per proroghe e cessazioni"}
       </Row>
       {err && <div style={{ marginTop: 8 }}><Notice kind="error">{err}</Notice></div>}
-      <button onClick={saveLinks} disabled={busy === "links"} style={{ ...btnGhost, marginTop: 8, padding: "8px 14px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 7 }}>{busy === "links" && <Loader2 className="spin" size={14} />}Salva RDA e PO</button>
+      <button onClick={saveLinks} disabled={busy === "links"} style={{ ...btnGhost, marginTop: 8, padding: "8px 14px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 7 }}>{busy === "links" && <Loader2 className="spin" size={14} />}Salva budget, RDA e PO</button>
     </Card>
   );
 }
