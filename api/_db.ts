@@ -200,10 +200,14 @@ create table if not exists rfqs (
   created_at timestamptz not null default now(), closed_at timestamptz
 );
 create index if not exists rfqs_task_idx on rfqs (task_id);
+alter table rfqs add column if not exists spec_name text not null default '';
+alter table rfqs add column if not exists spec_path text not null default '';
 create table if not exists rfq_invites (
   rfq_id integer not null references rfqs(id) on delete cascade, supplier_id integer not null references suppliers(id) on delete cascade,
   amount numeric, notes text not null default '', quoted_at timestamptz, declined boolean not null default false, primary key (rfq_id, supplier_id)
 );
+alter table rfq_invites add column if not exists quote_file_name text not null default '';
+alter table rfq_invites add column if not exists quote_file_path text not null default '';
 -- Valutazioni dei fornitori da parte dei buyer (1-5 su quattro criteri).
 create table if not exists supplier_ratings (
   id serial primary key, supplier_id integer not null references suppliers(id) on delete cascade, rater_id integer references users(id) on delete set null, rater_name text not null default '',

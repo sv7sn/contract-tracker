@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Rfq, SupplierSummary, TaskDetail } from "../types.ts";
-import { portalApi } from "../api.ts";
+import { portalApi, rfqFileUrl, uploadDocument } from "../api.ts";
 import { btnGhost, btnPrimary, C, iStyle, sans } from "../theme.ts";
 import { fmt, fmtDate } from "../lib/format.ts";
 import { Card, CardTitle, Field } from "../components/ui.tsx";
-import { CheckCircle2, Clock, Loader2, Send } from "../components/icons.tsx";
+import { CheckCircle2, Clock, Loader2, Paperclip, Send, Upload } from "../components/icons.tsx";
 import { Notice } from "../components/vendorUi.tsx";
 import { ScoreBadge } from "./RatingCard.tsx";
 
@@ -23,13 +23,15 @@ export function RfqCard({ t, fail, notify, onSaved }: { t: TaskDetail; fail: (e:
   const [q, setQ] = useState("");
   const [winner, setWinner] = useState<Record<number, number>>({});
   const [just, setJust] = useState("");
+  const [spec, setSpec] = useState<File | null>(null);
+  const specRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { let off = false; portalApi.rfqs(t.id).then(x => { if (!off) setRfqs(x); }).catch(() => { if (!off) setRfqs([]); }); return () => { off = true; }; }, [t.id]);
   useEffect(() => { if (!creating || vendors.length) return; let off = false; portalApi.vendors().then(v => { if (!off) setVendors(v.filter(x => x.status === "registered" && x.lifecycle === "active")); }).catch(() => undefined); portalApi.ratings().then(r => { if (!off) setRatings(r); }).catch(() => undefined); return () => { off = true; }; }, [creating, vendors.length]);
 
   const run = useCallback(async (f: () => Promise<void>) => { setBusy(true); setErr(null); try { await f(); } catch (e) { setErr(fail(e)); } setBusy(false); }, [fail]);
-  const create = () => run(async () => { setRfqs(await portalApi.createRfq({ taskId: t.id, title, description, deadline, supplierIds: picked })); setCreating(false); setPicked([]); notify("Richiesta inviata ai fornitori"); });
+  const create = () => run(async () => { const specPath = spec ? await uploadDocument(spec) : undefined; setRfqs(await portalApi.createRfq({ taskId: t.id, title, description, deadline, supplierIds: picked, ...(spec && specPath ? { specPath, specName: spec.name } : {}) })); setCreating(false); setPicked([]); setSpec(null); notify("Richiesta inviata ai fornitori"); });
   const close = (id: number) => run(async () => { setRfqs(await portalApi.closeRfq(id)); });
   const use = (r: Rfq) => run(async () => { const x = await portalApi.useRfq(r.id, { supplierId: winner[r.id], justification: just }); setRfqs(await portalApi.rfqs(t.id)); onSaved(x, "Confronto registrato dalle offerte ricevute"); });
   const shown = vendors.filter(v => !q.trim() || `${v.legalName || v.name} ${v.sapCode}`.toLowerCase().includes(q.trim().toLowerCase()));
@@ -44,6 +46,11 @@ export function RfqCard({ t, fail, notify, onSaved }: { t: TaskDetail; fail: (e:
         <div style={{ display: "grid", gap: 12 }}>
           <Field label="Oggetto" htmlFor="rfq-title"><input id="rfq-title" value={title} onChange={e => setTitle(e.target.value)} style={iStyle} /></Field>
           <Field label="Cosa serve (visibile ai fornitori)" htmlFor="rfq-desc"><textarea id="rfq-desc" value={description} onChange={e => setDescription(e.target.value)} rows={3} style={{ ...iStyle, resize: "vertical" }} /></Field>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <input ref={specRef} type="file" hidden accept=".pdf,.doc,.docx" onChange={e => setSpec(e.target.files?.[0] ?? null)} />
+            <button type="button" onClick={() => specRef.current?.click()} style={{ ...btnGhost, padding: "7px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}><Upload size={14} />Allega capitolato o specifiche</button>
+            {spec && <span style={{ ...sans, fontSize: 13, color: C.muted }}>{spec.name}</span>}
+          </div>
           <Field label="Risposta entro" htmlFor="rfq-deadline"><input id="rfq-deadline" type="date" min={plus(0)} value={deadline} onChange={e => setDeadline(e.target.value)} style={{ ...iStyle, width: 190 }} /></Field>
           <div>
             <div style={{ ...sans, fontSize: 12.5, fontWeight: 650, marginBottom: 6 }}>Fornitori da invitare ({picked.length}, da 2 a 10)</div>
@@ -67,6 +74,7 @@ export function RfqCard({ t, fail, notify, onSaved }: { t: TaskDetail; fail: (e:
           <div key={r.id} style={{ borderTop: `1px solid ${C.borderLight}`, marginTop: 12, paddingTop: 12 }}>
             <div style={{ ...sans, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", fontSize: 13 }}>
               <b>{r.title}</b>
+              {r.specFile && <a href={rfqFileUrl(r.id, "spec")} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5, color: C.blue }}><Paperclip size={13} />{r.specFile}</a>}
               <span style={{ color: r.status === "open" ? C.blue : C.muted, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12.5 }}><Clock size={13} />{r.status === "open" ? `Aperta fino al ${fmtDate(r.deadline)}` : `Chiusa (scadenza ${fmtDate(r.deadline)})`}</span>
               {r.status === "open" && <button onClick={() => close(r.id)} disabled={busy} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12, marginLeft: "auto" }}>Chiudi ora</button>}
             </div>
@@ -75,6 +83,7 @@ export function RfqCard({ t, fail, notify, onSaved }: { t: TaskDetail; fail: (e:
                 <label key={i.supplierId} style={{ ...sans, display: "flex", gap: 10, alignItems: "center", fontSize: 13 }}>
                   {r.status === "closed" && i.amount !== null && !i.declined ? <input type="radio" name={`w-${r.id}`} checked={winner[r.id] === i.supplierId} onChange={() => setWinner(w => ({ ...w, [r.id]: i.supplierId }))} /> : <span style={{ width: 13 }} />}
                   <span style={{ fontWeight: 550 }}>{i.supplierName}</span>
+                  {i.fileName && <a href={rfqFileUrl(r.id, "quote", i.supplierId)} target="_blank" rel="noreferrer" title={i.fileName} style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, color: C.blue }}><Paperclip size={13} />Offerta</a>}
                   <span style={{ marginLeft: "auto", color: i.declined ? C.subtle : i.amount === null ? C.yellow : C.text }} className="tabular">
                     {i.declined ? "Ha rinunciato" : i.amount === null ? "In attesa" : <>{fmt(i.amount)}{i.amount === low && quoted.length > 1 && <CheckCircle2 size={13} color={C.green} style={{ marginLeft: 6, verticalAlign: "-2px" }} />}</>}
                   </span>
