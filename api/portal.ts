@@ -9,7 +9,7 @@ import { listConfigAudit, logConfigChange } from "./_audit.js";
 import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
 import { computeKpis } from "./_kpi.js";
 import { createDemoSupplier } from "./_demo.js";
-import { deleteBudgetDemo, loadBudgetDemo } from "./_budget-demo.js";
+import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_budget-demo.js";
 import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudget } from "./_budget.js";
 import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
 import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, setTaskLinks, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
@@ -201,6 +201,10 @@ async function handle(request: Request): Promise<Response> {
     if (op === "budget-version" && method === "DELETE") { await deleteBudgetVersion(user, idOf(url)); return json({ ok: true }); }
     if (op === "budget-demo" && method === "POST") return json(await loadBudgetDemo(user), { status: 201 });
     if (op === "budget-demo" && method === "DELETE") return json(await deleteBudgetDemo(user));
+    if (op === "budget-demo-file" && method === "GET") {
+      const po = url.searchParams.get("kind") === "po";
+      return new Response(Buffer.from(po ? demoPoFile() : demoPrFile()), { headers: { ...noStore, "Content-Type": "application/vnd.ms-excel", "Content-Disposition": `attachment; filename="${po ? "PO_LAST_7D_PROVA.XLS" : "OPEN_PR_PROVA.XLS"}"` } });
+    }
     if (op === "budget-template" && method === "GET") return new Response(BUDGET_TEMPLATE, { headers: { ...noStore, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="modello-master-plan.csv"' } });
     if (op === "vendor-demo" && method === "POST") return json(await createDemoSupplier(user), { status: 201 });
     if (op === "vendors" && method === "GET") return json({ vendors: await listVendors(user) });

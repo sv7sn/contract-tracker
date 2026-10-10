@@ -75,7 +75,7 @@ export const portalApi = {
   demoSupplier: () => post<{ id: number; name: string; email: string; password: string }>(portal("vendor-demo"), {}),
   budget: (year?: number) => request<BudgetView>(portal("budget", year ? `&year=${year}` : "")),
   budgetIo: (io: string, year?: number) => request<{ line: BudgetLine | null; items: BudgetItem[]; year: number }>(portal("budget-io", `&io=${encodeURIComponent(io)}${year ? `&year=${year}` : ""}`)),
-  loadBudgetDemo: () => post<{ years: number[]; tasks: number; contracts: number }>(portal("budget-demo"), {}),
+  loadBudgetDemo: () => post<{ years: number[]; tasks: number; contracts: number; suppliers: number }>(portal("budget-demo"), {}),
   deleteBudgetDemo: () => request<{ deleted: number }>(portal("budget-demo"), { method: "DELETE" }),
   deleteBudgetVersion: (id: number) => request<{ ok: true }>(portal("budget-version", `&id=${id}`), { method: "DELETE" }),
   configAudit: () => request<{ entries: ConfigAuditEntry[] }>(portal("config-audit")).then(r => r.entries),
@@ -109,6 +109,7 @@ export const portalApi = {
   saveConfig: (entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders" | "rda" | "pgr" | "privacy", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
 };
 
+export const demoSapFileUrl = (kind: "pr" | "po") => `/api/portal?op=budget-demo-file&kind=${kind}`;
 export const budgetTemplateUrl = "/api/portal?op=budget-template";
 export const taskDocUrl = (docId: number) => `/api/portal?op=task-doc-download&id=${docId}`;
 export const vendorExportUrl = (id: number) => `/api/portal?op=vendor-export&id=${id}`;
