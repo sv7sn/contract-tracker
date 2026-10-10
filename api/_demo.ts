@@ -80,3 +80,20 @@ export async function createDemoSupplier(user: User, opts: { name?: string; sapC
   });
   return { id, name, email, password };
 }
+
+/** I fornitori di prova (creati col pulsante o dalla simulazione), riconoscibili da nome o codice SAP. */
+export const isTestSupplier = (name: string, sapCode: string | null) => /^Fornitore di Prova/i.test(name) || /^(PROVA|SIMV)/.test(sapCode ?? "");
+
+/** Nuova password per l'accesso di un fornitore di prova, per vedere l'area fornitore. Mai per i fornitori veri. */
+export async function resetTestSupplierAccess(user: User, supplierId: number): Promise<{ email: string; password: string }> {
+  if (user.role !== "manager") throw new HttpError(403, "Solo il Manager genera l'accesso di prova");
+  const db = getPool();
+  const s = (await db.query("select s.name, s.sap_code, u.id as uid, u.email from suppliers s left join users u on u.id = s.user_id and u.role = 'supplier' where s.id = $1", [supplierId])).rows[0];
+  if (!s) throw new HttpError(404, "Fornitore non trovato");
+  if (!isTestSupplier(s.name, s.sap_code)) throw new HttpError(403, "L'accesso si può generare solo per i fornitori di prova: per quelli veri il fornitore imposta la password dal suo invito");
+  if (!s.uid) throw new HttpError(409, "Questo fornitore non ha ancora un accesso");
+  const password = `Prova-${randomBytes(4).toString("hex")}!`;
+  await db.query("update users set password_hash = $1 where id = $2", [await hashPassword(password), s.uid]);
+  await db.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'user','update',$2,'Accesso di prova generato')", [user.name, s.email]);
+  return { email: s.email as string, password };
+}

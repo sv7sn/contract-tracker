@@ -224,6 +224,7 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
   const [busy, setBusy] = useState<string | null>(null);
   const [dialog, setDialog] = useState<"reject" | "revision" | "block" | "deactivate" | "exclude" | "reactivate" | "sanctions" | "anonymize" | null>(null);
   const [copied, setCopied] = useState(false);
+  const [access, setAccess] = useState<{ email: string; password: string } | null>(null);
   // Conferme richieste dai controlli: doppioni (Buyer), verifica del conto e valutazione dei controlli (Finance).
   const [dupOk, setDupOk] = useState(false); const [dupReason, setDupReason] = useState("");
   const [bankContact, setBankContact] = useState(""); const [bankNote, setBankNote] = useState("");
@@ -388,6 +389,15 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
                 <Summary s={s} data={s.data} />
               </Card>
             </>)}
+
+            {currentUser.role === "manager" && (/^Fornitore di Prova/i.test(s.name) || /^(PROVA|SIMV)/.test(s.sapCode ?? "")) && (
+              <Card>
+                <CardTitle>Accesso di prova</CardTitle>
+                <div style={{ ...sans, fontSize: 13, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>Fornitore di prova: genera una password per entrare come lui e vedere l'area fornitore (richieste di offerta, documenti). Apri l'accesso in una finestra anonima per non uscire dal tuo.</div>
+                {access && <Notice kind="ok">Email <b style={{ userSelect: "all" }}>{access.email}</b> · password <b style={{ userSelect: "all" }}>{access.password}</b> (mostrata solo ora).</Notice>}
+                <button onClick={async () => { setError(null); try { setAccess(await portalApi.testAccess(s.id)); } catch (err) { setError(fail(err)); } }} style={{ ...btnGhost, padding: "8px 14px", fontSize: 13 }}>{access ? "Genera una nuova password" : "Genera accesso di prova"}</button>
+              </Card>
+            )}
 
             {s.status === "registered" && (currentUser.role === "manager" || currentUser.role === "buyer") && <RatingCard supplierId={s.id} fail={fail} notify={notify} />}
 
