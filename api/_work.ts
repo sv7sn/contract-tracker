@@ -34,6 +34,21 @@ export async function myWork(user: User): Promise<WorkItem[]> {
     if (manager && unassigned.length) items.push({ kind: "unassigned", urgency: 2, title: `${unassigned.length} ${plural(unassigned.length, "task senza assegnatario", "task senza assegnatario")}`, detail: "Assegnali a un buyer dal modulo Task", days: null, target: { view: "tasks" } });
   });
 
+  // Avvisi ai Business Owner: da inviare (data prevista passata) o senza risposta.
+  await safe(async () => {
+    const rows = (await db.query(`select c.id, c.supplier, c.object, n.scheduled_date as notify_date, r.status as resp_status,
+        (select max(sent_at)::date::text from bo_notices b where b.contract_id = c.id) as last_sent
+      from contracts c join plan_steps n on n.contract_id = c.id and n.step_id = 'bo_notify' join plan_steps r on r.contract_id = c.id and r.step_id = 'bo_response'
+      where c.bo_email <> '' and c.status = 'active' and not c.ceased and r.status <> 'done' and ${manager ? "true" : "lower(c.owner) = lower($1)"}`, manager ? [] : [user.name])).rows;
+    for (const r of rows) {
+      const title = `${r.supplier} — ${r.object}`.slice(0, 120), target = { view: "list" as const, contractId: r.id };
+      if (r.last_sent) {
+        const d = daysBetween(t0, r.last_sent);
+        if (d >= 7) items.push({ kind: "bo_waiting", urgency: d >= 14 ? 3 : 2, title, detail: `In attesa del Business Owner da ${d} giorni`, days: d, target, quick: { label: "Sollecita", contractId: r.id } });
+      } else if (r.notify_date <= t0) items.push({ kind: "bo_to_send", urgency: 2, title, detail: `Avviso al Business Owner da inviare (previsto il ${r.notify_date.split("-").reverse().join("/")})`, days: daysBetween(t0, r.notify_date), target, quick: { label: "Invia ora", contractId: r.id } });
+    }
+  });
+
   await safe(async () => {
     const rows = (await db.query(`select r.id, r.title, r.task_id, r.deadline::text as deadline, r.status, t.sourcing is null as no_sourcing,
         (select count(*)::int from rfq_invites i where i.rfq_id = r.id and i.amount is not null and not i.declined) as quotes, (select count(*)::int from rfq_invites i where i.rfq_id = r.id) as invited

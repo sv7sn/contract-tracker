@@ -3,7 +3,7 @@ import type { Queryable } from "./_db.js";
 // Email del portale. Ogni messaggio viene salvato nella tabella `notifications`; l'invio reale avviene se sono
 // configurati RESEND_API_KEY e MAIL_FROM (servizio Resend), altrimenti lo stato resta "logged" (non inviato).
 
-export type Template = "invitation" | "new_registration" | "supplier_modified" | "revision_requested" | "rejection" | "buyer_approved" | "vendor_created" | "sap_code" | "doc_reminder" | "doc_unresponsive" | "bank_change_alert" | "rfq_invite" | "rfq_quote";
+export type Template = "invitation" | "new_registration" | "supplier_modified" | "revision_requested" | "rejection" | "buyer_approved" | "vendor_created" | "sap_code" | "doc_reminder" | "doc_unresponsive" | "bank_change_alert" | "rfq_invite" | "rfq_quote" | "bo_notice" | "bo_reminder";
 export type Lang = "IT" | "EN";
 
 interface Vars { items?: string; name?: string; link?: string; reason?: string; sapCode?: string; expires?: string; companies?: string; deadline?: string; detail?: string }
@@ -60,6 +60,14 @@ const T: Record<Template, Record<Lang, (v: Vars) => { subject: string; body: str
   rfq_quote: {
     IT: v => ({ subject: `Offerta ricevuta: ${v.reason}`, body: `${v.name} ha risposto alla richiesta di offerta "${v.reason}": ${v.detail}.\n\nApri la pratica: ${v.link}` }),
     EN: v => ({ subject: `Quotation received: ${v.reason}`, body: `${v.name} replied to the request for quotation "${v.reason}": ${v.detail}.\n\nOpen it: ${v.link}` }),
+  },
+  bo_notice: {
+    IT: v => ({ subject: `Serve una tua decisione sul contratto: ${v.reason}`, body: `Gentile ${v.name},\n\nil contratto "${v.reason}" ${v.deadline}.\n${v.detail ? `\nMessaggio del buyer:\n${v.detail}\n` : ""}\nServe la tua decisione (rinnovare, rinegoziare, cessare…): senza la tua risposta l'ufficio acquisti non può procedere.\nRispondi dal sistema: ${v.link}\n\nPer chiarimenti rispondi a questa email.` }),
+    EN: v => ({ subject: `Your decision is needed on the contract: ${v.reason}`, body: `Dear ${v.name},\n\nthe contract "${v.reason}" ${v.deadline}.\n${v.detail ? `\nMessage from the buyer:\n${v.detail}\n` : ""}\nWe need your decision (renew, renegotiate, terminate…): procurement cannot proceed without it.\nReply in the system: ${v.link}` }),
+  },
+  bo_reminder: {
+    IT: v => ({ subject: `Sollecito: serve la tua decisione sul contratto ${v.reason}`, body: `Gentile ${v.name},\n\nti ricordiamo che attendiamo la tua decisione sul contratto "${v.reason}" (${v.deadline}).\n${v.detail ? `\nMessaggio del buyer:\n${v.detail}\n` : ""}\nRispondi dal sistema: ${v.link}` }),
+    EN: v => ({ subject: `Reminder: your decision is needed on the contract ${v.reason}`, body: `Dear ${v.name},\n\nthis is a reminder that we are waiting for your decision on the contract "${v.reason}" (${v.deadline}).\n${v.detail ? `\nMessage from the buyer:\n${v.detail}\n` : ""}\nReply in the system: ${v.link}` }),
   },
 };
 

@@ -28,6 +28,7 @@ create table if not exists contracts (
 alter table contracts add column if not exists file_path text;
 alter table contracts add column if not exists notice_days integer;
 alter table contracts add column if not exists notice_date text not null default '';
+alter table contracts add column if not exists bo_lead_days integer;
 create table if not exists plan_steps (
   contract_id integer not null references contracts(id) on delete cascade, step_id text not null,
   scheduled_date text not null, original_date text not null, status text not null,
@@ -41,6 +42,12 @@ create table if not exists audit_log (
   ts text not null, user_name text not null, action text not null, detail text not null default ''
 );
 create index if not exists audit_log_contract_idx on audit_log(contract_id);
+-- Avvisi inviati al Business Owner di un contratto (primo avviso, solleciti, invii automatici).
+create table if not exists bo_notices (
+  id serial primary key, contract_id integer not null references contracts(id) on delete cascade, kind text not null, to_email text not null,
+  message text not null default '', sent_by text not null default '', status text not null default 'sent', sent_at timestamptz not null default now()
+);
+create index if not exists bo_notices_contract_idx on bo_notices (contract_id, sent_at desc);
 create table if not exists users (
   id serial primary key,
   email text not null, name text not null,
@@ -459,6 +466,7 @@ function rowToContract(r: Record<string, unknown>): Contract {
     status: (r.status as Contract["status"]) ?? "active", outcome: (r.outcome as Contract["outcome"]) ?? "", outcomeNote: (r.outcome_note as string) ?? "",
     closedAt: r.closed_at ? new Date(r.closed_at as string).toISOString() : null, replaces: (r.replaces as number | null) ?? null, replacedBy: (r.replaced_by as number | null) ?? null,
     supplierId: (r.supplier_id as number | null) ?? null, internalOrder: (r.internal_order as string) ?? "",
+    boLeadDays: (r.bo_lead_days as number | null) ?? null,
   };
 }
 function rowToStep(r: Record<string, unknown>): PlanStep {
@@ -507,7 +515,7 @@ async function fetchContract(db: Queryable, id: number): Promise<Contract | unde
   const r = (await db.query("select * from contracts where id = $1", [id])).rows[0];
   return r ? rowToContract(r) : undefined;
 }
-async function fetchPlan(db: Queryable, id: number): Promise<PlanStep[]> {
+export async function fetchPlan(db: Queryable, id: number): Promise<PlanStep[]> {
   return (await db.query(`select * from plan_steps where contract_id = $1 order by ${STEP_ORDER_SQL}`, [id])).rows.map(rowToStep);
 }
 
@@ -527,7 +535,7 @@ async function upsertContract(db: Queryable, c: ContractInput): Promise<number> 
   return c.id;
 }
 
-async function replacePlan(db: Queryable, contractId: number, plan: PlanStep[]) {
+export async function replacePlan(db: Queryable, contractId: number, plan: PlanStep[]) {
   await db.query("delete from plan_steps where contract_id = $1", [contractId]);
   for (const s of plan) {
     await db.query(
@@ -537,7 +545,7 @@ async function replacePlan(db: Queryable, contractId: number, plan: PlanStep[]) 
   }
 }
 
-async function addAudit(db: Queryable, contractId: number, user: User, entries: AuditEntry[]) {
+export async function addAudit(db: Queryable, contractId: number, user: User, entries: AuditEntry[]) {
   for (const e of entries) {
     // L'autore è sempre l'utente della sessione: il client non può attribuire azioni ad altri ("Sistema" indica le azioni automatiche).
     await db.query("insert into audit_log (contract_id, ts, user_name, action, detail) values ($1,$2,$3,$4,$5)",

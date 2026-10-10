@@ -1,6 +1,9 @@
 // Piano di rinnovo di un contratto: condiviso tra interfaccia e server (che crea il piano dei nuovi contratti).
 import type { PlanStep, StepTemplate } from "../src/types.ts";
 
+/** Giorni prima della scadenza in cui parte la notifica al Business Owner, se non è stato scelto altro. */
+export const DEFAULT_BO_LEAD_DAYS = 75;
+
 export const PLANNING_STEPS: StepTemplate[] = [
   { id: "analysis",    daysBeforeEnd: 90, icon: "analysis", label: "Analisi spend",           actor: "buyer"  },
   { id: "bo_notify",   daysBeforeEnd: 75, icon: "bo_notify",  label: "Notifica Business Owner", actor: "system" },
@@ -23,8 +26,8 @@ export function makePlan(contractId: number, end: string, offsetDays = 0): PlanS
 }
 
 // Ricalcola le date del piano su una nuova scadenza mantenendo lo stato delle attività già avviate/completate.
-export function reschedulePlan(oldPlan: PlanStep[], contractId: number, end: string): PlanStep[] {
-  return makePlan(contractId, end).map(ns => {
+export function reschedulePlan(oldPlan: PlanStep[], contractId: number, end: string, offsetDays = 0): PlanStep[] {
+  return makePlan(contractId, end, offsetDays).map(ns => {
     const old = oldPlan.find(s => s.stepId === ns.stepId);
     return old && old.status !== "upcoming" ? { ...old, scheduledDate: ns.scheduledDate, originalDate: ns.originalDate, modified: false, modifiedReason: "" } : ns;
   });

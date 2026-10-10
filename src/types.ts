@@ -18,6 +18,8 @@ export interface Contract {
   status?: ContractStatus; outcome?: ContractOutcome | ""; outcomeNote?: string; closedAt?: string | null;
   /** Catena dei contratti: quello che questo sostituisce e quello che lo sostituisce. */
   replaces?: number | null; replacedBy?: number | null;
+  /** Giorni prima della scadenza in cui partono gli avvisi al Business Owner (null = predefinito, 75). */
+  boLeadDays?: number | null;
   /** Fornitore in anagrafica (portale fornitori), se collegato. */
   supplierId?: number | null;
   /** Riga del Master Plan su cui pesa il contratto. */
@@ -310,14 +312,25 @@ export interface Scorecard {
 }
 
 // ─── Il mio lavoro ───────────────────────────────────────────
-export type WorkKind = "task_late" | "task_soon" | "sourcing_missing" | "exception" | "unassigned" | "rfq_answers" | "rfq_compare" | "vendor_review" | "vendor_lapsed" | "vendor_unresponsive" | "splits";
+export type WorkKind = "bo_to_send" | "bo_waiting" | "task_late" | "task_soon" | "sourcing_missing" | "exception" | "unassigned" | "rfq_answers" | "rfq_compare" | "vendor_review" | "vendor_lapsed" | "vendor_unresponsive" | "splits";
 export interface WorkItem {
   kind: WorkKind; urgency: 1 | 2 | 3; title: string; detail: string;
   /** Giorni di ritardo (positivo) o mancanti (negativo), se la voce ha una scadenza. */
   days: number | null;
-  target: { view: View; taskId?: number; vendorId?: number };
+  target: { view: View; taskId?: number; vendorId?: number; contractId?: number };
+  /** Azione rapida sulla riga: invia o sollecita l'avviso al Business Owner del contratto. */
+  quick?: { label: string; contractId: number };
 }
 
 // ─── Pulizia dei dati di prova ───────────────────────────────
 export type ResetArea = "tasks" | "contracts" | "suppliers_test" | "suppliers_all" | "sap" | "budget" | "categories";
 export type ResetPreview = Record<ResetArea, number>;
+
+// ─── Avvisi al Business Owner ────────────────────────────────
+export interface BoNotice { id: number; kind: "notice" | "reminder" | "auto" | "auto_reminder"; toEmail: string; message: string; sentBy: string; sentAt: string; status: string }
+export interface BoSettings { auto: boolean; reminderDays: number }
+export interface BoInfo {
+  boEmail: string; hasBoAccount: boolean; leadDays: number; defaultLeadDays: number; noticeDate: string;
+  /** Stato della richiesta: da inviare, in attesa di risposta (da quanti giorni), risposta data. */
+  state: "to_send" | "waiting" | "answered"; waitingDays: number | null; decision: string; notices: BoNotice[]; settings: BoSettings;
+}
