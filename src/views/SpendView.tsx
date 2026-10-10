@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { SpendGroup, SpendPo, SpendSupplier, SpendView as View } from "../types.ts";
+import type { SpendGroup, SpendPo, SplitCase, SpendSupplier, SpendView as View } from "../types.ts";
 import { ApiError, portalApi } from "../api.ts";
 import { btnGhost, C, font, iStyle, sans } from "../theme.ts";
 import { fmt, fmtCompact, fmtDate } from "../lib/format.ts";
@@ -57,6 +57,7 @@ export function SpendView({ onSessionExpired }: { onSessionExpired: () => void }
         <StatCard label="Fornitori" value={v.suppliers} sub={`${v.concentration.coreSuppliers} fanno l'80% · coda lunga ${v.concentration.tailSuppliers}`} color={C.accent} icon={<Building2 size={18} />} />
         <StatCard label="Copertura" value={pct(v.coverage.coveredShare)} sub={`Accordi SAP ${fmtCompact(v.coverage.agreement)} · registro ${fmtCompact(v.coverage.contract)}`} color={v.coverage.coveredShare >= 70 ? C.green : v.coverage.coveredShare >= 40 ? C.yellow : C.red} icon={<FileText size={18} />} />
         <StatCard label="Fuori processo" value={fmtCompact(v.noRda.value)} sub={`${v.noRda.lines} righe senza RDA né contratto`} color={v.noRda.lines ? C.red : C.green} icon={<AlertTriangle size={18} />} />
+        <StatCard label="Possibili frazionamenti" value={v.splits.cases.length} sub={v.splits.cases.length ? `${fmtCompact(v.splits.cases.reduce((a, c) => a + c.total, 0))} complessivi` : "Nessun caso"} color={v.splits.cases.length ? C.red : C.green} icon={<Scale size={18} />} />
         <StatCard label="Primi 5 fornitori" value={pct(v.concentration.top5)} sub={`Primo: ${pct(v.concentration.top1)} · primi 10: ${pct(v.concentration.top10)}`} color={C.purple} icon={<Scale size={18} />} />
       </Grid>
 
@@ -95,6 +96,12 @@ export function SpendView({ onSessionExpired }: { onSessionExpired: () => void }
         </>}
       </Card>
 
+      <Card style={{ marginBottom: 14 }}>
+        <CardTitle icon={<Scale size={17} />}>Possibili frazionamenti</CardTitle>
+        <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginBottom: 10 }}>Più ordini o RDA entro {v.splits.windowDays} giorni, ciascuno sotto i {fmt(v.threshold)}, che insieme superano la soglia del confronto tra offerte. Per gli ordini si guardano fornitore e categoria (esclusi quelli a contratto o accordo quadro); per le RDA richiedente e internal order. Sono segnalazioni da verificare, non violazioni.</div>
+        {v.splits.cases.length === 0 ? <div style={{ ...sans, fontSize: 13, color: C.subtle }}>Nessun caso.</div> : <div style={{ display: "grid", gap: 10 }}>{v.splits.cases.map((c, i) => <SplitRow key={i} c={c} />)}</div>}
+      </Card>
+
       {v.overRda.available && (
         <Card style={{ marginBottom: 14 }}>
           <CardTitle icon={<AlertTriangle size={17} />}>PO oltre il valore della RDA</CardTitle>
@@ -115,6 +122,21 @@ export function SpendView({ onSessionExpired }: { onSessionExpired: () => void }
       </p>
       {openSup && <Portal><SupplierSheet s={openSup} year={v.year} fail={fail} onClose={() => setOpenSup(null)} /></Portal>}
     </div>
+  );
+}
+
+function SplitRow({ c }: { c: SplitCase }) {
+  return (
+    <details style={{ border: `1px solid ${C.borderLight}`, borderRadius: 12, padding: "10px 14px" }}>
+      <summary style={{ ...sans, cursor: "pointer", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 13.5 }}>
+        <span style={{ fontWeight: 650, flex: "1 1 240px" }}>{c.who}</span>
+        <span style={{ color: C.muted, fontSize: 12.5 }}>{c.kind === "po" ? "Ordini" : "RDA"} · {c.items.length} dal {fmtDate(c.from)} al {fmtDate(c.to)}</span>
+        <b className="tabular" style={{ color: C.red }}>{fmt(c.total)}</b>
+      </summary>
+      <div style={{ marginTop: 8 }}>
+        {c.items.map(i => <div key={i.id} style={{ ...sans, display: "flex", gap: 10, padding: "5px 0", borderTop: `1px solid ${C.borderLight}`, fontSize: 12.5 }}><span className="tabular" style={{ minWidth: 110 }}>{i.id}</span><span style={{ color: C.muted, minWidth: 90 }}>{fmtDate(i.date)}</span><span style={{ flex: 1, color: C.muted }}>{i.label}</span><span className="tabular">{fmt(i.value)}</span></div>)}
+      </div>
+    </details>
   );
 }
 

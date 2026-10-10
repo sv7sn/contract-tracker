@@ -1,9 +1,10 @@
 // Spesa reale dai file ordini SAP: per fornitore, categoria e funzione, concentrazione, coda lunga,
 // copertura contrattuale (accordo quadro SAP o contratto del registro) e ordini senza RDA.
-import type { SpendCoverage, SpendGroup, SpendPo, SpendSupplier, SpendView, User } from "../src/types.ts";
+import type { SpendCoverage, SplitCase, SpendGroup, SpendPo, SpendSupplier, SpendView, User } from "../src/types.ts";
 import { canSeeBudget } from "./_budget.js";
 import { getPool } from "./_db.js";
 import { HttpError } from "./_http.js";
+import { findSplits, SPLIT_WINDOW_DAYS, type SplitItem } from "./_splits.js";
 import { loadRdaSettings } from "./_tasks.js";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -71,6 +72,30 @@ export async function spendView(user: User, yearIn?: number): Promise<SpendView>
     const rs = eur.filter(r => (r.day ?? "").startsWith(month));
     return { month, value: r2(rs.reduce((a, r) => a + val(r), 0)), pos: poSet(rs) };
   });
+  // Frazionamento. Ordini: righe dello stesso PO sommate, poi per fornitore e categoria; le righe già coperte da contratto o accordo non contano.
+  const poGroups = new Map<string, SplitItem[]>(), poNames = new Map<string, string>();
+  const perPo = new Map<string, Row>();
+  for (const r of eur) {
+    if (r.coverage !== "none" || !r.day || !r.supplier_code) continue;
+    const k = `${r.po}|${r.supplier_code}|${r.matl_group}`; const cur = perPo.get(k);
+    if (cur) cur.value = val(cur) + val(r); else perPo.set(k, { ...r, value: val(r) });
+  }
+  for (const r of perPo.values()) {
+    const k = `${r.supplier_code}|${r.matl_group}`; poNames.set(k, `${r.supplier_name || r.supplier_code} · ${category(r)}`);
+    const a = poGroups.get(k) ?? []; a.push({ id: r.po, date: r.day, value: val(r), label: r.short_text }); poGroups.set(k, a);
+  }
+  const cases: SplitCase[] = findSplits(poGroups, threshold).map(c => ({ kind: "po", who: poNames.get(c.key) ?? c.key, detail: "Ordini dello stesso fornitore e categoria", total: c.total, from: c.from, to: c.to, items: c.items }));
+  // RDA: per richiedente e internal order (o centro di costo), nell'anno scelto.
+  const rdas = (await db.query(`select source_key, title, meta, coalesce(meta->>'releaseDate', created_at::date::text) as d from tasks
+    where source = 'rda' and coalesce(done_reason, '') <> 'merged' and extract(year from coalesce((meta->>'releaseDate')::date, created_at::date)) = $1`, [year ?? 0])).rows;
+  const rdaGroups = new Map<string, SplitItem[]>();
+  for (const t of rdas) {
+    const m = t.meta ?? {}; const who = m.requestedBy; const where = Object.keys(m.io ?? {})[0] || m.internalOrder || m.costCenter;
+    if (!who || !where) continue;
+    const k = `${who}|${where}`; const a = rdaGroups.get(k) ?? []; a.push({ id: t.source_key, date: String(t.d).slice(0, 10), value: Number(m.value) || 0, label: String(t.title ?? "").replace(/^RDA \S+ · /, "") }); rdaGroups.set(k, a);
+  }
+  for (const c of findSplits(rdaGroups, threshold)) { const [who, where] = c.key.split("|"); cases.push({ kind: "rda", who: `${who} · ${where}`, detail: "RDA dello stesso richiedente e internal order", total: c.total, from: c.from, to: c.to, items: c.items }); }
+  cases.sort((a, b) => b.total - a.total);
   const count = (src: string) => eur.filter(r => r.value_source === src).length;
 
   return {
@@ -79,7 +104,7 @@ export async function spendView(user: User, yearIn?: number): Promise<SpendView>
     valued: { net: count("net"), pr: count("pr"), gr: count("gr"), none: count("none") },
     otherCurrency: { lines: other.length, currencies: [...new Set(other.map(r => r.currency as string))].sort() },
     concentration: { top1: top(1), top5: top(5), top10: top(10), coreSuppliers: core, tailSuppliers: tail.length, tailValue, tailShare: pct(tailValue, total) },
-    coverage, monthly, bySupplier,
+    coverage, monthly, bySupplier, splits: { windowDays: SPLIT_WINDOW_DAYS, cases },
     byCategory: group(category),
     byFunction: group(r => r.func || "Non attribuita"),
     noRda: { lines: noRda.length, value: r2(noRda.reduce((a, r) => a + val(r), 0)), items: [...noRda].sort((a, b) => val(b) - val(a)).slice(0, 50).map(toPo) },

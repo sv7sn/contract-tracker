@@ -263,6 +263,8 @@ export type SpendCoverage = "agreement" | "contract" | "none";
 export interface SpendSupplier { code: string; name: string; supplierId: number | null; value: number; pos: number; share: number; agreement: number; contract: number; none: number }
 export interface SpendGroup { label: string; value: number; pos: number; suppliers: number }
 export interface SpendPo { po: string; item: string; docDate: string | null; supplierCode: string; supplierName: string; value: number; valueSource: string; prValue: number; netValue: number | null; shortText: string; category: string; internalOrder: string; costCenter: string; pr: string }
+/** Possibile frazionamento: elementi ravvicinati, ciascuno sotto soglia, che insieme la superano. */
+export interface SplitCase { kind: "po" | "rda"; who: string; detail: string; total: number; from: string; to: string; items: { id: string; date: string; value: number; label: string }[] }
 export interface SpendView {
   year: number | null; years: number[]; from: string | null; to: string | null; firstImport: string | null; threshold: number;
   total: number; lines: number; pos: number; suppliers: number;
@@ -277,6 +279,8 @@ export interface SpendView {
   noRda: { lines: number; value: number; items: SpendPo[] };
   /** Fornitori sopra la soglia senza contratto né accordo quadro: candidati a un contratto. */
   candidates: SpendSupplier[];
+  /** Possibili frazionamenti di ordini (stesso fornitore e categoria) e di RDA (stesso richiedente e internal order) nella finestra indicata. */
+  splits: { windowDays: number; cases: SplitCase[] };
   /** Ordini con valore netto oltre quello della RDA (solo se l'estrazione ha il valore netto). */
   overRda: { available: boolean; items: SpendPo[] };
 }
