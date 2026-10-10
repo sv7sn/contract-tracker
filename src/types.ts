@@ -279,8 +279,16 @@ export interface SpendView {
   noRda: { lines: number; value: number; items: SpendPo[] };
   /** Fornitori sopra la soglia senza contratto né accordo quadro: candidati a un contratto. */
   candidates: SpendSupplier[];
+  /** Spesa non attribuita a nessuna categoria unificata (gruppi merci SAP non classificati). */
+  unclassified: { value: number; groups: number };
+  /** Budget del Master Plan (versione in uso) e spesa per categoria unificata; vuoto se non ci sono categorie. */
+  categoryBudget: { label: string; budget: number; spend: number }[];
   /** Possibili frazionamenti di ordini (stesso fornitore e categoria) e di RDA (stesso richiedente e internal order) nella finestra indicata. */
   splits: { windowDays: number; cases: SplitCase[] };
   /** Ordini con valore netto oltre quello della RDA (solo se l'estrazione ha il valore netto). */
   overRda: { available: boolean; items: SpendPo[] };
 }
+
+// ─── Categorie unificate ─────────────────────────────────────
+export interface CategorySource { kind: "sap" | "mp"; key: string; label: string; amount: number; categoryId: number | null }
+export interface CategoriesView { categories: { id: number; name: string }[]; sources: CategorySource[] }

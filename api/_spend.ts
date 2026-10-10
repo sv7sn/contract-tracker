@@ -29,13 +29,14 @@ export async function spendView(user: User, yearIn?: number): Promise<SpendView>
           and c.end_date ~ ${ISO} and c.end_date::date >= l.doc_date and (c.start_date !~ ${ISO} or c.start_date::date <= l.doc_date)) then 'contract'
         else 'none' end as coverage,
       coalesce(case when l.internal_order <> '' then ${FUNC("io")} end, case when l.cost_center <> '' then ${FUNC("cost_center")} end, '') as func,
+      (select c.name from category_map cm join categories c on c.id = cm.category_id where cm.kind = 'sap' and cm.key = l.matl_group) as cat_name,
       (select s.id from suppliers s where s.sap_code = l.supplier_code and l.supplier_code <> '' limit 1) as supplier_id
     from po_lines l where extract(year from l.doc_date) = $1`, [year])).rows;
 
   const eur = rows.filter(r => (r.currency || "EUR") === "EUR");
   const other = rows.filter(r => (r.currency || "EUR") !== "EUR");
   const val = (r: Row) => Number(r.value) || 0;
-  const category = (r: Row) => r.matl_group_desc || r.matl_group || "Non indicata";
+  const category = (r: Row) => r.cat_name || r.matl_group_desc || r.matl_group || "Non indicata";
   const total = r2(eur.reduce((a, r) => a + val(r), 0));
   const poSet = (rs: Row[]) => new Set(rs.map(r => r.po)).size;
 
@@ -96,6 +97,17 @@ export async function spendView(user: User, yearIn?: number): Promise<SpendView>
   }
   for (const c of findSplits(rdaGroups, threshold)) { const [who, where] = c.key.split("|"); cases.push({ kind: "rda", who: `${who} · ${where}`, detail: "RDA dello stesso richiedente e internal order", total: c.total, from: c.from, to: c.to, items: c.items }); }
   cases.sort((a, b) => b.total - a.total);
+  // Categorie unificate: budget del Master Plan (versione in uso) contro spesa.
+  const cats = (await db.query("select id, name from categories order by name")).rows;
+  const categoryBudget = !cats.length || year === null ? [] : await (async () => {
+    const mp = (await db.query(`select c.name, sum(m.amount)::float as budget from mp_lines m join mp_versions v on v.id = m.version_id join category_map cm on cm.kind = 'mp' and cm.key = m.category join categories c on c.id = cm.category_id
+      where v.year = $1 and v.version = (select max(version) from mp_versions where year = $1) group by c.name`, [year])).rows;
+    const spendBy = new Map<string, number>();
+    for (const r of eur) if (r.cat_name) spendBy.set(r.cat_name, (spendBy.get(r.cat_name) ?? 0) + val(r));
+    return cats.map(c => ({ label: c.name as string, budget: r2(mp.find(m => m.name === c.name)?.budget ?? 0), spend: r2(spendBy.get(c.name) ?? 0) })).filter(c => c.budget || c.spend).sort((a, b) => b.spend - a.spend);
+  })();
+  const unclassifiedRows = eur.filter(r => !r.cat_name && val(r) > 0);
+  const unclassified = { value: r2(unclassifiedRows.reduce((a, r) => a + val(r), 0)), groups: new Set(unclassifiedRows.map(r => r.matl_group || "—")).size };
   const count = (src: string) => eur.filter(r => r.value_source === src).length;
 
   return {
@@ -104,7 +116,7 @@ export async function spendView(user: User, yearIn?: number): Promise<SpendView>
     valued: { net: count("net"), pr: count("pr"), gr: count("gr"), none: count("none") },
     otherCurrency: { lines: other.length, currencies: [...new Set(other.map(r => r.currency as string))].sort() },
     concentration: { top1: top(1), top5: top(5), top10: top(10), coreSuppliers: core, tailSuppliers: tail.length, tailValue, tailShare: pct(tailValue, total) },
-    coverage, monthly, bySupplier, splits: { windowDays: SPLIT_WINDOW_DAYS, cases },
+    coverage, monthly, bySupplier, splits: { windowDays: SPLIT_WINDOW_DAYS, cases }, unclassified, categoryBudget,
     byCategory: group(category),
     byFunction: group(r => r.func || "Non attribuita"),
     noRda: { lines: noRda.length, value: r2(noRda.reduce((a, r) => a + val(r), 0)), items: [...noRda].sort((a, b) => val(b) - val(a)).slice(0, 50).map(toPo) },
