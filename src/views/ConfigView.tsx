@@ -6,6 +6,7 @@ import { btnGhost, btnPrimary, C, font, iStyle, sans } from "../theme.ts";
 import { Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
 import { AlertTriangle, Bell, Building2, History, Lock, RotateCcw, ShieldCheck, Inbox, FileCheck2, Loader2, Pencil, Plus, Save, Settings, Sparkles, Trash2, Wallet, FileText, X } from "../components/icons.tsx";
 import { Notice, Portal } from "../components/vendorUi.tsx";
+import { CategoriesCard } from "./CategoriesCard.tsx";
 
 type Entity = "company" | "industry" | "payment_term";
 type Draft = { entity: Entity; item: Record<string, unknown>; isNew: boolean };
@@ -178,6 +179,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
         <button onClick={saveSap} disabled={busy} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}Salva parametri SAP</button>
       </Card>
 
+      <CategoriesCard fail={fail} notify={notify} />
       <SanctionsCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
       <PrivacyCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
       <AuditCard cfg={cfg} fail={fail} />

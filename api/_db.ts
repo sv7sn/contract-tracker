@@ -193,6 +193,11 @@ create table if not exists po_lines (
 );
 create index if not exists po_lines_date_idx on po_lines (doc_date);
 create index if not exists po_lines_supplier_idx on po_lines (supplier_code);
+-- Categorie merceologiche unificate: collegano i gruppi merci SAP e le categorie del Master Plan.
+create table if not exists categories (id serial primary key, name text not null unique);
+create table if not exists category_map (
+  kind text not null check (kind in ('sap','mp')), key text not null, category_id integer not null references categories(id) on delete cascade, primary key (kind, key)
+);
 create table if not exists pgr_assignments (pgr text primary key, user_id integer references users(id) on delete set null, note text not null default '');
 create table if not exists sap_imports (
   id serial primary key, kind text not null, file_name text not null, rows integer not null default 0, result jsonb not null default '{}'::jsonb,

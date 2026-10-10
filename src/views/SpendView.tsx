@@ -74,6 +74,22 @@ export function SpendView({ onSessionExpired }: { onSessionExpired: () => void }
         <GroupBars title="Per funzione" subtitle="Dal Master Plan, per internal order o centro di costo" data={v.byFunction} />
       </Grid>
 
+      {v.unclassified.groups > 0 && <Notice kind="warn">{fmtCompact(v.unclassified.value)} di spesa ({v.unclassified.groups} gruppi merci SAP) non sono collegati a una categoria unificata: classificali in Amministrazione → Configurazione → Categorie merceologiche.</Notice>}
+      {v.categoryBudget.length > 0 && (
+        <Card style={{ marginBottom: 14 }}>
+          <CardTitle icon={<Wallet size={17} />}>Budget e spesa per categoria</CardTitle>
+          <div className="table-wrap">
+            <table className="data-table">
+              <thead><tr><th>Categoria</th><th style={th}>Budget Master Plan</th><th style={th}>Spesa ordinata</th><th style={th}>Scostamento</th></tr></thead>
+              <tbody>{v.categoryBudget.map(c => { const d = c.budget - c.spend; return (
+                <tr key={c.label} style={{ cursor: "default" }}><td style={{ fontWeight: 650 }}>{c.label}</td><td className="num tabular">{c.budget ? fmt(c.budget) : "—"}</td><td className="num tabular">{fmt(c.spend)}</td>
+                  <td className="num tabular" style={{ color: c.budget && d < 0 ? C.red : C.muted }}>{c.budget ? fmt(d) : "—"}</td></tr>); })}</tbody>
+            </table>
+          </div>
+          <p style={{ ...sans, fontSize: 12, color: C.subtle, margin: "10px 0 0" }}>La spesa è quella dei PO già emessi: il budget residuo include anche RDA aperte e contratti (vedi Master Plan).</p>
+        </Card>
+      )}
+
       <Card style={{ marginBottom: 14 }}>
         <CardTitle icon={<FileText size={17} />}>Copertura contrattuale</CardTitle>
         <CoverageBar v={v} />

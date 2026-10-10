@@ -9,6 +9,7 @@ import { listConfigAudit, logConfigChange } from "./_audit.js";
 import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
 import { computeKpis } from "./_kpi.js";
 import { spendLines, spendView } from "./_spend.js";
+import { deleteCategory, listCategories, saveCategory, seedCategoriesFromMp, setCategoryMap } from "./_categories.js";
 import { createDemoSupplier } from "./_demo.js";
 import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_budget-demo.js";
 import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudget } from "./_budget.js";
@@ -192,6 +193,12 @@ async function handle(request: Request): Promise<Response> {
       return json({ supplier: await getVendor(user, owner) });
     }
     if (op === "kpis" && method === "GET") return json(await computeKpis(user));
+    // ── Categorie unificate ──
+    if (op === "categories" && method === "GET") return json(await listCategories(user));
+    if (op === "category-save" && method === "POST") { const b = (await readJson(request)) as { id?: unknown; name?: string }; return json(await saveCategory(user, b.id ? Number(b.id) : null, String(b.name ?? ""))); }
+    if (op === "category" && method === "DELETE") return json(await deleteCategory(user, Number(url.searchParams.get("id"))));
+    if (op === "category-map" && method === "POST") { const b = (await readJson(request)) as { kind?: string; key?: string; categoryId?: unknown }; return json(await setCategoryMap(user, String(b.kind ?? ""), String(b.key ?? ""), b.categoryId ? Number(b.categoryId) : null)); }
+    if (op === "category-seed" && method === "POST") return json(await seedCategoriesFromMp(user));
     // ── Spesa dai file ordini SAP ──
     if (op === "spend" && method === "GET") return json(await spendView(user, Number(url.searchParams.get("year")) || undefined));
     if (op === "spend-lines" && method === "GET") return json(await spendLines(user, Number(url.searchParams.get("year")), url.searchParams.get("supplier") ?? ""));
