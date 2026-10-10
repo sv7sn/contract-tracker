@@ -16,6 +16,8 @@ export async function myWork(user: User): Promise<WorkItem[]> {
   if (user.role !== "manager" && user.role !== "buyer") throw new HttpError(403, "Operazione non consentita");
   const db = getPool(), t0 = today(), manager = user.role === "manager";
   const items: WorkItem[] = [];
+  // Il buyer in sostituzione lavora anche sulle pratiche del collega assente.
+  const ids = user.acting?.ids ?? [user.id], names = (user.acting?.names ?? [user.name]).map(n => n.toLowerCase());
   const safe = async (f: () => Promise<void>) => { try { await f(); } catch { /* una sezione che non carica non blocca le altre */ } };
 
   await safe(async () => {
@@ -39,7 +41,7 @@ export async function myWork(user: User): Promise<WorkItem[]> {
     const rows = (await db.query(`select c.id, c.supplier, c.object, n.scheduled_date as notify_date, r.status as resp_status,
         (select max(sent_at)::date::text from bo_notices b where b.contract_id = c.id) as last_sent
       from contracts c join plan_steps n on n.contract_id = c.id and n.step_id = 'bo_notify' join plan_steps r on r.contract_id = c.id and r.step_id = 'bo_response'
-      where c.bo_email <> '' and c.status = 'active' and not c.ceased and r.status <> 'done' and ${manager ? "true" : "lower(c.owner) = lower($1)"}`, manager ? [] : [user.name])).rows;
+      where c.bo_email <> '' and c.status = 'active' and not c.ceased and r.status <> 'done' and ${manager ? "true" : "(c.owner_id = any($1) or lower(c.owner) = any($2))"}`, manager ? [] : [ids, names])).rows;
     for (const r of rows) {
       const title = `${r.supplier} — ${r.object}`.slice(0, 120), target = { view: "list" as const, contractId: r.id };
       if (r.last_sent) {
@@ -52,14 +54,14 @@ export async function myWork(user: User): Promise<WorkItem[]> {
   // Messaggi del Business Owner non ancora letti.
   await safe(async () => {
     const rows = (await db.query(`select c.id, c.supplier, c.object, count(*)::int as n from bo_messages m join contracts c on c.id = m.contract_id
-      where m.author_role = 'bo' and m.seen_at is null and ${manager ? "true" : "lower(c.owner) = lower($1)"} group by c.id`, manager ? [] : [user.name])).rows;
+      where m.author_role = 'bo' and m.seen_at is null and ${manager ? "true" : "(c.owner_id = any($1) or lower(c.owner) = any($2))"} group by c.id`, manager ? [] : [ids, names])).rows;
     for (const r of rows) items.push({ kind: "bo_message", urgency: 2, title: `${r.supplier} — ${r.object}`.slice(0, 120), detail: `Il Business Owner ha scritto (${r.n} ${plural(r.n, "messaggio", "messaggi")}): rispondigli`, days: null, target: { view: "list", contractId: r.id } });
   });
 
   await safe(async () => {
     const rows = (await db.query(`select r.id, r.title, r.task_id, r.deadline::text as deadline, r.status, t.sourcing is null as no_sourcing,
         (select count(*)::int from rfq_invites i where i.rfq_id = r.id and i.amount is not null and not i.declined) as quotes, (select count(*)::int from rfq_invites i where i.rfq_id = r.id) as invited
-      from rfqs r join tasks t on t.id = r.task_id where t.status = 'open' and (r.created_by = $1 or $2) order by r.deadline`, [user.id, manager])).rows;
+      from rfqs r join tasks t on t.id = r.task_id where t.status = 'open' and (r.created_by = any($1) or $2) order by r.deadline`, [ids, manager])).rows;
     for (const r of rows) {
       const closed = r.status === "closed" || r.deadline < t0;
       const target = { view: "tasks" as const, taskId: r.task_id };

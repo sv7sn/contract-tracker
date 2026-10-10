@@ -3,6 +3,7 @@
 import type { BudgetItem, BudgetLine, BudgetView, MpVersion, User } from "../src/types.ts";
 import { getPool, inTransaction } from "./_db.js";
 import { HttpError } from "./_http.js";
+import { categoryScope } from "./_scope.js";
 import { parseSheet } from "./_sap-files.js";
 import { isXlsx, parseCsvRows, parseXlsx } from "./_xlsx.js";
 
@@ -219,8 +220,16 @@ export async function budgetView(user: User, yearIn?: number): Promise<BudgetVie
   }
   // Prima le righe del Master Plan (per funzione), poi gli internal order impegnati ma non a budget.
   const lines = [...map.values()].sort((a, b) => Number(a.current === null) - Number(b.current === null) || (a.function || "~").localeCompare(b.function || "~") || a.io.localeCompare(b.io));
+  // Un buyer con categorie assegnate vede solo le righe del Master Plan delle sue categorie (e nessuna RDA senza internal order).
+  const scope = await categoryScope(user);
+  let visible = lines, unassignedVisible = unassigned;
+  if (scope) {
+    const mapped = new Map((await db.query("select cm.key, c.name from category_map cm join categories c on c.id = cm.category_id where cm.kind = 'mp'")).rows.map(r => [r.key as string, r.name as string]));
+    visible = lines.filter(l => { const n = mapped.get(l.category); return !!n && scope.has(n); });
+    unassignedVisible = [];
+  }
   const demo = (await db.query("select 1 from mp_versions where file_name = 'simulazione-master-plan.csv' limit 1")).rows.length > 0;
-  return { demo, year, currentYear, years, versions, baselineId: base?.id ?? null, currentId: cur?.id ?? null, lines, unassigned: unassigned.sort((a, b) => b.value - a.value), canUpload: canUploadBudget(user) };
+  return { demo, year, currentYear, years, versions, baselineId: base?.id ?? null, currentId: cur?.id ?? null, lines: visible, unassigned: unassignedVisible.sort((a, b) => b.value - a.value), canUpload: canUploadBudget(user) };
 }
 
 /** Dettaglio di un internal order: budget e pratiche/contratti che lo impegnano. */
@@ -235,7 +244,10 @@ export async function budgetIo(user: User, io: string, yearIn?: number): Promise
     items.push({ kind: t.source === "rda" ? "rda" : "purchase", id: t.id, title: t.title, value: r2(Number(v)), status: kind === "pipeline" ? "In previsione" : t.status === "open" ? "Approvata, in lavorazione" : "Ordinata / chiusa", date: t.meta?.releaseDate ?? (t.due ? new Date(t.due).toISOString().slice(0, 10) : null) });
   }
   for (const c of contracts) if (c.internal_order === io) { const q = contractQuota(c, view.year); if (q > 0) items.push({ kind: "contract", id: c.id, title: `${c.supplier} · ${c.object}`, value: q, status: `Quota ${view.year} del contratto (scad. ${c.end_date})`, date: c.end_date }); }
-  return { line: view.lines.find(l => l.io === io) ?? null, items: items.sort((a, b) => b.value - a.value), year: view.year };
+  const line = view.lines.find(l => l.io === io) ?? null;
+  // Fuori dal perimetro del buyer non si mostra nemmeno il dettaglio.
+  if (!line && !(await categoryScope(user) === null)) return { line: null, items: [], year: view.year };
+  return { line, items: items.sort((a, b) => b.value - a.value), year: view.year };
 }
 
 /** Modello da compilare (CSV con ";", si apre con Excel). */

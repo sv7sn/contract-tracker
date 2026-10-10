@@ -6,7 +6,9 @@ export type StepStatus = "upcoming" | "done" | "pending_bo";
 export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub" | "kpi" | "budget" | "spend" | "requests";
 
 /** Utente autenticato, come restituito dall'API (mai con la password). */
-export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean; /** Codice utente SAP del richiedente (solo Business Owner): collega le RDA aperte in SAP a lui. */ sapUser?: string }
+export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean; /** Codice utente SAP del richiedente (solo Business Owner): collega le RDA aperte in SAP a lui. */ sapUser?: string;
+  /** Solo buyer: chi sta sostituendo oggi (assenze dei colleghi), calcolato a ogni richiesta. `ids` e `names` includono sempre l'utente stesso. */
+  acting?: { ids: number[]; names: string[]; covering: { id: number; name: string; until: string }[] } }
 export interface Contract {
   id: number; supplier: string; object: string; category: string; country: string;
   value: number; currency: string; start: string; end: string; owner: string; boEmail: string;
@@ -296,7 +298,9 @@ export interface SpendView {
 
 // ─── Categorie unificate ─────────────────────────────────────
 export interface CategorySource { kind: "sap" | "mp"; key: string; label: string; amount: number; categoryId: number | null }
-export interface CategoriesView { categories: { id: number; name: string }[]; sources: CategorySource[] }
+export interface CategoriesView { categories: { id: number; name: string }[]; sources: CategorySource[];
+  /** Buyer assegnati a ciascuna categoria e buyer che non ne seguono nessuna (vedono tutta la spesa). */
+  assignments: Record<number, number[]>; buyers: { id: number; name: string }[]; unscoped: string[] }
 
 // ─── Richieste di offerta ────────────────────────────────────
 export interface RfqInvite { supplierId: number; supplierName: string; sapCode: string; amount: number | null; notes: string; quotedAt: string | null; declined: boolean; fileName: string }
@@ -350,3 +354,8 @@ export interface RequesterContract {
 }
 export interface Requests { sapUser: string; rdas: RequesterRda[]; contracts: RequesterContract[] }
 export interface BoMessage { id: number; authorName: string; authorRole: Role; body: string; createdAt: string; fromMe: boolean }
+
+// ─── Assenze e sostituti ─────────────────────────────────────
+export interface CoverEntry { id: number; userId: number; userName: string; substituteId: number; substituteName: string; from: string; to: string; active: boolean }
+export interface CoverBuyer { id: number; name: string }
+export interface CoverView { entries: CoverEntry[]; buyers: CoverBuyer[] }

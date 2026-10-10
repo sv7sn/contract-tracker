@@ -32,6 +32,22 @@ export function CategoriesCard({ fail, notify }: { fail: (e: unknown) => string;
             <button onClick={() => { if (confirm(`Eliminare la categoria "${c.name}"? I collegamenti vengono tolti.`)) run(portalApi.deleteCategory(c.id)); }} aria-label={`Elimina ${c.name}`} style={{ background: "none", border: "none", cursor: "pointer", display: "flex", color: C.subtle, padding: 2 }}><Trash2 size={13} /></button></span>)}
         </div>
       )}
+      {v && v.categories.length > 0 && v.buyers.length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ ...sans, fontSize: 13, fontWeight: 650, marginBottom: 4 }}>Chi segue quale categoria</div>
+          <div style={{ ...sans, fontSize: 12, color: C.muted, marginBottom: 8, lineHeight: 1.5 }}>Un buyer vede la spesa e il budget solo delle categorie che segue. Se non ne segue nessuna, vede tutto.</div>
+          {v.unscoped.length > 0 && <Notice kind="warn">Vedono tutta la spesa perché non seguono nessuna categoria: {v.unscoped.join(", ")}.</Notice>}
+          <div className="table-wrap"><table className="data-table"><thead><tr><th>Categoria</th><th>Buyer</th></tr></thead><tbody>
+            {v.categories.map(c => (
+              <tr key={c.id} style={{ cursor: "default" }}><td style={{ fontWeight: 650 }}>{c.name}</td><td><div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                {v.buyers.map(b => { const on = (v.assignments[c.id] ?? []).includes(b.id); return (
+                  <label key={b.id} style={{ ...sans, display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13, cursor: "pointer" }}>
+                    <input type="checkbox" checked={on} onChange={() => run(portalApi.setCategoryBuyers(c.id, on ? (v.assignments[c.id] ?? []).filter(x => x !== b.id) : [...(v.assignments[c.id] ?? []), b.id]))} style={{ width: 16, height: 16, accentColor: C.accent }} />{b.name}</label>); })}
+              </div></td></tr>
+            ))}
+          </tbody></table></div>
+        </div>
+      )}
       {v && v.sources.length > 0 && (
         <div className="table-wrap">
           <table className="data-table">

@@ -157,7 +157,11 @@ async function reconcile(db: Queryable, res: ImportResult) {
 function visibleSql(user: User): string {
   const id = Number(user.id);
   if (user.role === "manager") return "true";
-  if (user.role === "buyer") return `(t.assignee_id = ${id} or (t.source = 'manual' and t.created_by = '${user.name.replace(/'/g, "''")}'))`;
+  if (user.role === "buyer") {
+    // Anche le pratiche dei colleghi che sta sostituendo (assenze registrate).
+    const ids = (user.acting?.ids ?? [id]).map(Number).filter(Number.isInteger), names = user.acting?.names ?? [user.name];
+    return `(t.assignee_id in (${ids.join(",")}) or (t.source = 'manual' and t.created_by in (${names.map(n => `'${n.replace(/'/g, "''")}'`).join(",")})))`;
+  }
   return "false";
 }
 

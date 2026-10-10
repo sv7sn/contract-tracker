@@ -21,7 +21,31 @@ export async function listCategories(user: User): Promise<CategoriesView> {
     ...sap.map(r => ({ kind: "sap" as const, key: r.key as string, label: (r.label as string) || "", amount: Math.round(r.amount ?? 0), categoryId: maps.get(`sap|${r.key}`) ?? null })),
     ...mp.map(r => ({ kind: "mp" as const, key: r.key as string, label: "", amount: Math.round(r.amount ?? 0), categoryId: maps.get(`mp|${r.key}`) ?? null })),
   ];
-  return { categories, sources };
+  const asg = (await db.query("select category_id, user_id from category_buyers")).rows;
+  const assignments: Record<number, number[]> = {};
+  for (const r of asg) (assignments[r.category_id] ??= []).push(r.user_id);
+  const buyers = (await db.query("select id, name from users where active and role = 'buyer' order by name")).rows.map(r => ({ id: r.id as number, name: r.name as string }));
+  const scoped = new Set(asg.map(r => r.user_id as number));
+  return { categories, sources, assignments, buyers, unscoped: buyers.filter(b => !scoped.has(b.id)).map(b => b.name) };
+}
+
+/** Quali buyer seguono una categoria: chi ne segue almeno una vede solo spesa e budget di quelle. */
+export async function setCategoryBuyers(user: User, categoryId: number, userIds: unknown): Promise<CategoriesView> {
+  needManager(user);
+  const db = getPool();
+  if (!(await db.query("select 1 from categories where id = $1", [categoryId])).rows.length) throw new HttpError(404, "Categoria non trovata");
+  const ids = [...new Set((Array.isArray(userIds) ? userIds : []).map(Number))].filter(Number.isInteger);
+  const ok = ids.length ? (await db.query("select id from users where id = any($1) and active and role = 'buyer'", [ids])).rows.map(r => r.id as number) : [];
+  if (ok.length !== ids.length) throw new HttpError(400, "Si assegnano solo buyer attivi");
+  const name = (await db.query("select name from categories where id = $1", [categoryId])).rows[0].name as string;
+  const before = (await db.query("select u.name from category_buyers b join users u on u.id = b.user_id where b.category_id = $1 order by u.name", [categoryId])).rows.map(r => r.name).join(", ");
+  await inTransaction(async tx => {
+    await tx.query("delete from category_buyers where category_id = $1", [categoryId]);
+    for (const id of ok) await tx.query("insert into category_buyers (category_id, user_id) values ($1,$2)", [categoryId, id]);
+  });
+  const after = (await db.query("select u.name from category_buyers b join users u on u.id = b.user_id where b.category_id = $1 order by u.name", [categoryId])).rows.map(r => r.name).join(", ");
+  await logChange(db, user, "category", "update", name, { buyer: before }, { buyer: after });
+  return listCategories(user);
 }
 
 export async function saveCategory(user: User, id: number | null, nameIn: string): Promise<CategoriesView> {
