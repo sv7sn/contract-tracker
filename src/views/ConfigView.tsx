@@ -7,6 +7,7 @@ import { Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
 import { AlertTriangle, Bell, Building2, History, Lock, RotateCcw, ShieldCheck, Inbox, FileCheck2, Loader2, Pencil, Plus, Save, Settings, Sparkles, Trash2, Wallet, FileText, X } from "../components/icons.tsx";
 import { Notice, Portal } from "../components/vendorUi.tsx";
 import { CategoriesCard } from "./CategoriesCard.tsx";
+import { ResetCard } from "./ResetCard.tsx";
 
 type Entity = "company" | "industry" | "payment_term";
 type Draft = { entity: Entity; item: Record<string, unknown>; isNew: boolean };
@@ -182,6 +183,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
       <CategoriesCard fail={fail} notify={notify} />
       <SanctionsCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
       <PrivacyCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
+      <ResetCard fail={fail} notify={notify} />
       <AuditCard cfg={cfg} fail={fail} />
 
       {docDraft && <Portal><DocTypeDialog draft={docDraft} cfg={cfg} fail={fail} onClose={() => setDocDraft(null)} onSaved={c => { adopt(c); setDocDraft(null); notify("Salvato"); }} /></Portal>}
