@@ -72,6 +72,7 @@ export const portalApi = {
   // Staff
   kpis: () => request<Kpis>(portal("kpis")),
   sanctionsRefresh: () => post<{ updated: string[]; errors: string[]; rescreened: number; newHits: number; config: PortalConfig }>(portal("sanctions-refresh"), {}),
+  testAccess: (id: number) => post<{ email: string; password: string }>(portal("vendor-test-access", `&id=${id}`), {}),
   demoSupplier: () => post<{ id: number; name: string; email: string; password: string }>(portal("vendor-demo"), {}),
   scorecard: (id: number) => request<{ scorecard: Scorecard }>(portal("vendor-rating", `&id=${id}`)).then(r => r.scorecard),
   addRating: (id: number, input: { quality: number; delivery: number; service: number; price: number; comment: string; po: string }) => post<{ scorecard: Scorecard }>(portal("vendor-rating-add", `&id=${id}`), input).then(r => r.scorecard),

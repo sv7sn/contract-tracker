@@ -14,7 +14,7 @@ import { myWork } from "./_work.js";
 import { addRating, deleteRating, ratingSummary, supplierScorecard } from "./_rating.js";
 import { closeRfq, createRfq, listMyRfqs, rfqFile, listTaskRfqs, submitQuote, applyRfq } from "./_rfq.js";
 import { deleteCategory, listCategories, saveCategory, seedCategoriesFromMp, setCategoryMap } from "./_categories.js";
-import { createDemoSupplier } from "./_demo.js";
+import { createDemoSupplier, resetTestSupplierAccess } from "./_demo.js";
 import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_budget-demo.js";
 import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudget } from "./_budget.js";
 import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
@@ -250,6 +250,7 @@ async function handle(request: Request): Promise<Response> {
       return new Response(Buffer.from(po ? demoPoFile() : demoPrFile()), { headers: { ...noStore, "Content-Type": "application/vnd.ms-excel", "Content-Disposition": `attachment; filename="${po ? "PO_LAST_7D_PROVA.XLS" : "OPEN_PR_PROVA.XLS"}"` } });
     }
     if (op === "budget-template" && method === "GET") return new Response(BUDGET_TEMPLATE, { headers: { ...noStore, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="modello-master-plan.csv"' } });
+    if (op === "vendor-test-access" && method === "POST") return json(await resetTestSupplierAccess(user, idOf(url)));
     if (op === "vendor-demo" && method === "POST") return json(await createDemoSupplier(user), { status: 201 });
     if (op === "vendors" && method === "GET") return json({ vendors: await listVendors(user) });
     if (op === "vendor-checks" && method === "POST") {
