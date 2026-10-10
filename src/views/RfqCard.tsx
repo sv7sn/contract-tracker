@@ -6,6 +6,7 @@ import { fmt, fmtDate } from "../lib/format.ts";
 import { Card, CardTitle, Field } from "../components/ui.tsx";
 import { CheckCircle2, Clock, Loader2, Send } from "../components/icons.tsx";
 import { Notice } from "../components/vendorUi.tsx";
+import { ScoreBadge } from "./RatingCard.tsx";
 
 const plus = (days: number) => new Date(Date.now() + days * 864e5).toISOString().slice(0, 10);
 
@@ -13,6 +14,7 @@ const plus = (days: number) => new Date(Date.now() + days * 864e5).toISOString()
 export function RfqCard({ t, fail, notify, onSaved }: { t: TaskDetail; fail: (e: unknown) => string; notify: (m: string) => void; onSaved: (t: TaskDetail, msg: string) => void }) {
   const [rfqs, setRfqs] = useState<Rfq[] | null>(null);
   const [vendors, setVendors] = useState<SupplierSummary[]>([]);
+  const [ratings, setRatings] = useState<Record<number, { overall: number; count: number }>>({});
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState(t.title.replace(/^RDA \S+ · /, ""));
   const [description, setDescription] = useState("");
@@ -24,7 +26,7 @@ export function RfqCard({ t, fail, notify, onSaved }: { t: TaskDetail; fail: (e:
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   useEffect(() => { let off = false; portalApi.rfqs(t.id).then(x => { if (!off) setRfqs(x); }).catch(() => { if (!off) setRfqs([]); }); return () => { off = true; }; }, [t.id]);
-  useEffect(() => { if (!creating || vendors.length) return; let off = false; portalApi.vendors().then(v => { if (!off) setVendors(v.filter(x => x.status === "registered" && x.lifecycle === "active")); }).catch(() => undefined); return () => { off = true; }; }, [creating, vendors.length]);
+  useEffect(() => { if (!creating || vendors.length) return; let off = false; portalApi.vendors().then(v => { if (!off) setVendors(v.filter(x => x.status === "registered" && x.lifecycle === "active")); }).catch(() => undefined); portalApi.ratings().then(r => { if (!off) setRatings(r); }).catch(() => undefined); return () => { off = true; }; }, [creating, vendors.length]);
 
   const run = useCallback(async (f: () => Promise<void>) => { setBusy(true); setErr(null); try { await f(); } catch (e) { setErr(fail(e)); } setBusy(false); }, [fail]);
   const create = () => run(async () => { setRfqs(await portalApi.createRfq({ taskId: t.id, title, description, deadline, supplierIds: picked })); setCreating(false); setPicked([]); notify("Richiesta inviata ai fornitori"); });
@@ -49,7 +51,7 @@ export function RfqCard({ t, fail, notify, onSaved }: { t: TaskDetail; fail: (e:
             <div style={{ maxHeight: 200, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 10 }}>
               {shown.length === 0 && <div style={{ ...sans, padding: 12, fontSize: 13, color: C.subtle }}>Nessun fornitore registrato.</div>}
               {shown.map(v => <label key={v.id} style={{ ...sans, display: "flex", gap: 10, alignItems: "center", padding: "7px 12px", fontSize: 13, cursor: "pointer", borderBottom: `1px solid ${C.borderLight}` }}>
-                <input type="checkbox" checked={picked.includes(v.id)} onChange={e => setPicked(p => e.target.checked ? [...p, v.id] : p.filter(x => x !== v.id))} style={{ width: 16, height: 16, accentColor: C.accent }} />{v.legalName || v.name}<span style={{ color: C.subtle, marginLeft: "auto" }}>{v.sapCode && `SAP ${v.sapCode}`}</span></label>)}
+                <input type="checkbox" checked={picked.includes(v.id)} onChange={e => setPicked(p => e.target.checked ? [...p, v.id] : p.filter(x => x !== v.id))} style={{ width: 16, height: 16, accentColor: C.accent }} />{v.legalName || v.name}{ratings[v.id] && <ScoreBadge value={ratings[v.id].overall} count={ratings[v.id].count} />}<span style={{ color: C.subtle, marginLeft: "auto" }}>{v.sapCode && `SAP ${v.sapCode}`}</span></label>)}
             </div>
           </div>
           <div style={{ display: "flex", gap: 8 }}>

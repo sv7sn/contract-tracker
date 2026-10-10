@@ -1,3 +1,4 @@
+import { RatingCard, ScoreBadge } from "./RatingCard.tsx";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DuplicateMatch, Lifecycle, InviteInput, PortalConfig, Supplier, SupplierStatus, SupplierSummary, User, VendorAction } from "../types.ts";
 import { ApiError, portalApi, vendorExportUrl } from "../api.ts";
@@ -24,18 +25,20 @@ export function VendorsView({ currentUser, notify, onSessionExpired }: Props) {
   const [inviting, setInviting] = useState(false);
   const [demo, setDemo] = useState<{ name: string; email: string; password: string } | null>(null);
   const [demoBusy, setDemoBusy] = useState(false);
+  const [ratings, setRatings] = useState<Record<number, { overall: number; count: number }>>({});
 
   const fail = useCallback((err: unknown) => {
     if (err instanceof ApiError && err.status === 401) { onSessionExpired(); return "Sessione scaduta"; }
     return err instanceof Error ? err.message : "Operazione non riuscita";
   }, [onSessionExpired]);
   const reload = useCallback(async () => {
-    try { const [v, c] = await Promise.all([portalApi.vendors(), portalApi.config()]); setVendors(v); setConfig(c); setError(null); }
+    try { const [v, c] = await Promise.all([portalApi.vendors(), portalApi.config()]); setVendors(v); setConfig(c); setError(null); portalApi.ratings().then(setRatings).catch(() => undefined); }
     catch (err) { setError(fail(err)); }
   }, [fail]);
   useEffect(() => {
     let off = false;
     Promise.all([portalApi.vendors(), portalApi.config()]).then(([v, c]) => { if (!off) { setVendors(v); setConfig(c); } }).catch(err => { if (!off) setError(fail(err)); });
+    portalApi.ratings().then(r => { if (!off) setRatings(r); }).catch(() => undefined);
     return () => { off = true; };
   }, [fail]);
 
@@ -113,7 +116,7 @@ export function VendorsView({ currentUser, notify, onSessionExpired }: Props) {
       ) : (<>
         <div className="table-wrap desktop-only">
           <table className="data-table">
-            <thead><tr><th>Fornitore</th><th>Paese</th><th>Società</th><th>Stato</th><th>Buyer</th><th>Aggiornato</th><th aria-label="Documenti" /></tr></thead>
+            <thead><tr><th>Fornitore</th><th>Paese</th><th>Società</th><th>Stato</th><th>Buyer</th><th>Voto</th><th>Aggiornato</th><th aria-label="Documenti" /></tr></thead>
             <tbody>
               {shown.map(v => (
                 <tr key={v.id} onClick={() => setOpenId(v.id)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setOpenId(v.id); }}>
@@ -122,6 +125,7 @@ export function VendorsView({ currentUser, notify, onSessionExpired }: Props) {
                   <td style={{ color: C.muted }}>{v.companyCodes.join(", ")}</td>
                   <td><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><StatusBadge status={v.status} update={v.isUpdate} /><VendorFlags lifecycle={v.lifecycle} qualification={v.qualification} duplicate={v.duplicate} /></div></td>
                   <td><div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}><Avatar name={v.referenceBuyerName || "?"} size={24} /><span style={{ color: C.muted }}>{v.referenceBuyerName || "—"}</span></div></td>
+                  <td>{ratings[v.id] ? <ScoreBadge value={ratings[v.id].overall} count={ratings[v.id].count} /> : <span style={{ color: C.subtle }}>—</span>}</td>
                   <td className="tabular" style={{ whiteSpace: "nowrap", color: C.muted }}>{fmtDate(v.updatedAt)}</td>
                   <td style={{ color: C.subtle, whiteSpace: "nowrap" }}>{v.documentCount > 0 && <span style={{ display: "inline-flex", gap: 4, alignItems: "center" }}><Paperclip size={14} />{v.documentCount}</span>}</td>
                 </tr>
@@ -383,6 +387,8 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
                 <Summary s={s} data={s.data} />
               </Card>
             </>)}
+
+            {s.status === "registered" && (currentUser.role === "manager" || currentUser.role === "buyer") && <RatingCard supplierId={s.id} fail={fail} notify={notify} />}
 
             <Card>
               <CardTitle>Dati interni</CardTitle>

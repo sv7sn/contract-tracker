@@ -204,6 +204,13 @@ create table if not exists rfq_invites (
   rfq_id integer not null references rfqs(id) on delete cascade, supplier_id integer not null references suppliers(id) on delete cascade,
   amount numeric, notes text not null default '', quoted_at timestamptz, declined boolean not null default false, primary key (rfq_id, supplier_id)
 );
+-- Valutazioni dei fornitori da parte dei buyer (1-5 su quattro criteri).
+create table if not exists supplier_ratings (
+  id serial primary key, supplier_id integer not null references suppliers(id) on delete cascade, rater_id integer references users(id) on delete set null, rater_name text not null default '',
+  quality smallint not null check (quality between 1 and 5), delivery smallint not null check (delivery between 1 and 5), service smallint not null check (service between 1 and 5), price smallint not null check (price between 1 and 5),
+  comment text not null default '', po text not null default '', created_at timestamptz not null default now()
+);
+create index if not exists supplier_ratings_supplier_idx on supplier_ratings (supplier_id, created_at desc);
 -- Categorie merceologiche unificate: collegano i gruppi merci SAP e le categorie del Master Plan.
 create table if not exists categories (id serial primary key, name text not null unique);
 create table if not exists category_map (
