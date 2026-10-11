@@ -362,3 +362,5 @@ export interface BoMessage { id: number; authorName: string; authorRole: Role; b
 export interface CoverEntry { id: number; userId: number; userName: string; substituteId: number; substituteName: string; from: string; to: string; active: boolean }
 export interface CoverBuyer { id: number; name: string }
 export interface CoverView { entries: CoverEntry[]; buyers: CoverBuyer[] }
+
+export interface TestAccess { role: string; label: string; name: string; email: string; password: string }

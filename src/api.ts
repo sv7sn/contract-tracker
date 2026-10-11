@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type RdaSuggestion, type TaskDetail, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type RdaSuggestion, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -73,6 +73,8 @@ export const portalApi = {
   kpis: () => request<Kpis>(portal("kpis")),
   sanctionsRefresh: () => post<{ updated: string[]; errors: string[]; rescreened: number; newHits: number; config: PortalConfig }>(portal("sanctions-refresh"), {}),
   testAccess: (id: number) => post<{ email: string; password: string }>(portal("vendor-test-access", `&id=${id}`), {}),
+  testAccesses: () => post<{ accesses: TestAccess[] }>(portal("test-accesses"), {}).then(r => r.accesses),
+  removeTestAccesses: () => post<{ removed: number }>(portal("test-accesses-remove"), {}).then(r => r.removed),
   demoSupplier: () => post<{ id: number; name: string; email: string; password: string }>(portal("vendor-demo"), {}),
   scorecard: (id: number) => request<{ scorecard: Scorecard }>(portal("vendor-rating", `&id=${id}`)).then(r => r.scorecard),
   addRating: (id: number, input: { quality: number; delivery: number; service: number; price: number; comment: string; po: string }) => post<{ scorecard: Scorecard }>(portal("vendor-rating-add", `&id=${id}`), input).then(r => r.scorecard),
