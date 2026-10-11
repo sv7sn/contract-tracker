@@ -232,7 +232,9 @@ async function handle(request: Request): Promise<Response> {
     if (op === "doc-monitor" && method === "GET") return json(await monitorData(user));
     if (op === "doc-remind" && method === "POST") {
       const body = (await readJson(request)) as { supplierId?: unknown; channel?: unknown; note?: unknown };
-      return json(await remindSupplier(user, Number(body.supplierId), body.channel === "phone" ? "phone" : "email", typeof body.note === "string" ? body.note : "", origin));
+      const supplierId = Number(body.supplierId);
+      if (!Number.isInteger(supplierId) || supplierId <= 0) throw new HttpError(400, "Indica il fornitore");
+      return json(await remindSupplier(user, supplierId, body.channel === "phone" ? "phone" : "email", typeof body.note === "string" ? body.note : "", origin));
     }
     if (op === "reminders-run" && method === "POST") {
       if (!canConfigurePortal(user)) throw new HttpError(403, "Operazione non consentita");

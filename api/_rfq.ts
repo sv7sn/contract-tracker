@@ -42,7 +42,9 @@ export async function listTaskRfqs(user: User, taskId: number): Promise<Rfq[]> {
 
 export async function createRfq(user: User, input: Row, origin: string): Promise<Rfq[]> {
   if (!staff(user)) throw new HttpError(403, "Operazione non consentita");
-  const task = await getTask(user, Number(input?.taskId)); eligible(task);
+  const taskId = Number(input?.taskId);
+  if (!Number.isInteger(taskId) || taskId <= 0) throw new HttpError(400, "Indica il task");
+  const task = await getTask(user, taskId); eligible(task);
   const title = str(input?.title, 200) || task.title.slice(0, 200);
   const description = str(input?.description, 2000);
   const deadline = str(input?.deadline, 10);
