@@ -213,7 +213,7 @@ function IoSheet({ io, year, future, fail, onClose }: { io: string; year: number
   return (
     <div className="sheet-overlay" role="dialog" aria-modal="true" aria-label={`Internal order ${io}`} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="sheet" style={{ maxWidth: 720 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
+        <div className="sheet-head">
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ ...font, fontSize: 18, fontWeight: 700 }} className="tabular">{io}</div>
             <div style={{ ...sans, fontSize: 13, color: C.muted }}>{l?.description}{l?.function ? ` · ${l.function}` : ""}{l?.costCenter ? ` · CdC ${l.costCenter}` : ""}</div>
