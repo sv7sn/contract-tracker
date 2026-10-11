@@ -326,7 +326,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
           <p style={{ ...sans, fontSize: 13, color: C.muted, margin: "0 0 14px", lineHeight: 1.55 }}>Carica un file per ogni documento richiesto (PDF, Word, PowerPoint o immagine, massimo {MAX_DOC_BYTES / 1024 / 1024} MB). Per i documenti con scadenza indica la data: ti ricorderemo di rinnovarli.</p>
           {!country && <Notice kind="warn">Seleziona prima il paese nel passaggio “Società e indirizzo”: i documenti richiesti dipendono dal paese.</Notice>}
           {showErrors && missing.length > 0 && <Notice kind="error">Documenti obbligatori mancanti o scaduti: {missing.map(labelOf).join(", ")}.</Notice>}
-          <div style={{ display: "grid", gap: 12 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12 }}>
             {s.docTypes.map(t => <DocSlot key={t.key} type={t} docs={s.documents.filter(d => d.type === t.key)} editable checking={checking} onUpload={uploadDoc} onRemove={removeDoc} />)}
           </div>
         </>)}
@@ -346,7 +346,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
             </div>
           ) : null}
           {!amending && (
-            <div style={{ marginTop: 18, display: "grid", gap: 14 }}>
+            <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14 }}>
               <CardTitle>Dichiarazioni</CardTitle>
               <Field label="Esistono rapporti di parentela, partecipazione o interesse tra la tua azienda (titolari, soci, amministratori) e dipendenti o amministratori della nostra società?" req error={err("declarations.conflictOfInterest")}>
                 <div style={{ display: "flex", gap: 10 }}>
@@ -401,7 +401,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
       <Card style={{ marginTop: 14 }}>
         <CardTitle icon={<FileCheck2 size={16} />}>Documenti di qualifica</CardTitle>
         {amending && <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "0 0 12px", lineHeight: 1.5 }}>Quando un documento sta per scadere caricane uno nuovo qui: la tua scheda tornerà in verifica fino all'approvazione.</p>}
-        <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12 }}>
           {s.docTypes.map(t => <DocSlot key={t.key} type={t} docs={s.documents.filter(d => d.type === t.key)} editable={amending} checking={checking} onUpload={uploadDoc} onRemove={removeDoc} />)}
         </div>
       </Card>
@@ -410,7 +410,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
 
   const events = supplierTimeline(s);
   return (
-    <div style={{ maxWidth: 920, margin: "0 auto", display: "grid", gap: 14 }}>
+    <div style={{ maxWidth: 920, margin: "0 auto", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14 }}>
       {tracker}
       {s.status === "registered" && <SupplierRfqs fail={fail} notify={notify} />}
       {banner}
@@ -437,7 +437,7 @@ export function Summary({ s, data }: { s: Supplier; data: SupplierData }) {
   const c = data.company ?? {}, a = data.address ?? {}, p = data.payment ?? {}, k = data.contacts ?? {};
   const wh = p.withholdingTax === undefined || p.withholdingTax === null ? "" : p.withholdingTax ? `Sì${p.withholdingType ? ` · ${WITHHOLDING_TYPES.find(w => w.code === p.withholdingType)?.label ?? p.withholdingType}` : ""}` : "No";
   return (
-    <div style={{ display: "grid", gap: 18 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 18 }}>
       <KV rows={[["Ragione sociale", c.legalName], ["Partita IVA", c.vatCode], ["Codice fiscale", c.fiscalCode], ["Indirizzo", [a.street, a.houseNumber].filter(Boolean).join(" ")], ["CAP e città", [a.postalCode, a.city].filter(Boolean).join(" ")], ["Regione / provincia", a.region], ["Paese", countryName(a.country)]]} />
       <KV rows={[["IBAN", p.iban], ["SWIFT / BIC", p.swift], ["Banca", p.bankName], ["Numero di conto", p.accountNumber], ["Valuta", p.currency], ...(a.country === "IT" ? [["Ritenuta d'acconto", wh] as [string, string]] : [])]} />
       <KV rows={[["Lingua", k.language === "EN" ? "English" : k.language === "IT" ? "Italiano" : ""], ["Email ordini", k.ordersEmail], ["Email amministrativa", k.adminEmail], ["Telefono", k.phone], ["Documenti caricati", String(s.documents.length)]]} />
