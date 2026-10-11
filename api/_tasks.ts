@@ -594,6 +594,29 @@ export async function setTaskLinks(user: User, id: number, input: Row): Promise<
   return closeIfComplete(user, id);
 }
 
+/** Per un rinnovo senza RDA: le RDA aperte che probabilmente sono la sua (stesso richiedente del BO, importo simile, fornitore nel testo). */
+export interface RdaSuggestion { id: number; rda: string; title: string; value: number; currency: string; requestedBy: string; due: string | null; why: string[] }
+export async function suggestRdas(user: User, id: number): Promise<RdaSuggestion[]> {
+  const t = await getTask(user, id);
+  if (t.source !== "contract" || t.status !== "open" || t.rdaNumbers.length || !t.contractId) return [];
+  const db = getPool();
+  const c = (await db.query("select c.value, c.supplier, bu.sap_user from contracts c left join users bu on bu.id = c.bo_user_id where c.id = $1", [t.contractId])).rows[0];
+  if (!c) return [];
+  const word = String(c.supplier ?? "").toLowerCase().split(/\s+/).find(w => w.length >= 4) ?? "";
+  const rows = (await db.query(`${SELECT} where t.source = 'rda' and t.status = 'open' and ${visibleSql(user)}
+      and not exists (select 1 from tasks o where o.id <> t.id and o.source in ('manual','contract') and o.status = 'open' and o.rda_numbers && array[t.source_key])`)).rows;
+  const texts = rows.length ? (await db.query("select pr, string_agg(short_text, ' ') as txt from rda_lines where pr = any($1) group by pr", [rows.map(r => r.source_key)])).rows : [];
+  const sap = String(c.sap_user ?? "").toUpperCase(), val = Number(c.value) || 0;
+  return rows.map(r => {
+    const why: string[] = [], m = r.meta ?? {}, v = Number(m.value) || 0;
+    if (sap && String(m.requestedBy ?? "").toUpperCase() === sap) why.push("stesso richiedente del Business Owner");
+    if (val > 0 && v > 0 && Math.abs(v - val) / val <= 0.3) why.push("importo simile al contratto");
+    const txt = `${r.title} ${texts.find(x => x.pr === r.source_key)?.txt ?? ""}`.toLowerCase();
+    if (word && txt.includes(word)) why.push("il fornitore compare nel testo");
+    return { id: r.id as number, rda: r.source_key as string, title: r.title as string, value: v, currency: m.currency ?? "EUR", requestedBy: m.requestedBy ?? "", due: day(r.due), why };
+  }).filter(x => x.why.length).sort((a, b) => b.why.length - a.why.length).slice(0, 5);
+}
+
 const DOC_KINDS: TaskDocKind[] = ["offer", "contract", "addendum", "termination", "other"];
 export async function addTaskDocument(user: User, id: number, input: Row): Promise<TaskDetail> {
   await getTask(user, id);

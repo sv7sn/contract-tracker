@@ -21,7 +21,7 @@ import { createDemoSupplier, resetTestSupplierAccess } from "./_demo.js";
 import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_budget-demo.js";
 import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudget } from "./_budget.js";
 import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
-import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, setTaskLinks, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
+import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, setTaskLinks, suggestRdas, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
 import {
@@ -207,6 +207,7 @@ async function handle(request: Request): Promise<Response> {
       if (op === "rfq-use" && method === "POST") return json({ task: await applyRfq(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-outcome" && method === "POST") return json({ task: await setRenewalOutcome(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-contract" && method === "POST") return json({ task: await registerPurchaseContract(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-rda-suggest" && method === "GET") return json({ suggestions: await suggestRdas(user, idOf(url)) });
       if (op === "task-links" && method === "POST") return json({ task: await setTaskLinks(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-doc" && method === "POST") return json({ task: await addTaskDocument(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-doc" && method === "DELETE") {

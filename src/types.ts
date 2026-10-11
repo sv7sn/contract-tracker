@@ -220,6 +220,7 @@ export interface Task {
   kind: "activity" | "purchase";
   rdaNumbers: string[]; poNumbers: string[]; noPoReason: string; documents: TaskDocument[];
 }
+export interface RdaSuggestion { id: number; rda: string; title: string; value: number; currency: string; requestedBy: string; due: string | null; why: string[] }
 export type TaskDocKind = "offer" | "contract" | "addendum" | "termination" | "other";
 export interface TaskDocument { id: number; kind: TaskDocKind; fileName: string; size: number; uploadedBy: string; uploadedAt: string }
 export interface TaskLine { item: string; shortText: string; qty: number; unit: string; price: number; per: number; currency: string; delivDate: string | null; costCenter: string; glAccount: string; value: number; internalOrder: string }
