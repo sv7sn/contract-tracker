@@ -1,7 +1,8 @@
-import type { CSSProperties, ReactNode } from "react";
+import { useContext, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { FoldContext } from "./foldContext.ts";
 import type { Role, Urgency } from "../types.ts";
 import { C, colorFor, font, initials, radius, ROLE_COLORS, ROLE_LABELS, sans, shadow, URGENCY_COLORS } from "../theme.ts";
-import { BarChart3, ClipboardCheck, Flag, Handshake, History, Inbox, Mail, PenLine, Target } from "./icons.tsx";
+import { BarChart3, ChevronDown, ClipboardCheck, Flag, Handshake, History, Inbox, Mail, PenLine, Target } from "./icons.tsx";
 
 export function UrgencyDot({ level, size = 8 }: { level: Urgency; size?: number }) {
   return <span style={{ display: "inline-block", width: size, height: size, borderRadius: "50%", background: URGENCY_COLORS[level], flexShrink: 0 }} />;
@@ -53,11 +54,37 @@ export function Grid({ min = 320, gap = 14, children, style, fill = false }: { m
 }
 
 export function Card({ children, style, onClick, ...rest }: { children: ReactNode; style?: CSSProperties; onClick?: () => void } & Omit<React.HTMLAttributes<HTMLDivElement>, "style" | "onClick">) {
-  return <div onClick={onClick} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: radius.lg, padding: 18, boxShadow: shadow.sm, ...style }} {...rest}>{children}</div>;
+  const inFold = useContext(FoldContext);
+  return <div onClick={onClick} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: radius.lg, padding: 18, boxShadow: shadow.sm, ...(inFold ? { background: "transparent", border: "none", boxShadow: "none", padding: "2px 2px 6px" } : {}), ...style }} {...rest}>{children}</div>;
+}
+
+/** Sezione che si apre e si chiude: sulle schede lunghe tiene in vista solo quello che serve ora. */
+export function Fold({ id, title, badge, hint, defaultOpen, children }: { id?: string; title: string; badge?: { label: string; color: string; bg: string } | null; hint?: string; defaultOpen: boolean; children: ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen);
+  useEffect(() => {
+    if (!id) return;
+    const h = (e: Event) => { if ((e as CustomEvent).detail === id) setOpen(true); };
+    window.addEventListener("fold-open", h);
+    return () => window.removeEventListener("fold-open", h);
+  }, [id]);
+  return (
+    <section id={id} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: radius.lg, boxShadow: shadow.sm, scrollMarginTop: 130 }}>
+      <button onClick={() => setOpen(o => !o)} aria-expanded={open} style={{ ...sans, display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: 52, padding: "0 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left", color: C.text }}>
+        <span style={{ ...font, fontSize: 15, fontWeight: 650, flexShrink: 0 }}>{title}</span>
+        {badge && <span style={{ fontSize: 11.5, fontWeight: 650, color: badge.color, background: badge.bg, borderRadius: 999, padding: "3px 9px", whiteSpace: "nowrap" }}>{badge.label}</span>}
+        {hint && <span className="one-line" style={{ fontSize: 12.5, color: C.muted, flex: 1 }}>{hint}</span>}
+        {!hint && <span style={{ flex: 1 }} />}
+        <ChevronDown size={18} color={C.subtle} style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s ease" }} />
+      </button>
+      {open && <div style={{ padding: "0 14px 14px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12 }}><FoldContext.Provider value={true}>{children}</FoldContext.Provider></div>}
+    </section>
+  );
 }
 
 /** Titolo di sezione dentro una scheda. */
 export function CardTitle({ children, icon, action }: { children: ReactNode; icon?: ReactNode; action?: ReactNode }) {
+  const inFold = useContext(FoldContext);
+  if (inFold) return action ? <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>{action}</div> : null;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
       {icon && <span aria-hidden style={{ color: C.subtle, display: "flex" }}>{icon}</span>}

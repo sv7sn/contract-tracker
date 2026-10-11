@@ -16,6 +16,8 @@ export async function myWork(user: User): Promise<WorkItem[]> {
   if (user.role !== "manager" && user.role !== "buyer") throw new HttpError(403, "Operazione non consentita");
   const db = getPool(), t0 = today(), manager = user.role === "manager";
   const items: WorkItem[] = [];
+  // Rinnovi che aspettano ancora la RDA: a parità di urgenza vengono dopo le pratiche con RDA già approvata.
+  const waitingRda = new Set<number>();
   // Il buyer in sostituzione lavora anche sulle pratiche del collega assente.
   const ids = user.acting?.ids ?? [user.id], names = (user.acting?.names ?? [user.name]).map(n => n.toLowerCase());
   const safe = async (f: () => Promise<void>) => { try { await f(); } catch { /* una sezione che non carica non blocca le altre */ } };
@@ -24,6 +26,7 @@ export async function myWork(user: User): Promise<WorkItem[]> {
     const { tasks } = await listTasks(user);
     const open = tasks.filter(t => t.status === "open");
     for (const t of open) {
+      if (t.source === "contract" && !t.rdaNumbers.length && !t.outcome) waitingRda.add(t.id);
       const overdue = t.due && t.due < t0 ? daysBetween(t0, t.due) : 0;
       const label = t.source === "contract" ? "Rinnovo" : t.source === "rda" ? "RDA" : t.kind === "purchase" ? "Acquisto" : "Attività";
       const target = { view: "tasks" as const, taskId: t.id };
@@ -97,5 +100,6 @@ export async function myWork(user: User): Promise<WorkItem[]> {
     same.detail = `${same.detail} · ${it.detail}`;
     if (it.days !== null && (same.days === null || it.days > same.days)) same.days = it.days;
   }
-  return merged.sort((a, b) => b.urgency - a.urgency || (b.days ?? -999) - (a.days ?? -999));
+  const waits = (i: WorkItem) => (i.target.taskId !== undefined && waitingRda.has(i.target.taskId) ? 1 : 0);
+  return merged.sort((a, b) => b.urgency - a.urgency || waits(a) - waits(b) || (b.days ?? -999) - (a.days ?? -999));
 }
