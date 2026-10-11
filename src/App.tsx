@@ -372,7 +372,7 @@ export default function App() {
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {view === "detail" && <button className="topbar-back" onClick={() => setView("list")} aria-label="Torna alla lista" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}><ChevronLeft size={22} /></button>}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="topbar-eyebrow">{eyebrow}</div>
+              {eyebrow !== titles[view] && <div className="topbar-eyebrow">{eyebrow}</div>}
               <div className="topbar-title">{titles[view]}</div>
             </div>
             {inContracts && hasContracts(currentUser) && currentUser.role !== "bo" && (

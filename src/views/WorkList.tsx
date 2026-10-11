@@ -38,12 +38,12 @@ export function WorkList({ onOpen }: { onOpen: (view: View, focus?: { taskId?: n
       {shown.map((i, k) => {
         const u = URGENCY[i.urgency];
         return (
-          <div key={k} style={{ display: "flex", alignItems: "center", borderTop: `1px solid ${C.borderLight}` }}>
+          <div key={k} style={{ display: "flex", alignItems: "center", height: 64, boxSizing: "border-box", borderTop: `1px solid ${C.borderLight}` }}>
             <button onClick={() => onOpen(i.target.view, { taskId: i.target.taskId, vendorId: i.target.vendorId, contractId: i.target.contractId })} style={{ ...sans, display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0, textAlign: "left", background: "none", border: "none", padding: "11px 12px 11px 20px", cursor: "pointer", color: C.text }}>
               <span style={{ width: 32, height: 32, borderRadius: 10, background: u.bg, color: u.fg, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{ICON[i.kind]}</span>
               <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: "block", fontSize: 13.5, fontWeight: 650, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i.title}</span>
-                <span style={{ display: "block", fontSize: 12.5, color: C.muted }}>{i.detail}</span>
+                <span style={{ display: "block", fontSize: 13.5, fontWeight: 650, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i.title.replace(/^RDA\s+\S+\s+·\s+/, "")}</span>
+                <span style={{ display: "block", fontSize: 12.5, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i.detail}</span>
               </span>
               <span style={{ fontSize: 11.5, fontWeight: 650, color: u.fg, background: u.bg, borderRadius: 999, padding: "3px 9px", flexShrink: 0 }}>{u.label}</span>
             </button>
