@@ -28,6 +28,12 @@ export function BudgetView({ currentUser, notify, onSessionExpired }: { currentU
     if (err instanceof ApiError && err.status === 401) { onSessionExpired(); return "Sessione scaduta"; }
     return err instanceof Error ? err.message : "Operazione non riuscita";
   }, [onSessionExpired]);
+  const [buyers, setBuyers] = useState<{ id: number; name: string }[]>([]);
+  const isManager = currentUser.role === "manager";
+  useEffect(() => { if (!isManager) return; let off = false; portalApi.config().then(c => { if (!off) setBuyers(c.buyers.filter(b => b.active)); }).catch(() => undefined); return () => { off = true; }; }, [isManager]);
+  const assign = async (io: string, userId: string) => {
+    try { const r = await portalApi.setIoBuyer(io, userId ? Number(userId) : null); notify(userId ? (r.moved ? `Buyer assegnato · ${r.moved} RDA aperte passate a lui` : "Buyer assegnato alla riga di budget") : "Buyer tolto dalla riga"); await load(year); } catch (e) { notify(fail(e)); }
+  };
   const load = useCallback((y?: number) => portalApi.budget(y).then(x => { setV(x); setError(null); }).catch(err => setError(fail(err))), [fail]);
   useEffect(() => { let off = false; portalApi.budget(year).then(x => { if (!off) { setV(x); setError(null); } }).catch(err => { if (!off) setError(fail(err)); }); return () => { off = true; }; }, [year, fail]);
 
@@ -123,7 +129,7 @@ export function BudgetView({ currentUser, notify, onSessionExpired }: { currentU
       {v.lines.length === 0 ? <EmptyState icon={<PiggyBank size={26} />} title="Nessun dato per quest'anno" text={v.canUpload ? "Carica il file del Master Plan qui sotto." : "Il Master Plan lo caricano Manager e Finance."} /> : (
         <div className="table-wrap" style={{ marginBottom: 14 }}>
           <table className="data-table">
-            <thead><tr><th>Internal order</th><th>Funzione</th><th style={th}>{v.versions[0]?.label ?? "Prima versione"}</th><th style={th}>In uso</th><th style={th}>Impegnato</th><th style={th}>In previsione</th><th style={th}>{future ? "Contratti" : "Quota contratti"}</th><th style={th}>Residuo</th><th style={th}>vs prima versione</th></tr></thead>
+            <thead><tr><th>Internal order</th><th>Funzione</th><th>Buyer</th><th style={th}>{v.versions[0]?.label ?? "Prima versione"}</th><th style={th}>In uso</th><th style={th}>Impegnato</th><th style={th}>In previsione</th><th style={th}>{future ? "Contratti" : "Quota contratti"}</th><th style={th}>Residuo</th><th style={th}>vs prima versione</th></tr></thead>
             <tbody>
               {shown.map(l => {
                 const p = pct(l.committed + l.pipeline + (future ? l.contracts : 0), l.current);
@@ -131,6 +137,14 @@ export function BudgetView({ currentUser, notify, onSessionExpired }: { currentU
                   <tr key={l.io} onClick={() => setOpenIo(l.io)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setOpenIo(l.io); }}>
                     <td style={{ minWidth: 220 }}><div style={{ fontWeight: 650, color: C.text }} className="tabular">{l.io}</div><div style={{ fontSize: 12, color: C.muted, maxWidth: 320, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.description || (l.current === null ? "Non presente nel Master Plan" : "")}</div></td>
                     <td style={{ color: C.muted }}>{l.function || "—"}</td>
+                    <td onClick={e => e.stopPropagation()} style={{ minWidth: 150 }}>
+                      {isManager && l.current !== null
+                        ? <select aria-label={`Buyer di ${l.io}`} value={l.buyerVia === "io" ? l.buyerId ?? "" : ""} onChange={e => assign(l.io, e.target.value)} style={{ ...iStyle, padding: "6px 8px", fontSize: 12.5 }}>
+                            <option value="">{l.buyerVia === "category" ? `Auto · ${l.buyerName}` : "Automatico"}</option>
+                            {buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                          </select>
+                        : <span style={{ fontSize: 12.5, color: C.muted }}>{l.buyerName ? `${l.buyerName}${l.buyerVia === "category" ? " (categoria)" : ""}` : "—"}</span>}
+                    </td>
                     <td className="num tabular">{eur(l.baseline)}</td>
                     <td className="num tabular">{eur(l.current)}</td>
                     <td className="num tabular">{l.committed ? eur(l.committed) : "—"}</td>

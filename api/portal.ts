@@ -21,7 +21,7 @@ import { createTestAccesses, removeTestAccesses, createDemoSupplier, resetTestSu
 import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_budget-demo.js";
 import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudget } from "./_budget.js";
 import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
-import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, setTaskLinks, setTaskSupplier, suggestRdas, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
+import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, setIoBuyer, setTaskLinks, setTaskSupplier, suggestRdas, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
 import {
@@ -185,6 +185,7 @@ async function handle(request: Request): Promise<Response> {
     // ── Staff ──
     const user = await requireRole(request, [...STAFF]);
     const origin = originOf(request);
+    if (op === "io-buyer" && method === "POST") { const b = (await readJson(request)) as { io?: unknown; userId?: unknown }; return json(await setIoBuyer(user, b.io, b.userId)); }
     // ── Task (Manager e Buyer) ──
     if (op.startsWith("task") || op.startsWith("rfq") || op === "rda-import") {
       if (user.role !== "manager" && user.role !== "buyer") throw new HttpError(403, "Operazione non consentita");

@@ -57,6 +57,23 @@ export async function importSapFile(actor: string, fileName: string, data: Uint8
   return res;
 }
 
+/**
+ * Chi prende una RDA: prima il buyer assegnato a uno dei suoi internal order, poi quello (unico) della categoria della riga di budget,
+ * infine quello del gruppo acquisti. `ios` in ordine di importo.
+ */
+export async function assigneeFor(db: Queryable, ios: string[], pgr: string, pgrMap: Map<string, number>): Promise<number | null> {
+  if (ios.length) {
+    const direct = (await db.query("select io, user_id from io_buyers where io = any($1) and user_id in (select id from users where active)", [ios])).rows;
+    for (const io of ios) { const d = direct.find(r => r.io === io); if (d) return d.user_id as number; }
+    for (const io of ios) {
+      const cat = (await db.query(`select distinct cb.user_id from mp_lines l join category_map cm on cm.kind = 'mp' and cm.key = l.category join category_buyers cb on cb.category_id = cm.category_id
+        join users u on u.id = cb.user_id and u.active where l.io = $1 and l.version_id = (select max(id) from mp_versions where year = (select max(year) from mp_versions))`, [io])).rows;
+      if (cat.length === 1) return cat[0].user_id as number;
+    }
+  }
+  return pgrMap.get(pgr) ?? null;
+}
+
 async function importPr(db: Queryable, lines: PrLine[], res: ImportResult, force: boolean) {
   if (!lines.length) bad("Il file non contiene nessuna RDA: controlla di aver scelto quello giusto");
   const prev = (await db.query("select count(distinct pr)::int as n from rda_lines")).rows[0].n as number;
@@ -88,7 +105,8 @@ async function importPr(db: Queryable, lines: PrLine[], res: ImportResult, force
     if (cur?.done_reason === "merged") continue;
     if (!cur && (await db.query("select 1 from tasks where source in ('manual','contract') and status = 'open' and $1 = any(rda_numbers)", [pr])).rows.length) { res.updated++; continue; }
     if (!cur) {
-      const assignee = maps.get(first.pgr) ?? null;
+      const ios = Object.entries(io).sort((a, b) => b[1] - a[1]).map(([k]) => k);
+      const assignee = await assigneeFor(db, ios, first.pgr, maps);
       await db.query("insert into tasks (source, source_key, title, due, assignee_id, assignee_auto, group_key, meta, created_by) values ('rda',$1,$2,$3,$4,$5,$6,$7,'SAP')", [pr, title, due, assignee, assignee !== null, first.pgr, JSON.stringify({ ...meta, firstSeen: new Date().toISOString() })]);
       res.created++;
     } else if (cur.status === "done") {
@@ -611,6 +629,27 @@ export async function setTaskLinks(user: User, id: number, input: Row): Promise<
   await getPool().query(`update tasks set ${sets.join(", ")}, updated_at = now() where id = $1`, vals);
   await autoLinkPos(getPool());
   return closeIfComplete(user, id);
+}
+
+/** Assegna una riga di budget (internal order) a un buyer; le RDA già aperte con quell'internal order, non assegnate a mano, passano a lui. */
+export async function setIoBuyer(user: User, ioIn: unknown, userIn: unknown): Promise<{ moved: number }> {
+  if (user.role !== "manager") throw new HttpError(403, "Solo il Manager assegna le righe di budget ai buyer");
+  const io = str(ioIn, 40).replace(/\s+/g, "");
+  if (!io) bad("Indica l'internal order");
+  const uid = userIn === null || userIn === undefined || userIn === "" ? null : Number(userIn);
+  const db = getPool();
+  if (uid !== null && !(await db.query("select 1 from users where id = $1 and active and role in ('buyer','manager')", [uid])).rows.length) bad("Buyer non valido");
+  let moved = 0;
+  await inTransaction(async tx => {
+    if (uid === null) await tx.query("delete from io_buyers where io = $1", [io]);
+    else {
+      await tx.query("insert into io_buyers (io, user_id) values ($1,$2) on conflict (io) do update set user_id = excluded.user_id", [io, uid]);
+      const r = await tx.query("update tasks set assignee_id = $2, assignee_auto = true, updated_at = now() where source = 'rda' and status = 'open' and (assignee_auto or assignee_id is null) and jsonb_exists(meta->'io', $1) and assignee_id is distinct from $2", [io, uid]);
+      moved = r.rowCount ?? 0;
+    }
+    await tx.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'budget',$2,$3,$4)", [user.name, uid === null ? "delete" : "update", io, uid === null ? "Buyer tolto dalla riga di budget" : `Buyer assegnato alla riga di budget (${moved} RDA aperte passate a lui)`]);
+  });
+  return { moved };
 }
 
 /** Sceglie il fornitore della pratica tra quelli registrati, attivi e qualificati. */

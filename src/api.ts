@@ -137,6 +137,7 @@ export const portalApi = {
   decideSourcing: (id: number, approve: boolean, note: string) => post<{ task: TaskDetail }>(portal("task-sourcing-approve", `&id=${id}`), { approve, note }).then(r => r.task),
   setOutcome: (id: number, input: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-outcome", `&id=${id}`), input).then(r => r.task),
   registerContract: (id: number, input: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-contract", `&id=${id}`), input).then(r => r.task),
+  setIoBuyer: (io: string, userId: number | null) => post<{ moved: number }>(portal("io-buyer"), { io, userId }),
   eligibleSuppliers: () => request<{ suppliers: EligibleSupplier[] }>(portal("task-suppliers")).then(r => r.suppliers),
   setTaskSupplier: (id: number, supplierId: number | null) => post<{ task: TaskDetail }>(portal("task-supplier", `&id=${id}`), { supplierId }).then(r => r.task),
   suggestRdas: (id: number) => request<{ suggestions: RdaSuggestion[] }>(portal("task-rda-suggest", `&id=${id}`)).then(r => r.suggestions),
