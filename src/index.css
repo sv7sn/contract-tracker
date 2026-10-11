@@ -32,6 +32,8 @@ code { background: #eef0f5; padding: 1px 6px; border-radius: 5px; font-size: .92
 .lift:hover { box-shadow: 0 8px 24px rgba(16,24,43,.09); transform: translateY(-1px); border-color: #d5d9e4; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
+:root { --nav-h: calc(62px + env(safe-area-inset-bottom)); }
+html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
 .desktop-label, .desktop-only, .desktop-only-flex { display: none; }
 
 /* ── Struttura: telefono = barra in basso, desktop = menu laterale ── */
@@ -43,9 +45,9 @@ code { background: #eef0f5; padding: 1px 6px; border-radius: 5px; font-size: .92
 .topbar-title { font-size: 16px; color: #fff; font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; letter-spacing: -0.01em; }
 .topbar-back { color: rgba(255,255,255,.7); }
 .topbar-search { display: none; }
-.page { padding: 18px 16px 96px; max-width: 1320px; margin: 0 auto; }
-.bottom-nav { overflow-x: auto; position: fixed; bottom: 0; left: 0; right: 0; background: rgba(255,255,255,.92); backdrop-filter: blur(10px); border-top: 1px solid var(--border); display: flex; padding: 8px 0 18px; box-shadow: 0 -4px 24px rgba(16,24,43,.06); z-index: 20; }
-.fab { position: fixed; bottom: 92px; right: 18px; width: 54px; height: 54px; border-radius: 50%; background: var(--accent); border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 22px rgba(200,82,42,.45); z-index: 50; }
+.page { padding: 18px 16px calc(var(--nav-h) + 24px); max-width: 1320px; margin: 0 auto; }
+.bottom-nav { min-height: var(--nav-h); box-sizing: border-box; overflow-x: auto; position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid var(--border); display: flex; padding: 8px 0 calc(10px + env(safe-area-inset-bottom)); box-shadow: 0 -4px 24px rgba(16,24,43,.06); z-index: 20; }
+.fab { position: fixed; bottom: calc(var(--nav-h) + 16px); right: 18px; width: 54px; height: 54px; border-radius: 50%; background: var(--accent); border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 22px rgba(200,82,42,.45); z-index: 12; }
 
 /* ── Finestre: dal basso su telefono, centrate su desktop ── */
 .sheet-overlay { position: fixed; inset: 0; background: rgba(16,24,43,.55); backdrop-filter: blur(3px); z-index: 100; display: flex; align-items: flex-end; animation: fade-up .2s ease both; }
@@ -88,3 +90,17 @@ code { background: #eef0f5; padding: 1px 6px; border-radius: 5px; font-size: .92
   .login-panel { background: #f4f5f8; max-width: 580px; }
 }
 @media (min-width: 960px) and (max-width: 1100px) { .page { padding: 24px 24px 48px; } .topbar { padding: 14px 24px; } }
+
+/* ── Telefono: le finestre stanno SOPRA la pagina ma sopra la barra in basso, che resta sempre visibile ── */
+.sheet-head { position: sticky; top: 0; z-index: 4; background: #fff; display: flex; align-items: flex-start; gap: 12px; margin: -22px -22px 14px; padding: calc(14px + env(safe-area-inset-top)) 18px 10px 22px; border-bottom: 1px solid var(--border); }
+.sheet { overscroll-behavior: contain; }
+@media (max-width: 959px) {
+  .sheet-overlay { bottom: var(--nav-h); z-index: 15 !important; padding: 0; align-items: stretch; background: #fff; backdrop-filter: none; animation: none; }
+  .dialog-overlay { bottom: var(--nav-h); z-index: 15 !important; padding: 12px; }
+  .dialog { max-height: 100%; }
+  .sheet { border-radius: 0; max-height: none; height: 100%; box-shadow: none; padding: 16px 16px 24px; -webkit-overflow-scrolling: touch; }
+  .sheet-head { top: -16px; margin: -16px -16px 14px; padding: calc(12px + env(safe-area-inset-top)) 10px 10px 16px; }
+  .task-row { height: 62px; }
+}
+@media (min-width: 960px) { .task-row-d td { height: 72px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; } }
+.one-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }

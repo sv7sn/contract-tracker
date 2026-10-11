@@ -230,7 +230,7 @@ function SupplierSheet({ s, year, fail, onClose }: { s: SpendSupplier; year: num
   return (
     <div className="sheet-overlay" role="dialog" aria-modal="true" aria-label={s.name} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="sheet" style={{ maxWidth: 820 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
+        <div className="sheet-head">
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ ...font, fontSize: 18, fontWeight: 700 }}>{s.name}</div>
             <div style={{ ...sans, fontSize: 13, color: C.muted }}>{s.code ? `Codice SAP ${s.code}` : "Senza codice SAP"} · {year} · {fmt(s.value)} in {s.pos} PO ({pct(s.share)} della spesa)</div>

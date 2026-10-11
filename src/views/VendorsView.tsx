@@ -271,7 +271,7 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
   return (
     <div className="sheet-overlay" role="dialog" aria-modal="true" aria-label="Scheda fornitore" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="sheet" style={{ maxWidth: 820 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 16 }}>
+        <div className="sheet-head">
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ ...font, fontSize: 20, fontWeight: 700, color: C.text, overflowWrap: "anywhere" }}>{s?.data.company?.legalName || s?.name || "…"}</div>
             {s && <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}><StatusBadge status={s.status} update={s.isUpdate} /><VendorFlags lifecycle={s.lifecycle} qualification={s.qualification} duplicate={s.duplicates.some(d => !d.confirmed)} /><span style={{ ...sans, fontSize: 12.5, color: C.muted }}>{s.email}</span></div>}

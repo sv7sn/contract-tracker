@@ -96,7 +96,7 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
     return items.filter(i => (origin === "all" || i.origin === origin) && (status === "all" || (status === "open" ? i.status !== "done" : i.status === "done"))
       && (!quick || (quick === "late" ? overdue(i) : quick === "sourcing" ? i.status !== "done" && sourcingGap(i.task) : quick === "approval" ? i.task?.sourcing?.approval === "pending" : quick === "unassigned" ? i.status !== "done" && i.assigneeId === null : i.status !== "done"))
       && (who === "all" || (who === "none" ? i.assigneeId === null : String(i.assigneeId) === who)) && (!q || `${i.title} ${i.sub} ${i.assignee}`.toLowerCase().includes(q)))
-      .sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999"));
+      .sort((a, b) => Number(a.status === "done") - Number(b.status === "done") || (a.due ?? "9999").localeCompare(b.due ?? "9999"));
   }, [items, origin, status, who, search, quick]);
 
   const open = (i: Item) => { if (i.task) setOpenId(i.task.id); else if (i.contract) onOpenContract(i.contract); };
@@ -134,7 +134,6 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
     ...(isManager && counts.approvals ? [{ key: "approval" as Quick, label: "Da approvare", value: counts.approvals, color: C.purple }] : []),
     ...(isManager && counts.unassigned ? [{ key: "unassigned" as Quick, label: "Da assegnare", value: counts.unassigned, color: C.purple }] : []),
   ];
-  const groups = groupItems(shown);
   const showWho = isManager && who === "all";
 
   return (
@@ -177,42 +176,38 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
       {shown.length === 0 ? (
         <EmptyState icon={<CheckCircle2 size={26} />} title={items.length ? "Nessun task con questi filtri" : "Nessun task"} text={items.length ? undefined : "I task arrivano dalle RDA di SAP, dai piani di rinnovo dei contratti e da quelli che crei tu."} />
       ) : (<>
-        {groups.map(g => (
-          <section key={g.key} style={{ marginBottom: 16 }}>
-            <div style={{ ...sans, display: "flex", alignItems: "baseline", gap: 8, margin: "0 2px 6px", fontSize: 12.5, fontWeight: 700, color: g.color, textTransform: "uppercase", letterSpacing: ".04em" }}>{g.label}<span style={{ color: C.subtle, fontWeight: 500 }}>{g.items.length}</span></div>
-            <div className="table-wrap desktop-only">
-              <table className="data-table" style={{ tableLayout: "fixed", width: "100%" }}>
-                <colgroup><col /><col style={{ width: 190 }} />{showWho && <col style={{ width: 170 }} />}<col style={{ width: 170 }} /></colgroup>
-                <tbody>
-                  {g.items.map(i => (
-                    <tr key={i.key} onClick={() => open(i)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter") open(i); }}>
-                      <td style={{ boxShadow: overdue(i) ? `inset 3px 0 0 ${C.red}` : i.priority === "high" && i.status !== "done" ? `inset 3px 0 0 ${C.yellow}` : undefined }}>
-                        <div style={{ fontWeight: 650, color: C.text, overflowWrap: "anywhere" }}><TitleOf i={i} /></div>
-                        <div style={{ ...sans, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 3, fontSize: 12.5, color: C.muted }}>{chip(i.task ? originLabel(i.task) : ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}{metaOf(i, people)}{sourcingChip(i)}</div>
-                      </td>
-                      <td className="tabular" style={{ color: overdue(i) ? C.red : C.text }}><div style={{ fontWeight: overdue(i) ? 650 : 500 }}>{i.due ? fmtDate(i.due) : "—"}</div><div style={{ fontSize: 12, color: overdue(i) ? C.red : C.muted }}>{relDue(i)}</div>{extraStatus(i) && <div style={{ marginTop: 4 }}>{extraStatus(i)}</div>}</td>
-                      {showWho && <td><div style={{ display: "flex", alignItems: "center", gap: 8 }}>{i.assignee !== "Da assegnare" && <Avatar name={i.assignee} size={24} />}<span style={{ color: i.assignee === "Da assegnare" ? C.purple : C.text, fontWeight: i.assignee === "Da assegnare" ? 650 : 400, fontSize: 13 }}>{i.assignee}</span></div></td>}
-                      <td onClick={e => e.stopPropagation()} style={{ textAlign: "right" }}>{contractAction(i, onCompleteStep, onSendBO, onOpenContract)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mobile-only" style={{ display: "grid", gap: 8 }}>
-              {g.items.map(i => (
-                <Card key={i.key} onClick={() => open(i)} role="button" tabIndex={0} style={{ padding: "11px 13px", cursor: "pointer", borderRadius: radius.md, borderLeft: overdue(i) ? `4px solid ${C.red}` : undefined }}>
-                  <div style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}><TitleOf i={i} /></div>
-                  <div style={{ ...sans, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 6, fontSize: 12.5, color: C.muted }}>
-                    {chip(i.task ? originLabel(i.task) : ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}
-                    <span className="tabular" style={{ color: overdue(i) ? C.red : C.muted, fontWeight: overdue(i) ? 650 : 400 }}>{i.due ? `${fmtDate(i.due)} · ${relDue(i)}` : "Senza scadenza"}</span>
-                    {showWho && <span title={i.assignee} style={{ marginLeft: "auto" }}>{i.assignee !== "Da assegnare" ? <Avatar name={i.assignee} size={22} /> : chip("Da assegnare", C.purple, C.purpleBg)}</span>}
-                  </div>
-                  {(extraStatus(i) || sourcingChip(i) || contractAction(i, onCompleteStep, onSendBO, onOpenContract)) && <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>{extraStatus(i)}{sourcingChip(i)}{contractAction(i, onCompleteStep, onSendBO, onOpenContract)}</div>}
-                </Card>
+        <div className="table-wrap desktop-only">
+          <table className="data-table" style={{ tableLayout: "fixed", width: "100%" }}>
+            <colgroup><col /><col style={{ width: 170 }} />{showWho && <col style={{ width: 170 }} />}<col style={{ width: 170 }} /></colgroup>
+            <tbody>
+              {shown.map(i => (
+                <tr key={i.key} className="task-row-d" onClick={() => open(i)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter") open(i); }}>
+                  <td style={{ boxShadow: overdue(i) ? `inset 3px 0 0 ${C.red}` : i.priority === "high" && i.status !== "done" ? `inset 3px 0 0 ${C.yellow}` : undefined }}>
+                    <div style={{ fontWeight: 650, color: C.text }} className="one-line"><TitleOf i={i} /></div>
+                    <div style={{ ...sans, display: "flex", gap: 8, alignItems: "center", marginTop: 3, fontSize: 12.5, color: C.muted, minWidth: 0 }} className="one-line">{chip(i.task ? originLabel(i.task) : ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}{metaOf(i, people)}{sourcingChip(i)}</div>
+                  </td>
+                  <td className="tabular" style={{ color: overdue(i) ? C.red : C.text }}><div style={{ fontWeight: overdue(i) ? 650 : 500 }}>{i.due ? fmtDate(i.due) : "—"}</div><div style={{ fontSize: 12, color: overdue(i) ? C.red : C.muted }}>{relDue(i) || (extraStatus(i) ? "" : "")}</div></td>
+                  {showWho && <td><div style={{ display: "flex", alignItems: "center", gap: 8 }}>{i.assignee !== "Da assegnare" && <Avatar name={i.assignee} size={24} />}<span className="one-line" style={{ color: i.assignee === "Da assegnare" ? C.purple : C.text, fontWeight: i.assignee === "Da assegnare" ? 650 : 400, fontSize: 13 }}>{i.assignee}</span></div></td>}
+                  <td onClick={e => e.stopPropagation()} style={{ textAlign: "right" }}>{contractAction(i, onCompleteStep, onSendBO, onOpenContract) ?? extraStatus(i)}</td>
+                </tr>
               ))}
-            </div>
-          </section>
-        ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mobile-only" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }}>
+          {shown.map(i => (
+            <Card key={i.key} className="task-row" onClick={() => open(i)} role="button" tabIndex={0} style={{ padding: "0 13px", cursor: "pointer", borderRadius: radius.md, borderLeft: overdue(i) ? `4px solid ${C.red}` : undefined, display: "flex", alignItems: "center", gap: 10, boxSizing: "border-box" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="one-line" style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text }}><TitleOf i={i} /></div>
+                <div className="one-line" style={{ ...sans, display: "flex", gap: 6, alignItems: "center", marginTop: 5, fontSize: 12.5, color: C.muted }}>
+                  {chip(i.task ? originLabel(i.task) : ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}
+                  <span className="tabular" style={{ color: overdue(i) ? C.red : C.muted, fontWeight: overdue(i) ? 650 : 400, whiteSpace: "nowrap" }}>{i.due ? `${fmtDate(i.due)} · ${relDue(i)}`.replace(/ · $/, "") : "Senza scadenza"}</span>
+                </div>
+              </div>
+              {showWho && (i.assignee !== "Da assegnare" ? <span title={i.assignee}><Avatar name={i.assignee} size={24} /></span> : chip("Da assegnare", C.purple, C.purpleBg))}
+            </Card>
+          ))}
+        </div>
       </>)}
       <button className="fab" onClick={() => setCreating(true)} aria-label="Nuovo task"><Plus size={26} /></button>
 
@@ -224,17 +219,6 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
 }
 
 type Quick = "open" | "late" | "sourcing" | "approval" | "unassigned";
-/** Gruppi per urgenza: in ritardo, questa settimana, più avanti, senza scadenza (e i chiusi a parte). */
-function groupItems(list: Item[]) {
-  const defs: { key: string; label: string; color: string; test: (i: Item) => boolean }[] = [
-    { key: "late", label: "In ritardo", color: C.red, test: i => overdue(i) },
-    { key: "week", label: "Questa settimana", color: C.yellow, test: i => i.status !== "done" && !!i.due && daysFrom(i.due) >= 0 && daysFrom(i.due) <= 7 },
-    { key: "later", label: "Più avanti", color: C.muted, test: i => i.status !== "done" && !!i.due && daysFrom(i.due) > 7 },
-    { key: "none", label: "Senza scadenza", color: C.muted, test: i => i.status !== "done" && !i.due },
-    { key: "done", label: "Chiusi di recente", color: C.green, test: i => i.status === "done" },
-  ];
-  return defs.map(d => ({ ...d, items: list.filter(d.test) })).filter(g => g.items.length);
-}
 const relDue = (it: Item) => {
   if (!it.due) return "";
   if (it.status === "done") return "";
@@ -392,7 +376,7 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
   return (
     <div className="sheet-overlay" role="dialog" aria-modal="true" aria-label="Dettaglio task" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="sheet" style={{ maxWidth: 760 }}>
-        <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
+        <div className="sheet-head">
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ ...font, fontSize: 18, fontWeight: 700, color: C.text, overflowWrap: "anywhere" }}>{t?.title ?? "…"}</div>
             {t && <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 6 }}>{chip(originLabel(t), ORIGIN_COLOR[t.source][0], ORIGIN_COLOR[t.source][1])}{t.status === "done" ? chip(t.outcome ? OUTCOME_LABEL[t.outcome] : DONE_TEXT[t.doneReason] ?? "Chiuso", C.green, C.greenBg) : chip(t.outcome ? `${OUTCOME_LABEL[t.outcome]} · da completare` : "Aperto", C.blue, C.blueBg)}</div>}
@@ -445,7 +429,7 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
               </Card>
             )}
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", position: "sticky", bottom: -1, background: "#fff", padding: "10px 0 2px", borderTop: `1px solid ${C.borderLight}`, zIndex: 3 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", padding: "14px 0 4px", borderTop: `1px solid ${C.borderLight}` }}>
               {isManager && t.status === "open" && (
                 <select aria-label="Assegna a" value={t.assigneeId ?? ""} onChange={e => patch({ assigneeId: e.target.value ? Number(e.target.value) : null }, "Assegnazione salvata")} disabled={busy} style={{ ...iStyle, width: "auto", minWidth: 0, flex: "1 1 120px", maxWidth: 260 }}>
                   <option value="">Da assegnare</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
