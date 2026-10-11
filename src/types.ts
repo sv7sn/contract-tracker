@@ -221,7 +221,14 @@ export interface Task {
   /** Solo task manuali: attività semplice oppure acquisto (pratica completa come RDA e rinnovi). */
   kind: "activity" | "purchase";
   rdaNumbers: string[]; poNumbers: string[]; noPoReason: string; documents: TaskDocument[];
+  /** Fornitore scelto (sempre uno registrato e qualificato) e stato del contratto: non serve, in negoziazione, firmato. */
+  chosenSupplierId: number | null; chosenSupplierName: string; contractStatus: TaskContractStatus; contractNote: string;
+  /** Passaggi della pratica e primo ostacolo alla chiusura (null = si può chiudere). */
+  steps: TaskStep[]; blocker: string | null;
 }
+export type TaskContractStatus = "" | "not_needed" | "negotiating" | "signed";
+export type TaskStepState = "done" | "current" | "todo";
+export interface TaskStep { key: string; label: string; state: TaskStepState; /** Passaggio informativo: non blocca la chiusura. */ info?: boolean; detail?: string; date?: string | null; section?: string; blocker?: string }
 export interface RdaSuggestion { id: number; rda: string; title: string; value: number; currency: string; requestedBy: string; due: string | null; why: string[] }
 export type TaskDocKind = "offer" | "contract" | "addendum" | "termination" | "other";
 export interface TaskDocument { id: number; kind: TaskDocKind; fileName: string; size: number; uploadedBy: string; uploadedAt: string }
@@ -324,7 +331,7 @@ export interface Scorecard {
 }
 
 // ─── Il mio lavoro ───────────────────────────────────────────
-export type WorkKind = "bo_message" | "bo_to_send" | "bo_waiting" | "task_late" | "task_soon" | "sourcing_missing" | "exception" | "unassigned" | "rfq_answers" | "rfq_compare" | "vendor_review" | "vendor_lapsed" | "vendor_unresponsive" | "splits";
+export type WorkKind = "po_gap" | "bo_message" | "bo_to_send" | "bo_waiting" | "task_late" | "task_soon" | "sourcing_missing" | "exception" | "unassigned" | "rfq_answers" | "rfq_compare" | "vendor_review" | "vendor_lapsed" | "vendor_unresponsive" | "splits";
 export interface WorkItem {
   kind: WorkKind; urgency: 1 | 2 | 3; title: string; detail: string;
   /** Giorni di ritardo (positivo) o mancanti (negativo), se la voce ha una scadenza. */
@@ -366,3 +373,5 @@ export interface CoverBuyer { id: number; name: string }
 export interface CoverView { entries: CoverEntry[]; buyers: CoverBuyer[] }
 
 export interface TestAccess { role: string; label: string; name: string; email: string; password: string }
+
+export interface EligibleSupplier { id: number; name: string; sapCode: string | null; qualification: Qualification }

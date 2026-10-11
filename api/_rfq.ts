@@ -7,7 +7,7 @@ import { SUPPLIER_FILE_PATH_RE } from "./_supplier-rules.js";
 import { deleteDocuments } from "./_blob.js";
 import { HttpError } from "./_http.js";
 import { sendMail } from "./_notify.js";
-import { getTask, saveSourcing } from "./_tasks.js";
+import { getTask, saveSourcing, setTaskSupplier } from "./_tasks.js";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 const bad = (msg: string): never => { throw new HttpError(400, msg); };
@@ -94,7 +94,8 @@ export async function applyRfq(user: User, id: number, input: Row): Promise<Task
   const task = await saveSourcing(user, r.task_id, { mode: "comparison", justification: str(input?.justification, 2000), baseline: input?.baseline, finalAmount: input?.finalAmount,
     quotes: quotes.map(q => ({ supplier: q.supplierName, amount: q.amount, chosen: q.supplierId === chosen })) });
   await getPool().query("update rfqs set status = 'closed', closed_at = coalesce(closed_at, now()) where id = $1", [id]);
-  return task;
+  // Il fornitore dell'offerta scelta è anche il fornitore della pratica, se è registrato e qualificato.
+  try { return await setTaskSupplier(user, r.task_id, { supplierId: chosen }); } catch { return task; }
 }
 
 // ─── Area fornitore ──────────────────────────────────────────
