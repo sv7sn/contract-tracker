@@ -55,7 +55,7 @@ export function taskSteps(t: Src, plan: PlanStep[] = []): TaskStep[] {
       : { key: "supplier", label: "Fornitore", state: "todo", section: "sec-sourcing", blocker: !chosen ? "Scegli il fornitore tra quelli registrati e qualificati" : sourcingBlocker(t) });
     // Per le RDA l'internal order lo legge il sistema da SAP: il passaggio è solo un controllo. Per gli acquisti manuali lo indica il buyer.
     const ios = Object.keys(t.meta.io ?? {}); const io = ios.length ? ios.join(", ") : t.meta.internalOrder ?? "";
-    steps.push(hasIo(t) ? { key: "io", label: "Internal order", state: "done", detail: io, section: "sec-pratica" }
+    steps.push(hasIo(t) ? { key: "io", label: "Internal order", state: "done", detail: io, section: "sec-pratica", hidden: t.source === "rda" }
       : { key: "io", label: "Internal order", state: "todo", detail: t.source === "rda" ? "manca in SAP" : undefined, section: "sec-pratica",
         blocker: t.source === "rda" ? "La RDA non ha l'internal order in SAP: chiedilo al richiedente (o indicalo nella pratica)" : "Manca l'internal order del Master Plan" });
     steps.push(contractStep(t));

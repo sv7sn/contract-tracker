@@ -228,7 +228,7 @@ export interface Task {
 }
 export type TaskContractStatus = "" | "not_needed" | "negotiating" | "signed";
 export type TaskStepState = "done" | "current" | "todo";
-export interface TaskStep { key: string; label: string; state: TaskStepState; /** Passaggio informativo: non blocca la chiusura. */ info?: boolean; detail?: string; date?: string | null; section?: string; blocker?: string }
+export interface TaskStep { key: string; label: string; state: TaskStepState; /** Passaggio informativo: non blocca la chiusura. */ info?: boolean; /** Controllo automatico già a posto: non serve mostrarlo nella linea di avanzamento. */ hidden?: boolean; detail?: string; date?: string | null; section?: string; blocker?: string }
 export interface RdaSuggestion { id: number; rda: string; title: string; value: number; currency: string; requestedBy: string; due: string | null; why: string[] }
 export type TaskDocKind = "offer" | "contract" | "addendum" | "termination" | "other";
 export interface TaskDocument { id: number; kind: TaskDocKind; fileName: string; size: number; uploadedBy: string; uploadedAt: string }

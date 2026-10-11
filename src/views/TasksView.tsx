@@ -394,7 +394,7 @@ function NextStep({ t, isManager, threshold }: { t: TaskDetail; isManager: boole
 
 /** A che punto è la pratica: passaggi fatti, quello in corso e quelli che mancano. Un tocco porta alla sezione relativa. */
 function TaskProgress({ t, plan }: { t: TaskDetail; plan: PlanStep[] }) {
-  const steps = taskSteps(t, plan);
+  const steps = taskSteps(t, plan).filter(x => !x.hidden);
   return (
     <ol aria-label="Avanzamento della pratica" style={{ listStyle: "none", margin: 0, padding: "2px 0 6px", display: "flex", overflowX: "auto", gap: 0, WebkitOverflowScrolling: "touch" }}>
       {steps.map((st, k) => {
