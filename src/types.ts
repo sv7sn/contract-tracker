@@ -266,6 +266,8 @@ export interface BudgetLine {
   /** Impegnato: RDA approvate (aperte o già ordinate) e acquisti chiusi. In previsione: pratiche aperte senza RDA. Contratti: quota dell'anno dei contratti collegati. */
   committed: number; pipeline: number; contracts: number;
   residual: number | null; vsBaseline: number | null; items: number;
+  /** Buyer a cui va la RDA di questa riga: assegnato a mano (io), oppure unico buyer della categoria (category). */
+  buyerId: number | null; buyerName: string; buyerVia: "io" | "category" | "";
 }
 export interface BudgetItem { kind: "rda" | "purchase" | "contract"; id: number; title: string; value: number; status: string; date: string | null }
 export interface BudgetView {

@@ -253,6 +253,8 @@ create table if not exists buyer_cover (
   from_date date not null, to_date date not null, created_by text not null default '', created_at timestamptz not null default now(), check (to_date >= from_date and user_id <> substitute_id)
 );
 create index if not exists buyer_cover_dates_idx on buyer_cover (substitute_id, from_date, to_date);
+-- Buyer di ogni riga di budget (internal order): quando arriva una RDA con quell'internal order, il task va a lui.
+create table if not exists io_buyers (io text primary key, user_id integer not null references users(id) on delete cascade);
 create table if not exists pgr_assignments (pgr text primary key, user_id integer references users(id) on delete set null, note text not null default '');
 create table if not exists sap_imports (
   id serial primary key, kind text not null, file_name text not null, rows integer not null default 0, result jsonb not null default '{}'::jsonb,

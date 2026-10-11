@@ -193,7 +193,7 @@ export async function budgetView(user: User, yearIn?: number): Promise<BudgetVie
   const map = new Map<string, BudgetLine>();
   const line = (io: string): BudgetLine => {
     let l = map.get(io);
-    if (!l) { l = { io, description: "", function: "", costCenter: "", glAccount: "", category: "", baseline: null, current: null, committed: 0, pipeline: 0, contracts: 0, residual: null, vsBaseline: null, items: 0 }; map.set(io, l); }
+    if (!l) { l = { io, description: "", function: "", costCenter: "", glAccount: "", category: "", baseline: null, current: null, committed: 0, pipeline: 0, contracts: 0, residual: null, vsBaseline: null, items: 0, buyerId: null, buyerName: "", buyerVia: "" }; map.set(io, l); }
     return l;
   };
   for (const r of bl) { const l = line(r.io); l.baseline = r2(Number(r.amount)); Object.assign(l, { description: r.description, function: r.function, costCenter: r.cost_center, glAccount: r.gl_account, category: r.category }); }
@@ -220,6 +220,15 @@ export async function budgetView(user: User, yearIn?: number): Promise<BudgetVie
   }
   // Prima le righe del Master Plan (per funzione), poi gli internal order impegnati ma non a budget.
   const lines = [...map.values()].sort((a, b) => Number(a.current === null) - Number(b.current === null) || (a.function || "~").localeCompare(b.function || "~") || a.io.localeCompare(b.io));
+  // Buyer di ogni riga: assegnato a mano oppure ricavato dalla categoria (se ne ha uno solo).
+  const explicit = new Map((await db.query("select b.io, b.user_id, u.name from io_buyers b join users u on u.id = b.user_id")).rows.map(r => [r.io as string, { id: r.user_id as number, name: r.name as string }]));
+  const catBuyers = (await db.query("select cm.key, array_agg(distinct u.id) as ids, array_agg(distinct u.name) as names from category_map cm join category_buyers cb on cb.category_id = cm.category_id join users u on u.id = cb.user_id and u.active where cm.kind = 'mp' group by cm.key")).rows;
+  for (const l of lines) {
+    const e = explicit.get(l.io);
+    if (e) { l.buyerId = e.id; l.buyerName = e.name; l.buyerVia = "io"; continue; }
+    const c = catBuyers.find(x => x.key === l.category);
+    if (c && c.ids.length === 1) { l.buyerId = c.ids[0]; l.buyerName = c.names[0]; l.buyerVia = "category"; }
+  }
   // Un buyer con categorie assegnate vede solo le righe del Master Plan delle sue categorie (e nessuna RDA senza internal order).
   const scope = await categoryScope(user);
   let visible = lines, unassignedVisible = unassigned;
