@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { BudgetLine, Contract, ContractOutcome, PlanStep, SupplierSummary, TaskDetail, TaskDocKind } from "../types.ts";
+import type { BudgetLine, Contract, ContractOutcome, PlanStep, SupplierSummary, TaskContractStatus, TaskDetail, TaskDocKind } from "../types.ts";
 import { checkDocument, portalApi, taskDocUrl, uploadDocument } from "../api.ts";
 import { btnGhost, btnPrimary, C, iStyle, sans } from "../theme.ts";
 import { fmt, fmtDate } from "../lib/format.ts";
@@ -181,6 +181,9 @@ export function PraticaCard({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unk
   const allPos = [...new Set([...sapPos, ...t.poNumbers])];
   const supplier = t.pos[0]?.supplierName || t.sourcing?.quotes.find(q => q.chosen)?.supplier || t.meta.supplier || "";
   const docs = t.documents;
+  const [cs, setCs] = useState<TaskContractStatus>(t.contractStatus);
+  const [csNote, setCsNote] = useState(t.contractNote);
+  const contractDone = t.steps.find(x => x.key === "contract")?.state === "done";
   const needPo = !renewal || t.outcome === "renewed" || t.outcome === "replaced";
 
   const saveLinks = async () => {
@@ -189,6 +192,11 @@ export function PraticaCard({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unk
       const x = await portalApi.setTaskLinks(t.id, { rdaNumbers: splitList(rda), poNumbers: splitList(po), noPoReason: noPoOn ? noPo : "", ...(sapIos.length ? {} : { internalOrder: io }) });
       onSaved(x, x.status === "done" && t.status !== "done" ? "Pratica completa e chiusa" : "Pratica aggiornata");
     } catch (e) { setErr(fail(e)); }
+    setBusy(null);
+  };
+  const saveContract = async () => {
+    setBusy("contract"); setErr(null);
+    try { onSaved(await portalApi.setTaskLinks(t.id, { contractStatus: cs, contractNote: csNote }), "Stato del contratto aggiornato"); } catch (e) { setErr(fail(e)); }
     setBusy(null);
   };
   const addOffer = async (f: File | undefined) => {
@@ -220,7 +228,7 @@ export function PraticaCard({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unk
         {t.sourcing ? <>{t.sourcing.mode === "comparison" ? `${t.sourcing.quotes.length} offerte` : t.sourcing.mode === "strategic" ? "Fornitura strategica" : t.sourcing.mode === "single_source" ? "Single source" : "Eccezione"}{t.saving ? <> · saving <b style={{ color: t.saving.amount >= 0 ? C.green : C.red }}>{fmt(t.saving.amount, t.meta.currency ?? "EUR")} ({t.saving.pct}%)</b></> : null}</>
           : t.sourcingRequired ? "Da registrare qui sotto (importo sopra soglia)" : "Non necessario sotto soglia"}
       </Row>
-      <Row ok={docs.some(d => d.kind === "offer" || d.kind === "contract" || d.kind === "addendum") ? true : renewal && t.outcome === "ceased" ? null : false} title={renewal ? "Contratto" : t.source === "manual" ? "Offerta / contratto" : "Offerta"}>
+      <Row ok={renewal ? (docs.some(d => d.kind === "offer" || d.kind === "contract" || d.kind === "addendum") ? true : t.outcome === "ceased" ? null : false) : contractDone} title={renewal ? "Contratto" : "Offerta e contratto"}>
         {docs.length > 0 && <div style={{ display: "grid", gap: 4, marginBottom: 6 }}>{docs.map(d => (
           <div key={d.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <span style={{ fontSize: 11.5, color: C.subtle }}>{DOC_LABEL[d.kind]}</span>
@@ -230,7 +238,20 @@ export function PraticaCard({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unk
         <input ref={fileRef} type="file" hidden accept=".pdf,.doc,.docx" onChange={e => addOffer(e.target.files?.[0])} />
         <button onClick={() => fileRef.current?.click()} disabled={busy === "doc"} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>{busy === "doc" ? <Loader2 className="spin" size={14} /> : <Upload size={14} />}Allega offerta</button>
       </Row>
-      <Row ok={supplier ? true : false} title="Fornitore">{supplier || "Si ricava dal PO, dal confronto o dal contratto"}</Row>
+      {!renewal && t.status === "open" && (
+        <div style={{ ...sans, padding: "0 0 12px 0", fontSize: 13 }}>
+          <div style={{ fontSize: 12, color: C.subtle, margin: "4px 0 6px" }}>Serve un contratto?</div>
+          <div role="radiogroup" aria-label="Stato del contratto" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {([["not_needed", "Non serve"], ["negotiating", "In negoziazione"], ["signed", "Firmato"]] as [TaskContractStatus, string][]).map(([k, l]) => (
+              <button key={k} role="radio" aria-checked={cs === k} onClick={() => setCs(k)} style={{ ...sans, padding: "6px 12px", borderRadius: 999, border: `1px solid ${cs === k ? C.accent : C.border}`, background: cs === k ? C.accentLight : "#fff", color: cs === k ? C.accent : C.muted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{l}</button>
+            ))}
+          </div>
+          {(cs === "not_needed" || cs === "negotiating") && <input value={csNote} onChange={e => setCsNote(e.target.value)} placeholder={cs === "not_needed" ? "Perché non serve (es. ordine semplice, offerta accettata)" : "Note sulla trattativa (opzionale)"} aria-label="Note sul contratto" style={{ ...iStyle, padding: "7px 10px", fontSize: 13, marginTop: 8 }} />}
+          {cs === "signed" && <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>Allega prima l'offerta accettata o il contratto firmato qui sopra.</div>}
+          <button onClick={saveContract} disabled={busy === "contract" || cs === t.contractStatus && csNote === t.contractNote || !cs} style={{ ...btnGhost, marginTop: 8, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>{busy === "contract" && <Loader2 className="spin" size={13} />}Salva lo stato del contratto</button>
+        </div>
+      )}
+      <Row ok={renewal ? !!supplier : t.chosenSupplierId !== null} title="Fornitore">{t.chosenSupplierName || supplier || (renewal ? "Si ricava dal PO, dal confronto o dal contratto" : "Da scegliere nella sezione «Scelta del fornitore»")}</Row>
       <Row ok={!needPo ? null : allPos.length > 0 || !!t.noPoReason} title="PO">
         {sapPos.length > 0 && <div style={{ color: C.text, marginBottom: 6 }}>Da SAP: {t.pos.map(p => `${p.po}${p.supplierName ? ` (${p.supplierName})` : ""}`).join(", ")}</div>}
         {needPo && (<>

@@ -1,9 +1,11 @@
+import { blockerOf, taskSteps } from "./_task-steps.js";
 import type { ContractOutcome, ImportResult, RdaConfig, RdaMeta, Sourcing, SourcingMode, SourcingQuote, SourcingStatus, Task, TaskDetail, TaskDocKind, TaskLine, TaskPo, TaskSummary, User } from "../src/types.ts";
 import { computeSaving } from "./_saving.js";
 import { makePlan, reschedulePlan } from "./_plan-rules.js";
 import { FILE_PATH_RE } from "./_blob.js";
 import { getPool, inTransaction, type Queryable } from "./_db.js";
 import { HttpError } from "./_http.js";
+import { listEligibleSuppliers } from "./_portal.js";
 import { detectKind, parsePoLines, parsePrLines, parseSheet, type PrLine } from "./_sap-files.js";
 
 const bad = (msg: string): never => { throw new HttpError(400, msg); };
@@ -132,25 +134,41 @@ async function importPo(db: Queryable, rows: (string | null)[][], res: ImportRes
       on conflict (po, pr) do update set supplier_code = excluded.supplier_code, supplier_name = excluded.supplier_name, doc_date = excluded.doc_date, seen_at = now()`, [l.po, l.pr, l.supplierCode, l.supplierName, l.docDate, l.pgr, l.createdBy]);
   }
   res.linked = seen.size; res.prs = new Set(withPr.map(l => l.pr)).size;
-  // Se la RDA era stata chiusa come "non più aperta" prima che arrivasse l'elenco ordini, ora si sa che è diventata un ordine.
-  const up = await db.query(`update tasks t set done_reason = 'po_created', done_at = coalesce((select min(p.doc_date)::timestamptz from sap_pos p where p.pr = t.source_key), t.done_at), updated_at = now()
-    where t.source = 'rda' and t.status = 'done' and t.done_reason = 'removed_from_sap' and exists (select 1 from sap_pos p where p.pr = t.source_key)`);
-  res.closedPo += up.rowCount ?? 0;
   await reconcile(db, res);
   res.closedPo += await autoLinkPos(db);
 }
 
-/** Chiude i task delle RDA che non risultano più aperte in SAP: "PO creato" se l'ordine è noto, altrimenti "non più aperta". */
-async function reconcile(db: Queryable, res: ImportResult) {
+/**
+ * Chiude i task delle RDA che non risultano più aperte in SAP, ma solo se tutti i passaggi sono fatti.
+ * Ordine emesso con passaggi mancanti: il task resta aperto (e si segnala). RDA sparita senza ordine noto (annullata o respinta): si chiude come "non più aperta".
+ */
+export async function reconcile(db: Queryable, res: ImportResult) {
   const hasSnapshot = (await db.query("select 1 from rda_lines limit 1")).rows.length > 0;
   if (!hasSnapshot) return;
-  const po = await db.query(`update tasks t set status = 'done', done_reason = 'po_created', done_by = 'SAP', updated_at = now(),
-      done_at = coalesce((select min(p.doc_date)::timestamptz from sap_pos p where p.pr = t.source_key), now())
-    where t.source = 'rda' and t.status = 'open' and not exists (select 1 from rda_lines l where l.pr = t.source_key)
-      and exists (select 1 from sap_pos p where p.pr = t.source_key)`);
-  const gone = await db.query(`update tasks t set status = 'done', done_reason = 'removed_from_sap', done_by = 'SAP', done_at = now(), updated_at = now()
-    where t.source = 'rda' and t.status = 'open' and not exists (select 1 from rda_lines l where l.pr = t.source_key)`);
-  res.closedPo += po.rowCount ?? 0; res.closedGone += gone.rowCount ?? 0;
+  const { sourcingThreshold } = await loadRdaSettings(db);
+  const load = async (where: string) => {
+    const rows = (await db.query(`select t.* from tasks t where t.source = 'rda' and ${where}`)).rows;
+    if (!rows.length) return [] as { r: Row; t: Task; poDate: string | null }[];
+    const pos = (await db.query("select pr, po, supplier_name, doc_date from sap_pos where pr = any($1) order by doc_date", [rows.map(r => r.source_key)])).rows;
+    const docs = (await db.query("select * from task_documents where task_id = any($1)", [rows.map(r => r.id)])).rows;
+    return rows.map(r => ({ r, t: mapTask(r, pos, sourcingThreshold, docs), poDate: pos.find(p => p.pr === r.source_key)?.doc_date ?? null }));
+  };
+  // RDA aperta nel task ma sparita da SAP.
+  for (const { r, t, poDate } of await load("t.status = 'open' and not exists (select 1 from rda_lines l where l.pr = t.source_key)")) {
+    if (t.pos.length) {
+      if (t.blocker) continue; // ordine emesso, ma mancano passaggi: resta aperta
+      await db.query("update tasks set status = 'done', done_reason = 'po_created', done_by = 'SAP', updated_at = now(), done_at = coalesce($2::timestamptz, now()) where id = $1", [r.id, poDate]);
+      res.closedPo++;
+    } else {
+      await db.query("update tasks set status = 'done', done_reason = 'removed_from_sap', done_by = 'SAP', done_at = now(), updated_at = now() where id = $1", [r.id]);
+      res.closedGone++;
+    }
+  }
+  // Chiusa come "non più aperta" prima che arrivasse l'elenco ordini: ora si sa che è un ordine. Se mancavano passaggi, si riapre.
+  for (const { r, t, poDate } of await load("t.status = 'done' and t.done_reason = 'removed_from_sap' and exists (select 1 from sap_pos p where p.pr = t.source_key)")) {
+    if (t.blocker) await db.query("update tasks set status = 'open', done_at = null, done_reason = '', done_by = '', updated_at = now() where id = $1", [r.id]);
+    else { await db.query("update tasks set done_reason = 'po_created', done_at = coalesce($2::timestamptz, done_at), updated_at = now() where id = $1", [r.id, poDate]); res.closedPo++; }
+  }
 }
 
 // ─── Lettura ─────────────────────────────────────────────────
@@ -167,9 +185,10 @@ function visibleSql(user: User): string {
 
 function mapTask(r: Row, pos: Row[], threshold: number, docs: Row[] = []): Task {
   const required = needsSourcing(r, threshold);
-  return {
+  const base: Omit<Task, "steps" | "blocker"> = {
     sourcing: r.sourcing ?? null, sourcingRequired: required, sourcingStatus: sourcingStatusOf(required, r.sourcing ?? null), saving: computeSaving(r.sourcing),
     contractId: r.contract_id ?? null, outcome: r.outcome ?? "", newContractId: r.new_contract_id ?? null, kind: r.kind === "purchase" ? "purchase" : "activity",
+    chosenSupplierId: r.chosen_supplier_id ?? null, chosenSupplierName: r.chosen_supplier_name ?? "", contractStatus: r.contract_status ?? "", contractNote: r.contract_note ?? "",
     rdaNumbers: r.source === "rda" ? [r.source_key, ...(r.rda_numbers ?? []).filter((x: string) => x !== r.source_key)] : (r.rda_numbers ?? []),
     poNumbers: r.po_numbers ?? [], noPoReason: r.no_po_reason ?? "",
     documents: docs.filter(d => d.task_id === r.id).map(d => ({ id: d.id, kind: d.kind, fileName: d.file_name, size: d.size, uploadedBy: d.uploaded_by, uploadedAt: iso(d.uploaded_at) })),
@@ -178,6 +197,8 @@ function mapTask(r: Row, pos: Row[], threshold: number, docs: Row[] = []): Task 
     pos: pos.filter(p => p.pr === r.source_key).map((p): TaskPo => ({ po: p.po, supplierName: p.supplier_name, docDate: day(p.doc_date) })),
     createdBy: r.created_by, createdAt: iso(r.created_at), updatedAt: iso(r.updated_at),
   };
+  const steps = taskSteps(base);
+  return { ...base, steps, blocker: blockerOf(steps) };
 }
 const SELECT = "select t.*, u.name as assignee_name from tasks t left join users u on u.id = t.assignee_id";
 
@@ -256,6 +277,8 @@ export async function updateTask(user: User, id: number, input: Row): Promise<Ta
     if (why) throw new HttpError(409, why, { needsOutcome: cur.source === "contract" && !cur.outcome });
   }
   if (input?.status === "open" && cur.status === "done" && cur.outcome) throw new HttpError(409, "La pratica è già stata chiusa con un contratto registrato");
+  if (input?.status === "done" && cur.status === "open" && cur.source === "rda" && cur.blocker && input?.force !== true)
+    throw new HttpError(409, `Mancano dei passaggi: ${cur.blocker}. Chiudila comunque solo se la RDA è stata annullata o respinta.`, { needsConfirm: true });
   if (input?.status === "done" && cur.status === "open" && cur.sourcingRequired && cur.sourcingStatus !== "ok") {
     throw new HttpError(409, cur.sourcingStatus === "pending"
       ? "L'eccezione per questa RDA è in attesa di approvazione del Manager: potrai chiuderla dopo l'approvazione"
@@ -399,22 +422,10 @@ const OUTCOME_LABEL: Record<ContractOutcome, string> = { renewed: "Rinnovato", r
 const isoDay = (v: unknown) => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) && !Number.isNaN(new Date(v).getTime()) ? v : null);
 const nowTs = () => new Date().toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" });
 
-/** Cosa manca per chiudere una pratica (rinnovo o acquisto manuale); null = si può chiudere. */
+/** Cosa manca per chiudere una pratica; null = tutti i passaggi sono fatti. */
 function closeBlocker(t: Task): string | null {
-  if (t.source === "manual") {
-    if (t.kind !== "purchase") return null;
-    if (t.sourcingRequired && t.sourcingStatus !== "ok") return t.sourcingStatus === "pending" ? "L'eccezione al confronto è in attesa del Manager" : "Acquisto sopra soglia: registra il confronto con un altro fornitore (o strategica, single source, eccezione)";
-    if (!t.newContractId && !t.documents.some(d => d.kind === "offer" || d.kind === "contract")) return "Allega l'offerta accettata o registra il contratto firmato";
-    if (!t.poNumbers.length && !t.noPoReason) return "Indica il numero di PO, oppure perché non serve";
-    return null;
-  }
-  if (!t.outcome) return "Registra prima l'esito del rinnovo: rinnovo, nuovo contratto, proroga o cessazione";
-  if (t.outcome === "renewed" || t.outcome === "replaced") {
-    if (!t.newContractId) return "Carica il nuovo contratto";
-    if (t.sourcingRequired && t.sourcingStatus !== "ok") return t.sourcingStatus === "pending" ? "L'eccezione al confronto è in attesa del Manager" : "Registra il confronto con un altro fornitore (o strategica, single source, eccezione)";
-    if (!t.poNumbers.length && !t.noPoReason) return "Indica il numero di PO, oppure perché non serve";
-  }
-  return null;
+  if (t.source === "manual" && t.kind !== "purchase") return null;
+  return blockerOf(taskSteps(t));
 }
 /**
  * Collega in automatico il PO ai rinnovi firmati che lo aspettano: tramite le RDA indicate nella pratica,
@@ -577,6 +588,14 @@ export async function setTaskLinks(user: User, id: number, input: Row): Promise<
     if (t.source === "rda" && t.meta.io && Object.keys(t.meta.io).length) bad("Questa RDA ha già l'internal order da SAP");
     vals.push(io); sets.push(`meta = meta || jsonb_build_object('internalOrder', $${vals.length}::text)`);
   }
+  if (input?.contractStatus !== undefined) {
+    if (t.source === "contract") bad("Per i rinnovi il contratto si registra con l'esito");
+    const cs = String(input.contractStatus), note = str(input?.contractNote, 500);
+    if (!["", "not_needed", "negotiating", "signed"].includes(cs)) bad("Stato del contratto non valido");
+    if (cs === "signed" && !t.newContractId && !t.documents.some(d => d.kind === "offer" || d.kind === "contract" || d.kind === "addendum")) bad("Allega prima l'offerta accettata o il contratto firmato");
+    if (cs === "not_needed" && note.length < 5) bad("Spiega perché non serve un contratto");
+    vals.push(cs); sets.push(`contract_status = $${vals.length}`); vals.push(cs === "not_needed" || cs === "negotiating" ? note : ""); sets.push(`contract_note = $${vals.length}`);
+  }
   if (input?.noPoReason !== undefined) { const r = str(input.noPoReason, 500); if (r && r.length < 5) bad("Spiega perché il PO non serve"); vals.push(r); sets.push(`no_po_reason = $${vals.length}`); }
   if (!sets.length) return t;
   // Una RDA già arrivata da SAP come task a sé viene unita a questa pratica, per non lavorarla due volte.
@@ -592,6 +611,20 @@ export async function setTaskLinks(user: User, id: number, input: Row): Promise<
   await getPool().query(`update tasks set ${sets.join(", ")}, updated_at = now() where id = $1`, vals);
   await autoLinkPos(getPool());
   return closeIfComplete(user, id);
+}
+
+/** Sceglie il fornitore della pratica tra quelli registrati, attivi e qualificati. */
+export async function setTaskSupplier(user: User, id: number, input: Row): Promise<TaskDetail> {
+  const t = await getTask(user, id);
+  if (t.source === "contract" || (t.source === "manual" && t.kind !== "purchase")) bad("Il fornitore si sceglie sulle RDA e sugli acquisti");
+  if (t.status !== "open") bad("La pratica è chiusa");
+  const sid = input?.supplierId === null ? null : Number(input?.supplierId);
+  if (sid === null) { await getPool().query("update tasks set chosen_supplier_id = null, chosen_supplier_name = '', updated_at = now() where id = $1", [id]); return getTask(user, id); }
+  if (!Number.isInteger(sid)) bad("Scegli un fornitore");
+  const ok = (await listEligibleSuppliers()).find(x => x.id === sid);
+  if (!ok) throw new HttpError(409, "Il fornitore non è registrato, attivo e qualificato: invitalo o aggiorna i suoi documenti dal modulo Fornitori");
+  await getPool().query("update tasks set chosen_supplier_id = $2, chosen_supplier_name = $3, updated_at = now() where id = $1", [id, sid, ok.name]);
+  return getTask(user, id);
 }
 
 /** Per un rinnovo senza RDA: le RDA aperte che probabilmente sono la sua (stesso richiedente del BO, importo simile, fornitore nel testo). */

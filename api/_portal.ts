@@ -36,9 +36,9 @@ function mapSupplier(r: Row): Base {
 
 const SELECT = "select s.*, rb.name as reference_buyer_name from suppliers s left join users rb on rb.id = s.reference_buyer_id";
 
-export async function listVendors(user: User): Promise<SupplierSummary[]> {
+async function vendorSummaries(whereSql: string): Promise<SupplierSummary[]> {
   const db = getPool();
-  const { rows } = await db.query(`select s.*, rb.name as reference_buyer_name from suppliers s left join users rb on rb.id = s.reference_buyer_id where ${visibleWhere(user)} order by s.updated_at desc`);
+  const { rows } = await db.query(`select s.*, rb.name as reference_buyer_name from suppliers s left join users rb on rb.id = s.reference_buyer_id where ${whereSql} order by s.updated_at desc`);
   const ids = rows.map(r => r.id);
   const docs = ids.length ? (await db.query("select supplier_id, type, valid_until from supplier_documents where supplier_id = any($1)", [ids])).rows : [];
   const cat = await loadCatalog(db);
@@ -49,6 +49,13 @@ export async function listVendors(user: User): Promise<SupplierSummary[]> {
     const qualification = qualificationOf(r.status, resolveDocTypes(cat.types, cat.rules, data.address?.country, r.industry_code), mine);
     return { ...rest, qualification, bankChanged: false, country: data.address?.country ?? "", legalName: data.company?.legalName ?? r.name, documentCount: mine.length, duplicate: dup.has(r.id) };
   });
+}
+export const listVendors = (user: User): Promise<SupplierSummary[]> => vendorSummaries(visibleWhere(user));
+
+/** Fornitori che si possono scegliere per una pratica: registrati, attivi e con qualifica non scaduta. Vale per tutto il personale acquisti, non solo per il buyer di riferimento. */
+export async function listEligibleSuppliers(): Promise<{ id: number; name: string; sapCode: string | null; qualification: SupplierSummary["qualification"] }[]> {
+  return (await vendorSummaries("s.status = 'registered' and s.lifecycle = 'active'")).filter(x => x.qualification !== "lapsed")
+    .map(x => ({ id: x.id, name: x.legalName || x.name, sapCode: x.sapCode, qualification: x.qualification })).sort((a, b) => a.name.localeCompare(b.name, "it"));
 }
 
 async function loadFull(db: Queryable, id: number, forSupplier = false): Promise<Supplier | undefined> {

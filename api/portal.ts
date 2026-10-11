@@ -21,12 +21,12 @@ import { createTestAccesses, removeTestAccesses, createDemoSupplier, resetTestSu
 import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_budget-demo.js";
 import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudget } from "./_budget.js";
 import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
-import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, setTaskLinks, suggestRdas, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
+import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, setTaskLinks, setTaskSupplier, suggestRdas, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
 import {
   documentOwner, activateInvite, addMyDocument, deleteInvite, deleteMyDocument, documentForDownload, getMySupplier, getVendor, inviteInfo,
-  inviteSupplier, listVendors, loadConfig, reinviteSupplier, saveConfig, saveMyData, submitMyRegistration, vendorAction,
+  inviteSupplier, listEligibleSuppliers, listVendors, loadConfig, reinviteSupplier, saveConfig, saveMyData, submitMyRegistration, vendorAction,
 } from "./_portal.js";
 import { DOC_EXTENSIONS, DOC_MIME, MAX_DOC_BYTES, SUPPLIER_FILE_PATH_RE } from "./_supplier-rules.js";
 import type { VendorAction } from "../src/types.ts";
@@ -208,6 +208,8 @@ async function handle(request: Request): Promise<Response> {
       if (op === "task-outcome" && method === "POST") return json({ task: await setRenewalOutcome(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-contract" && method === "POST") return json({ task: await registerPurchaseContract(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-rda-suggest" && method === "GET") return json({ suggestions: await suggestRdas(user, idOf(url)) });
+      if (op === "task-supplier" && method === "POST") return json({ task: await setTaskSupplier(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-suppliers" && method === "GET") return json({ suppliers: await listEligibleSuppliers() });
       if (op === "task-links" && method === "POST") return json({ task: await setTaskLinks(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-doc" && method === "POST") return json({ task: await addTaskDocument(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-doc" && method === "DELETE") {

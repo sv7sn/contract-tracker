@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Contract, ContractOutcome, PlanStep, RdaSuggestion, Saving, SourcingMode, SourcingQuote, SupplierSummary, Task, TaskDetail, TaskList, User } from "../types.ts";
+import type { Contract, ContractOutcome, EligibleSupplier, PlanStep, RdaSuggestion, Saving, SourcingMode, SourcingQuote, SupplierSummary, Task, TaskDetail, TaskList, User } from "../types.ts";
 import { computeSaving } from "../lib/saving.ts";
 import { OutcomeCard, PraticaCard, RenewalCard } from "./TaskPratica.tsx";
 import { ApiError, importSapFile, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmt, fmtDate, isoDate, NOW } from "../lib/format.ts";
 import { stepTemplate } from "../lib/plan.ts";
+import { taskSteps } from "../taskSteps.ts";
 import { Avatar, Card, CardTitle, EmptyState, Field, Fold } from "../components/ui.tsx";
 import { AlertTriangle, Check, CheckCircle2, FileText, Loader2, Paperclip, Plus, RotateCcw, Scale, Search, Send, Trash2, Upload } from "../components/icons.tsx";
 import { CloseButton, KV, Notice, Portal, SupplierPicker } from "../components/vendorUi.tsx";
@@ -355,21 +356,32 @@ function RdaSuggest({ t, fail, onLinked }: { t: TaskDetail; fail: (e: unknown) =
   );
 }
 
+const STEP_ACTION: Record<string, (t: TaskDetail) => { label: string; id: string } | null> = {
+  supplier: t => ({ label: t.chosenSupplierId === null ? "Scegli il fornitore" : "Registra il confronto", id: "sec-sourcing" }),
+  io: () => ({ label: "Indica l'internal order", id: "sec-pratica" }),
+  contract: t => ({ label: t.source === "contract" ? "Carica il nuovo contratto" : "Aggiorna il contratto", id: t.source === "contract" ? "sec-esito" : "sec-pratica" }),
+  po: t => (t.source === "rda" ? null : { label: "Indica il PO", id: "sec-pratica" }),
+  outcome: () => ({ label: "Registra l'esito", id: "sec-esito" }),
+};
+
 /** "Prossimo passo": cosa manca per portare avanti la pratica, con un pulsante che porta alla sezione giusta. */
 function NextStep({ t, isManager, threshold }: { t: TaskDetail; isManager: boolean; threshold: number }) {
   type Step = { text: string; action?: { label: string; run: () => void } };
   const steps: Step[] = [];
   if (isManager && t.sourcing?.approval === "pending") steps.push({ text: `Approva o respingi l'eccezione al confronto (${t.sourcing.recordedBy})`, action: { label: "Vai alla scelta del fornitore", run: () => goTo("sec-sourcing") } });
-  else if (t.sourcingRequired && t.sourcingStatus === "pending") steps.push({ text: "Eccezione al confronto in attesa dell'approvazione del Manager" });
-  else if (t.sourcingRequired && t.sourcingStatus !== "ok") steps.push({ text: `Sopra ${fmt(threshold)}: serve il confronto tra fornitori (o strategico, single source, eccezione)`, action: { label: "Registra la scelta del fornitore", run: () => goTo("sec-sourcing") } });
-  const io = Object.keys(t.meta.io ?? {})[0] || t.meta.internalOrder;
-  if ((t.source === "rda" || t.source === "manual") && !io) steps.push({ text: "Manca l'internal order del Master Plan", action: { label: "Indicalo nella pratica", run: () => goTo("sec-pratica") } });
-  if (t.source === "contract" && !t.outcome) steps.push({ text: "Registra l'esito del rinnovo (rinnovato, nuovo contratto, prorogato, cessato)" });
-  if (t.source === "contract" && t.outcome && !t.poNumbers.length && !t.noPoReason) steps.push({ text: "Manca il PO (o indica che non serve)", action: { label: "Vai alla pratica", run: () => goTo("sec-pratica") } });
-  if (t.source === "manual" && t.kind === "purchase" && !t.poNumbers.length && !t.noPoReason && !steps.length) steps.push({ text: "Emetti il PO in SAP e indicane il numero (o segna che non serve)", action: { label: "Vai alla pratica", run: () => goTo("sec-pratica") } });
+  for (const st of t.steps) {
+    if (st.info || st.key === "closed" || st.state === "done" || !st.blocker) continue;
+    const act = STEP_ACTION[st.key]?.(t) ?? null;
+    const text = st.key === "supplier" && t.chosenSupplierId !== null && t.sourcingStatus !== "pending" ? `Sopra ${fmt(threshold)}: serve il confronto tra fornitori (o strategico, single source, eccezione)`
+      : st.key === "po" && t.source === "rda" ? "Emetti il PO in SAP: appena arriva l'ordine nell'estrazione, la RDA si chiude da sola" : st.blocker;
+    if (st.key === "supplier" && t.sourcingStatus === "pending" && !isManager) { steps.push({ text }); continue; }
+    steps.push({ text, action: act ? { label: act.label, run: () => goTo(act.id) } : undefined });
+  }
+  const orderIn = t.source === "rda" && t.pos.length > 0 && steps.length > 0;
   const done = steps.length === 0;
-  const text = done ? (t.source === "rda" ? "Nessuna azione richiesta: la RDA si chiude da sola quando in SAP diventa un ordine." : "Tutto a posto: puoi completare la pratica.") : steps[0].text;
-  const tone = done ? [C.green, C.greenBg] : [C.accent, C.accentLight];
+  const text = done ? (t.source === "rda" ? "Nessuna azione richiesta: la RDA si chiude da sola quando in SAP arriva l'ordine." : "Tutto a posto: la pratica si chiude da sola.")
+    : orderIn ? `L'ordine è già in SAP, ma la pratica non è completa: ${steps[0].text}` : steps[0].text;
+  const tone = done ? [C.green, C.greenBg] : orderIn ? [C.red, C.redBg] : [C.accent, C.accentLight];
   return (
     <div style={{ ...sans, background: tone[1], border: `1px solid ${tone[0]}33`, borderRadius: 14, padding: "12px 16px" }}>
       <div style={{ fontSize: 11.5, fontWeight: 700, color: tone[0], textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>{done ? "Situazione" : "Prossimo passo"}</div>
@@ -377,6 +389,58 @@ function NextStep({ t, isManager, threshold }: { t: TaskDetail; isManager: boole
       {!done && steps[0].action && <button onClick={steps[0].action.run} style={{ ...btnPrimary, padding: "7px 14px", fontSize: 13, marginTop: 8 }}>{steps[0].action.label}</button>}
       {steps.length > 1 && <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>{steps.slice(1).map((x, k) => <li key={k}>{x.text}</li>)}</ul>}
     </div>
+  );
+}
+
+/** A che punto è la pratica: passaggi fatti, quello in corso e quelli che mancano. Un tocco porta alla sezione relativa. */
+function TaskProgress({ t, plan }: { t: TaskDetail; plan: PlanStep[] }) {
+  const steps = taskSteps(t, plan);
+  return (
+    <ol aria-label="Avanzamento della pratica" style={{ listStyle: "none", margin: 0, padding: "2px 0 6px", display: "flex", overflowX: "auto", gap: 0, WebkitOverflowScrolling: "touch" }}>
+      {steps.map((st, k) => {
+        const color = st.state === "done" ? C.green : st.state === "current" ? C.accent : C.subtle;
+        const sub = st.detail ?? (st.date ? fmtDate(st.date) : st.state === "current" ? "qui adesso" : "");
+        return (
+          <li key={st.key} style={{ flex: "1 0 58px", minWidth: 58, textAlign: "center", position: "relative" }}>
+            {k > 0 && <span aria-hidden style={{ position: "absolute", top: 13, left: "-50%", width: "100%", height: 2, background: st.state === "done" || steps[k - 1].state === "done" ? "#bfe3cf" : C.borderLight }} />}
+            <button onClick={() => st.section && goTo(st.section)} disabled={!st.section} aria-label={`${st.label}: ${st.state === "done" ? "fatto" : st.state === "current" ? "in corso" : "da fare"}`} style={{ position: "relative", background: "none", border: "none", padding: 0, cursor: st.section ? "pointer" : "default", width: "100%" }}>
+              <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 28, height: 28, borderRadius: "50%", background: st.state === "done" ? C.green : st.state === "current" ? C.accent : "#fff", border: `2px solid ${color}`, color: "#fff", boxSizing: "border-box" }}>
+                {st.state === "done" ? <Check size={15} /> : st.state === "current" ? <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#fff" }} /> : null}
+              </span>
+              <span style={{ ...sans, display: "block", marginTop: 4, fontSize: 11.5, fontWeight: st.state === "current" ? 700 : 600, color: st.state === "todo" ? C.muted : C.text, lineHeight: 1.2 }}>{st.label}</span>
+              <span className="one-line" style={{ ...sans, display: "block", fontSize: 10.5, color: st.state === "current" ? C.accent : C.subtle, minHeight: 13, padding: "0 2px" }}>{sub}</span>
+            </button>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Il fornitore si sceglie sempre tra quelli registrati, attivi e qualificati: così è garantito che sia a sistema. */
+function ChosenSupplier({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown) => string; onSaved: (t: TaskDetail, msg: string) => void }) {
+  const [list, setList] = useState<EligibleSupplier[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { let off = false; portalApi.eligibleSuppliers().then(x => { if (!off) setList(x); }).catch(() => { if (!off) setList([]); }); return () => { off = true; }; }, []);
+  const choose = async (v: string) => {
+    setBusy(true); setErr(null);
+    try { onSaved(await portalApi.setTaskSupplier(t.id, v ? Number(v) : null), v ? "Fornitore scelto" : "Scelta del fornitore rimossa"); } catch (e) { setErr(fail(e)); }
+    setBusy(false);
+  };
+  const missing = t.chosenSupplierId !== null && list && !list.some(x => x.id === t.chosenSupplierId);
+  return (
+    <Card>
+      <Field label="Fornitore scelto" htmlFor="chosen-supplier">
+        <select id="chosen-supplier" value={t.chosenSupplierId ?? ""} onChange={e => choose(e.target.value)} disabled={busy || t.status !== "open" || !list} style={iStyle}>
+          <option value="">{list ? "Scegli un fornitore registrato e qualificato…" : "Carico i fornitori…"}</option>
+          {missing && <option value={t.chosenSupplierId ?? ""}>{t.chosenSupplierName} (non più qualificato)</option>}
+          {(list ?? []).map(x => <option key={x.id} value={x.id}>{x.name}{x.sapCode ? ` · SAP ${x.sapCode}` : ""}{x.qualification === "expiring" ? " · documenti in scadenza" : ""}</option>)}
+        </select>
+      </Field>
+      <div style={{ ...sans, fontSize: 12, color: missing ? C.red : C.muted, marginTop: 6 }}>{missing ? "Il fornitore scelto non risulta più qualificato: sceglierne un altro o aggiornare i suoi documenti." : "Solo fornitori registrati, attivi e con qualifica valida. Il fornitore non c'è? Invitalo dal modulo Fornitori."}</div>
+      {err && <Notice kind="error">{err}</Notice>}
+    </Card>
   );
 }
 
@@ -394,7 +458,12 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
 
   const patch = async (p: Record<string, unknown>, msg?: string) => {
     setBusy(true); setError(null);
-    try { setT(await portalApi.updateTask(id, p)); onChanged(); if (msg) notify(msg); } catch (err) { setError(fail(err)); }
+    try { setT(await portalApi.updateTask(id, p)); onChanged(); if (msg) notify(msg); }
+    catch (err) {
+      // Pratica incompleta: si può chiudere a mano solo su conferma (RDA annullata o respinta).
+      if (err instanceof ApiError && err.data.needsConfirm && window.confirm(`${err.message}\n\nChiuderla comunque?`)) { try { setT(await portalApi.updateTask(id, { ...p, force: true })); onChanged(); if (msg) notify(msg); } catch (e2) { setError(fail(e2)); } }
+      else setError(fail(err));
+    }
     setBusy(false);
   };
   const remove = async () => {
@@ -425,6 +494,7 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
             {t.status === "done" && rda && t.doneReason === "removed_from_sap" && <Notice kind="info"><b>Chiusa automaticamente:</b> la RDA non risulta più aperta in SAP (ordinata, rifiutata o cancellata). Se in seguito arriva l'elenco degli ordini con il suo PO, lo vedrai qui.</Notice>}
             {t.status === "open" && t.pos.length > 0 && <Notice kind="info">Per questa RDA esiste già un ordine ({t.pos.map(p => p.po).join(", ")}): il task si chiude quando la RDA non è più aperta in SAP.</Notice>}
             {t.status === "open" && renewal && t.rdaNumbers.length === 0 && <RdaSuggest t={t} fail={fail} onLinked={x => { setT(x); onChanged(); notify("RDA collegata al rinnovo"); }} />}
+            {(rda || renewal || purchase) && <TaskProgress t={t} plan={t.contractId ? plans[t.contractId] ?? [] : []} />}
             {t.status === "open" && (rda || renewal || purchase) && <NextStep t={t} isManager={isManager} threshold={threshold} />}
             <Card>
               <KV rows={[
@@ -435,14 +505,15 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
             </Card>
 
             {(renewal || purchase) && (
-              <Fold title={renewal ? "Esito del rinnovo" : "Contratto della pratica"} badge={t.outcome ? { label: OUTCOME_LABEL[t.outcome] ?? "Registrato", color: C.green, bg: C.greenBg } : t.status === "open" ? { label: "Da registrare", color: C.yellow, bg: C.yellowBg } : null} defaultOpen={!t.outcome && t.status === "open"}>
+              <Fold id="sec-esito" title={renewal ? "Esito del rinnovo" : "Contratto della pratica"} badge={t.outcome ? { label: OUTCOME_LABEL[t.outcome] ?? "Registrato", color: C.green, bg: C.greenBg } : t.status === "open" ? { label: "Da registrare", color: C.yellow, bg: C.yellowBg } : null} defaultOpen={!t.outcome && t.status === "open"}>
                 <OutcomeCard t={t} contracts={contracts} fail={fail} onOpenContract={onOpenContract} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />
               </Fold>
             )}
-            {(rda || renewal || purchase) && (t.sourcingRequired || t.sourcing) && (
-              <Fold id="sec-sourcing" title="Scelta del fornitore" badge={t.sourcing?.approval === "pending" ? { label: "Eccezione da approvare", color: C.purple, bg: C.purpleBg } : t.sourcingStatus === "ok" ? { label: "Completa", color: C.green, bg: C.greenBg } : t.sourcingRequired ? { label: "Da fare", color: C.yellow, bg: C.yellowBg } : null} defaultOpen={t.status === "open" && t.sourcingStatus !== "ok"}>
-                {t.status === "open" && <RfqCard t={t} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} notify={notify} />}
-                <SourcingCard t={t} threshold={threshold} isManager={isManager} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />
+            {(rda || purchase || (renewal && (t.sourcingRequired || t.sourcing))) && (
+              <Fold id="sec-sourcing" title="Scelta del fornitore" badge={t.sourcing?.approval === "pending" ? { label: "Eccezione da approvare", color: C.purple, bg: C.purpleBg } : t.steps.find(x => x.key === "supplier")?.state === "done" ? { label: "Completa", color: C.green, bg: C.greenBg } : t.status === "open" ? { label: "Da fare", color: C.yellow, bg: C.yellowBg } : null} defaultOpen={t.status === "open" && t.steps.find(x => x.key === "supplier")?.state !== "done"}>
+                {!renewal && <ChosenSupplier t={t} fail={fail} onSaved={(x, m) => { setT({ ...x }); onChanged(); notify(m); }} />}
+                {(t.sourcingRequired || t.sourcing) && t.status === "open" && <RfqCard t={t} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} notify={notify} />}
+                {(t.sourcingRequired || t.sourcing) && <SourcingCard t={t} threshold={threshold} isManager={isManager} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
               </Fold>
             )}
             {(rda || renewal || purchase) && (
@@ -451,7 +522,7 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
               </Fold>
             )}
             {renewal && (
-              <Fold title="Contratto e piano di rinnovo" hint={t.meta.supplier} defaultOpen={false}>
+              <Fold id="sec-piano" title="Contratto e piano di rinnovo" hint={t.meta.supplier} defaultOpen={false}>
                 <RenewalCard t={t} contracts={contracts} plan={t.contractId ? plans[t.contractId] ?? [] : []} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onOpenContract={onOpenContract} />
               </Fold>
             )}

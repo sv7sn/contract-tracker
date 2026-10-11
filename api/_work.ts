@@ -33,6 +33,7 @@ export async function myWork(user: User): Promise<WorkItem[]> {
       if (overdue > 0) items.push({ kind: "task_late", urgency: overdue > 7 ? 3 : 2, title: t.title, detail: `${label} in ritardo di ${overdue} ${plural(overdue, "giorno", "giorni")}${t.assigneeName && manager ? ` · ${t.assigneeName}` : ""}`, days: overdue, target });
       else if (t.due && daysBetween(t.due, t0) <= 3) items.push({ kind: "task_soon", urgency: 1, title: t.title, detail: `${label} da chiudere ${daysBetween(t.due, t0) === 0 ? "oggi" : `entro ${daysBetween(t.due, t0)} ${plural(daysBetween(t.due, t0), "giorno", "giorni")}`}`, days: -daysBetween(t.due, t0), target });
       if (t.sourcingRequired && t.sourcingStatus === "missing" && t.source !== "contract") items.push({ kind: "sourcing_missing", urgency: 2, title: t.title, detail: "Sopra soglia: manca il confronto tra fornitori", days: null, target });
+      if (t.source === "rda" && t.pos.length && t.blocker) items.push({ kind: "po_gap", urgency: 3, title: t.title, detail: `Ordine già emesso in SAP (${t.pos.map(p => p.po).join(", ")}) ma manca: ${t.blocker}`, days: null, target });
       if (manager && t.sourcing?.approval === "pending") items.push({ kind: "exception", urgency: 3, title: t.title, detail: `Eccezione al confronto da approvare (${t.sourcing.recordedBy})`, days: null, target });
     }
     const unassigned = open.filter(t => t.assigneeId === null && t.source !== "contract");
