@@ -631,25 +631,27 @@ export async function setTaskLinks(user: User, id: number, input: Row): Promise<
   return closeIfComplete(user, id);
 }
 
-/** Assegna una riga di budget (internal order) a un buyer; le RDA già aperte con quell'internal order, non assegnate a mano, passano a lui. */
+/** Scrive l'assegnazione buyer di una o più righe di budget; le RDA aperte con quell'internal order, non assegnate a mano, passano al buyer. */
+export async function assignIoBuyers(db: Queryable, pairs: { io: string; userId: number | null }[], actor: string): Promise<{ assigned: number; moved: number }> {
+  let assigned = 0, moved = 0;
+  for (const { io, userId } of pairs) {
+    if (userId === null) { await db.query("delete from io_buyers where io = $1", [io]); continue; }
+    await db.query("insert into io_buyers (io, user_id) values ($1,$2) on conflict (io) do update set user_id = excluded.user_id", [io, userId]);
+    const r = await db.query("update tasks set assignee_id = $2, assignee_auto = true, updated_at = now() where source = 'rda' and status = 'open' and (assignee_auto or assignee_id is null) and jsonb_exists(meta->'io', $1) and assignee_id is distinct from $2", [io, userId]);
+    assigned++; moved += r.rowCount ?? 0;
+  }
+  if (pairs.length === 1) await db.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'budget',$2,$3,$4)", [actor, pairs[0].userId === null ? "delete" : "update", pairs[0].io, pairs[0].userId === null ? "Buyer tolto dalla riga di budget" : `Buyer assegnato alla riga di budget (${moved} RDA aperte passate a lui)`]);
+  return { assigned, moved };
+}
+
+/** Assegna una riga di budget (internal order) a un buyer, a mano dal Budget. */
 export async function setIoBuyer(user: User, ioIn: unknown, userIn: unknown): Promise<{ moved: number }> {
   if (user.role !== "manager") throw new HttpError(403, "Solo il Manager assegna le righe di budget ai buyer");
   const io = str(ioIn, 40).replace(/\s+/g, "");
   if (!io) bad("Indica l'internal order");
   const uid = userIn === null || userIn === undefined || userIn === "" ? null : Number(userIn);
-  const db = getPool();
-  if (uid !== null && !(await db.query("select 1 from users where id = $1 and active and role in ('buyer','manager')", [uid])).rows.length) bad("Buyer non valido");
-  let moved = 0;
-  await inTransaction(async tx => {
-    if (uid === null) await tx.query("delete from io_buyers where io = $1", [io]);
-    else {
-      await tx.query("insert into io_buyers (io, user_id) values ($1,$2) on conflict (io) do update set user_id = excluded.user_id", [io, uid]);
-      const r = await tx.query("update tasks set assignee_id = $2, assignee_auto = true, updated_at = now() where source = 'rda' and status = 'open' and (assignee_auto or assignee_id is null) and jsonb_exists(meta->'io', $1) and assignee_id is distinct from $2", [io, uid]);
-      moved = r.rowCount ?? 0;
-    }
-    await tx.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'budget',$2,$3,$4)", [user.name, uid === null ? "delete" : "update", io, uid === null ? "Buyer tolto dalla riga di budget" : `Buyer assegnato alla riga di budget (${moved} RDA aperte passate a lui)`]);
-  });
-  return { moved };
+  if (uid !== null && !(await getPool().query("select 1 from users where id = $1 and active and role in ('buyer','manager')", [uid])).rows.length) bad("Buyer non valido");
+  return { moved: (await inTransaction(tx => assignIoBuyers(tx, [{ io, userId: uid }], user.name))).moved };
 }
 
 /** Sceglie il fornitore della pratica tra quelli registrati, attivi e qualificati. */

@@ -5,6 +5,7 @@ import { getPool, inTransaction } from "./_db.js";
 import { HttpError } from "./_http.js";
 import { categoryScope } from "./_scope.js";
 import { parseSheet } from "./_sap-files.js";
+import { assignIoBuyers } from "./_tasks.js";
 import { isXlsx, parseCsvRows, parseXlsx } from "./_xlsx.js";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -23,6 +24,7 @@ const HEADERS: Record<string, string[]> = {
   costCenter: ["centrodicosto", "costcenter", "cdc", "costctr", "centrocosto"],
   glAccount: ["conto", "glaccount", "gl", "contocontabile", "account", "glacct", "natura"],
   category: ["categoria", "category", "famiglia", "categoriamerceologica"],
+  buyer: ["buyer", "buyerassegnato", "assegnatoa", "buyerdiriferimento", "responsabileacquisti", "acquirente", "referenteacquisti"],
 };
 /** Colonne che sono versioni del Master Plan: "MP26" (prima versione) e le revisioni "R3", "R5", "Rev 2", "FC1"… */
 const VERSION_COL = /^(mp\d{2}(\d{2})?|r\d{1,2}|rev\d{1,2}|fc\d{0,2}|forecast\d{0,2})$/;
@@ -39,7 +41,7 @@ export function parseAmount(v: string | null): number | null {
   const n = Number(s);
   return Number.isFinite(n) ? (neg ? -n : n) : null;
 }
-export interface ParsedLine { io: string; description: string; function: string; costCenter: string; glAccount: string; category: string; amount: number }
+export interface ParsedLine { io: string; description: string; function: string; costCenter: string; glAccount: string; category: string; buyer: string; amount: number }
 export interface ParsedBudget { versions: { label: string; lines: ParsedLine[] }[]; year: number | null }
 const TOTAL_ROW = /^(totale|total|grandtotal|totalegenerale|totalecomplessivo)/;
 /**
@@ -64,7 +66,7 @@ export function parseBudget(rows: (string | null)[][]): ParsedBudget {
   for (const r of rows.slice(h + 1)) {
     const io = get(r, cols.io).replace(/\s+/g, "");
     if (!io || TOTAL_ROW.test(norm(io))) continue;
-    const base = { io: io.slice(0, 40), description: get(r, cols.description).slice(0, 300), function: get(r, cols.function).slice(0, 120), costCenter: get(r, cols.costCenter).slice(0, 40), glAccount: get(r, cols.glAccount).slice(0, 40), category: get(r, cols.category).slice(0, 120) };
+    const base = { io: io.slice(0, 40), description: get(r, cols.description).slice(0, 300), function: get(r, cols.function).slice(0, 120), costCenter: get(r, cols.costCenter).slice(0, 40), glAccount: get(r, cols.glAccount).slice(0, 40), buyer: get(r, cols.buyer).slice(0, 120), category: get(r, cols.category).slice(0, 120) };
     amountCols.forEach((c, k) => {
       const amount = parseAmount(get(r, c.i));
       if (amount === null) return;
@@ -89,7 +91,7 @@ function readRows(data: Uint8Array): (string | null)[][] {
   return parseCsvRows(new TextDecoder("utf-8").decode(data).replace(/^\uFEFF/, ""));
 }
 
-export interface BudgetImport { year: number; created: MpVersion[]; updated: MpVersion[] }
+export interface BudgetImport { year: number; created: MpVersion[]; updated: MpVersion[]; buyersAssigned: number; buyersMoved: number; buyersUnmatched: string[] }
 /**
  * Carica il file di Finance. Con le colonne di versione (MP26, R3, R5…) ogni colonna è una versione: quelle già presenti
  * si aggiornano, le nuove si aggiungono in ordine. Con una sola colonna "Budget" si aggiunge una nuova versione.
@@ -106,7 +108,7 @@ export async function importBudget(user: User, yearIn: number, label: string, fi
   if (fileName !== "simulazione-master-plan.csv" && (await getPool().query("select 1 from mp_versions where year = $1 and file_name = 'simulazione-master-plan.csv' limit 1", [year])).rows.length)
     throw new HttpError(409, `Per il ${year} è caricata la simulazione: eliminala (pulsante in alto) prima di caricare il Master Plan vero`);
   return inTransaction(async db => {
-    const out: BudgetImport = { year, created: [], updated: [] };
+    const out: BudgetImport = { year, created: [], updated: [], buyersAssigned: 0, buyersMoved: 0, buyersUnmatched: [] };
     for (const pv of parsed.versions) {
       const lab = (multi ? pv.label : label.trim()).slice(0, 60);
       const existing = multi ? (await db.query("select * from mp_versions where year = $1 and upper(label) = upper($2)", [year, lab])).rows[0] : undefined;
@@ -128,6 +130,18 @@ export async function importBudget(user: User, yearIn: number, label: string, fi
       const info: MpVersion = { id: v.id, year, version: v.version, label: v.label, fileName: v.file_name, uploadedBy: user.name, uploadedAt: new Date(v.uploaded_at).toISOString(), lines: pv.lines.length, total };
       (existing ? out.updated : out.created).push(info);
       await db.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'budget',$2,$3,$4)", [user.name, existing ? "update" : "create", v.label, `${existing ? "Aggiornata" : "Caricata"} la versione ${v.label} del Master Plan ${year} (n. ${v.version}): ${pv.lines.length} internal order, totale ${Math.round(total).toLocaleString("it-IT")} €`]);
+    }
+    // Colonna "Buyer" del file: assegna le righe di budget ai buyer (per nome o email); le RDA aperte di quelle righe passano a loro.
+    const wanted = new Map<string, string>();
+    for (const pv of parsed.versions) for (const l of pv.lines) if (l.buyer) wanted.set(l.io, l.buyer);
+    if (wanted.size) {
+      const users = (await db.query("select id, name, email from users where active and role in ('buyer','manager')")).rows;
+      const find = (t: string) => users.find(u => norm(u.name) === norm(t) || norm(u.email) === norm(t));
+      const pairs: { io: string; userId: number }[] = [], miss = new Set<string>();
+      for (const [io, b] of wanted) { const u = find(b); if (u) pairs.push({ io, userId: u.id }); else miss.add(b); }
+      const r = await assignIoBuyers(db, pairs, user.name);
+      out.buyersAssigned = r.assigned; out.buyersMoved = r.moved; out.buyersUnmatched = [...miss].slice(0, 20);
+      await db.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'budget','update','buyer delle righe',$2)", [user.name, `Dal file: ${r.assigned} righe assegnate ai buyer, ${r.moved} RDA aperte passate a loro${miss.size ? `; non riconosciuti: ${[...miss].join(", ")}` : ""}`]);
     }
     return out;
   });
@@ -260,4 +274,4 @@ export async function budgetIo(user: User, io: string, yearIn?: number): Promise
 }
 
 /** Modello da compilare (CSV con ";", si apre con Excel). */
-export const BUDGET_TEMPLATE = "\uFEFFRow Labels;CDC;CDC NAME;NAME;CATEGORIA;MP26;R3;R5\nHQ2505245001;5245;R&D Agro;MARTANI - CONTRATTO;OTHERS;61000;61000;58000\n";
+export const BUDGET_TEMPLATE = "\uFEFFRow Labels;CDC;CDC NAME;NAME;CATEGORIA;BUYER;MP26;R3;R5\nHQ2505245001;5245;R&D Agro;MARTANI - CONTRATTO;OTHERS;Mario Bianchi;61000;61000;58000\n";
