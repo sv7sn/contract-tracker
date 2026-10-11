@@ -6,8 +6,8 @@ import { ApiError, importSapFile, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmt, fmtDate, isoDate, NOW } from "../lib/format.ts";
 import { stepTemplate } from "../lib/plan.ts";
-import { Avatar, Card, CardTitle, EmptyState, Field, Grid, StatCard } from "../components/ui.tsx";
-import { AlertTriangle, Check, CheckCircle2, Clock, FileText, Inbox, Loader2, Paperclip, Plus, RotateCcw, Scale, Search, Send, Trash2, Upload } from "../components/icons.tsx";
+import { Avatar, Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
+import { AlertTriangle, Check, CheckCircle2, FileText, Loader2, Paperclip, Plus, RotateCcw, Scale, Search, Send, Trash2, Upload } from "../components/icons.tsx";
 import { CloseButton, KV, Notice, Portal, SupplierPicker } from "../components/vendorUi.tsx";
 import { RfqCard } from "./RfqCard.tsx";
 
@@ -38,12 +38,6 @@ const SOURCING_LABEL: Record<SourcingMode, string> = { comparison: "Confronto tr
 const sourcingGap = (t?: Task) => !!t && t.sourcingRequired && t.sourcingStatus !== "ok";
 
 const chip = (label: string, color: string, bg: string) => <span style={{ ...sans, background: bg, color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}>{label}</span>;
-const dueText = (it: Item) => {
-  if (!it.due) return "—";
-  if (it.status === "done") return fmtDate(it.due);
-  const d = daysFrom(it.due);
-  return `${fmtDate(it.due)} · ${d < 0 ? `in ritardo di ${-d} gg` : d === 0 ? "oggi" : `tra ${d} gg`}`;
-};
 const overdue = (it: Item) => it.status !== "done" && !!it.due && daysFrom(it.due) < 0;
 
 /** Task del team: RDA da SAP, task creati a mano e attività dei piani di rinnovo dei contratti. */
@@ -55,6 +49,8 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
   const [status, setStatus] = useState<"open" | "done" | "all" | "sourcing">("open");
   const [threshold, setThreshold] = useState(10000);
   const [who, setWho] = useState("all");
+  const [quick, setQuick] = useState<Quick | null>(null);
+  const [people, setPeople] = useState<Map<string, string>>(new Map());
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<number | null>(initialOpenId ?? null);
   useEffect(() => { if (initialOpenId) onFocusUsed?.(); }, [initialOpenId, onFocusUsed]);
@@ -71,6 +67,8 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
   useEffect(() => {
     let off = false;
     Promise.all([portalApi.tasks(), portalApi.config()]).then(([d, c]) => { if (!off) { setData(d); setBuyers(c.buyers.filter(b => b.active)); setThreshold(c.rda.sourcingThreshold); } }).catch(err => { if (!off) setError(fail(err)); });
+    // Il richiedente si mostra con il nome quando il codice utente SAP corrisponde a un Business Owner.
+    portalApi.boUsers().then(u => { if (!off) setPeople(new Map(u.filter(x => x.sapUser).map(x => [x.sapUser.toUpperCase(), x.name]))); }).catch(() => undefined);
     return () => { off = true; };
   }, [fail]);
 
@@ -95,10 +93,11 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return items.filter(i => (origin === "all" || i.origin === origin) && (status === "all" || (status === "sourcing" ? sourcingGap(i.task) : status === "open" ? i.status !== "done" : i.status === "done"))
+    return items.filter(i => (origin === "all" || i.origin === origin) && (status === "all" || (status === "open" ? i.status !== "done" : i.status === "done"))
+      && (!quick || (quick === "late" ? overdue(i) : quick === "sourcing" ? i.status !== "done" && sourcingGap(i.task) : quick === "approval" ? i.task?.sourcing?.approval === "pending" : quick === "unassigned" ? i.status !== "done" && i.assigneeId === null : i.status !== "done"))
       && (who === "all" || (who === "none" ? i.assigneeId === null : String(i.assigneeId) === who)) && (!q || `${i.title} ${i.sub} ${i.assignee}`.toLowerCase().includes(q)))
-      .sort((a, b) => Number(overdue(b)) - Number(overdue(a)) || (a.due ?? "9999").localeCompare(b.due ?? "9999"));
-  }, [items, origin, status, who, search]);
+      .sort((a, b) => (a.due ?? "9999").localeCompare(b.due ?? "9999"));
+  }, [items, origin, status, who, search, quick]);
 
   const open = (i: Item) => { if (i.task) setOpenId(i.task.id); else if (i.contract) onOpenContract(i.contract); };
   const doImport = async (files: FileList | null) => {
@@ -126,98 +125,140 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
 
   const ageDays = (iso: string | null) => (iso ? Math.round((Date.now() - new Date(iso).getTime()) / 864e5) : null);
   const stale = ageDays(data.sapUpdatedAt.pr);
-  const tiles = [
-    { label: "Aperti", value: counts.open, sub: "Da fare", color: C.blue, icon: <Inbox size={18} /> },
-    { label: "In ritardo", value: counts.late, sub: "Scadenza superata", color: C.red, icon: <AlertTriangle size={18} /> },
-    { label: "Entro 7 giorni", value: counts.soon, sub: "In scadenza", color: C.yellow, icon: <Clock size={18} /> },
-    ...(isManager ? [{ label: "Da assegnare", value: counts.unassigned, sub: "Senza buyer", color: C.purple, icon: <Send size={18} /> }] : []),
-    { label: "Confronto fornitori", value: counts.sourcing, sub: `RDA oltre ${fmt(threshold)} da documentare`, color: C.accent, icon: <Scale size={18} /> },
-    ...(isManager && counts.approvals ? [{ label: "Eccezioni da approvare", value: counts.approvals, sub: "Senza confronto tra offerte", color: C.purple, icon: <AlertTriangle size={18} /> }] : []),
-    { label: "Chiusi di recente", value: counts.done, sub: "Ultimi 7 giorni", color: C.green, icon: <CheckCircle2 size={18} /> },
+  const fmtAt = (iso: string | null) => (iso ? new Date(iso).toLocaleString("it-IT", { dateStyle: "short", timeStyle: "short" }) : "mai");
+  // Contatori: ognuno è anche un filtro rapido (si ripreme per toglierlo).
+  const pills: { key: Quick; label: string; value: number; color: string }[] = [
+    { key: "open", label: "Aperti", value: counts.open, color: C.blue },
+    { key: "late", label: "In ritardo", value: counts.late, color: C.red },
+    { key: "sourcing", label: "Da confrontare", value: counts.sourcing, color: C.accent },
+    ...(isManager && counts.approvals ? [{ key: "approval" as Quick, label: "Da approvare", value: counts.approvals, color: C.purple }] : []),
+    ...(isManager && counts.unassigned ? [{ key: "unassigned" as Quick, label: "Da assegnare", value: counts.unassigned, color: C.purple }] : []),
   ];
+  const groups = groupItems(shown);
+  const showWho = isManager && who === "all";
 
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
         <div>
           <div style={{ ...font, fontSize: 18, fontWeight: 700, color: C.text }}>Task</div>
           <div style={{ ...sans, fontSize: 12, color: C.muted }}>{isManager ? "Tutto il team" : "I tuoi task"} · RDA da SAP, contratti e attività manuali</div>
         </div>
-        <button onClick={() => setCreating(true)} style={{ ...btnPrimary, display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 16px", fontSize: 13 }}><Plus size={16} />Nuovo task</button>
+        <button className="desktop-only-flex" onClick={() => setCreating(true)} style={{ ...btnPrimary, alignItems: "center", gap: 7, padding: "9px 16px", fontSize: 13 }}><Plus size={16} />Nuovo task</button>
       </div>
 
-      <Card style={{ marginBottom: 14, padding: "14px 16px" }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 280px", minWidth: 0 }}>
-            <div style={{ ...sans, fontSize: 13, fontWeight: 650, color: C.text }}>Dati da SAP</div>
-            <div style={{ ...sans, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>
-              RDA aggiornate: {data.sapUpdatedAt.pr ? new Date(data.sapUpdatedAt.pr).toLocaleString("it-IT", { dateStyle: "medium", timeStyle: "short" }) : "mai"} · Ordini: {data.sapUpdatedAt.po ? new Date(data.sapUpdatedAt.po).toLocaleString("it-IT", { dateStyle: "medium", timeStyle: "short" }) : "mai"}
-            </div>
-          </div>
-          <input ref={input} type="file" multiple hidden accept=".xls,.xml,.xlsx" onChange={e => doImport(e.target.files)} />
-          <button onClick={() => input.current?.click()} disabled={importing} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", color: C.text, fontSize: 13 }}>{importing ? <Loader2 className="spin" size={15} /> : <Upload size={15} />}Importa i file di SAP</button>
-        </div>
-        {(stale === null || stale >= 2) && <div style={{ marginTop: 10 }}><Notice kind="warn">{stale === null ? "Non è ancora stato importato nessun elenco di RDA." : `L'elenco delle RDA non è aggiornato da ${stale} giorni.`} Carica i due file che SAP invia ogni mattina (RDA aperte e ordini degli ultimi 7 giorni): i task si creano e si chiudono da soli.</Notice></div>}
-      </Card>
+      <div style={{ ...sans, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 12.5, color: C.muted, marginBottom: 10 }}>
+        <span style={{ flex: "1 1 240px", minWidth: 0 }}>SAP · RDA aggiornate {fmtAt(data.sapUpdatedAt.pr)} · ordini {fmtAt(data.sapUpdatedAt.po)}</span>
+        <input ref={input} type="file" multiple hidden accept=".xls,.xml,.xlsx" onChange={e => doImport(e.target.files)} />
+        <button onClick={() => input.current?.click()} disabled={importing} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", color: C.text, fontSize: 12.5 }}>{importing ? <Loader2 className="spin" size={14} /> : <Upload size={14} />}Importa file SAP</button>
+      </div>
+      {(stale === null || stale >= 2) && <Notice kind="warn">{stale === null ? "Non è ancora stato importato nessun elenco di RDA." : `L'elenco delle RDA non è aggiornato da ${stale} giorni.`} Carica i due file che SAP invia ogni mattina (RDA aperte e ordini degli ultimi 7 giorni): i task si creano e si chiudono da soli.</Notice>}
 
-      <Grid min={170} gap={12} fill style={{ marginBottom: 16 }}>
-        {tiles.map(t => <StatCard key={t.label} label={t.label} value={t.value} sub={t.sub} color={t.color} icon={t.icon} />)}
-      </Grid>
+      <div style={{ display: "flex", gap: 8, marginBottom: 10, overflowX: "auto", paddingBottom: 2 }}>
+        {pills.map(pl => { const on = quick === pl.key; return (
+          <button key={pl.key} onClick={() => setQuick(on ? null : pl.key)} aria-pressed={on} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0, padding: "7px 14px", borderRadius: 12, border: `1px solid ${on ? pl.color : C.border}`, background: on ? `${pl.color}14` : "#fff", cursor: "pointer", fontSize: 13, color: C.text }}>
+            <b className="tabular" style={{ ...font, fontSize: 17, color: pl.value ? pl.color : C.subtle }}>{pl.value}</b>{pl.label}</button>); })}
+      </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 10, overflowX: "auto", paddingBottom: 2 }}>
         {([["all", "Tutti"], ["rda", "RDA"], ["contract", "Rinnovi"], ["manual", "Manuali e acquisti"]] as [Origin, string][]).map(([k, l]) => (
-          <button key={k} onClick={() => setOrigin(k)} aria-pressed={origin === k} style={{ ...sans, padding: "6px 14px", borderRadius: 999, border: `1px solid ${origin === k ? C.accent : C.border}`, background: origin === k ? C.accentLight : "#fff", color: origin === k ? C.accent : C.muted, fontWeight: 650, fontSize: 12.5, cursor: "pointer" }}>{l}</button>
+          <button key={k} onClick={() => setOrigin(k)} aria-pressed={origin === k} style={{ ...sans, flexShrink: 0, padding: "5px 13px", borderRadius: 999, border: `1px solid ${origin === k ? C.accent : C.border}`, background: origin === k ? C.accentLight : "#fff", color: origin === k ? C.accent : C.muted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{l}</button>
         ))}
       </div>
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
-        <div style={{ position: "relative", flex: "1 1 240px", maxWidth: 380 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8, marginBottom: 14, maxWidth: 760 }}>
+        <div style={{ position: "relative", gridColumn: "1 / -1" }}>
           <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca task, RDA, fornitore…" aria-label="Cerca" style={{ ...iStyle, paddingLeft: 36 }} />
         </div>
-        <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label="Stato" style={{ ...iStyle, width: "auto", minWidth: 140 }}><option value="open">Aperti</option><option value="done">Chiusi</option><option value="all">Tutti</option><option value="sourcing">Confronto fornitori da documentare</option></select>
-        {isManager && <select value={who} onChange={e => setWho(e.target.value)} aria-label="Assegnatario" style={{ ...iStyle, width: "auto", minWidth: 170 }}><option value="all">Tutto il team</option><option value="none">Da assegnare</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
+        <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label="Stato" style={iStyle}><option value="open">Aperti</option><option value="done">Chiusi di recente</option><option value="all">Tutti</option></select>
+        {isManager && <select value={who} onChange={e => setWho(e.target.value)} aria-label="Assegnatario" style={iStyle}><option value="all">Tutto il team</option><option value="none">Da assegnare</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
       </div>
 
       {shown.length === 0 ? (
         <EmptyState icon={<CheckCircle2 size={26} />} title={items.length ? "Nessun task con questi filtri" : "Nessun task"} text={items.length ? undefined : "I task arrivano dalle RDA di SAP, dai piani di rinnovo dei contratti e da quelli che crei tu."} />
       ) : (<>
-        <div className="table-wrap desktop-only">
-          <table className="data-table">
-            <thead><tr><th>Task</th><th>Origine</th><th>Scadenza</th><th>Assegnato a</th><th>Stato</th><th aria-label="Azioni" /></tr></thead>
-            <tbody>
-              {shown.map(i => (
-                <tr key={i.key} onClick={() => open(i)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter") open(i); }}>
-                  <td style={{ minWidth: 260, boxShadow: overdue(i) ? `inset 3px 0 0 ${C.red}` : i.priority === "high" && i.status !== "done" ? `inset 3px 0 0 ${C.yellow}` : undefined }}><div style={{ fontWeight: 650, color: C.text }}>{i.title}{sourcingChip(i)}</div><div style={{ fontSize: 12, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", maxWidth: 420, whiteSpace: "nowrap" }}>{i.sub}</div></td>
-                  <td>{chip(i.task ? originLabel(i.task) : ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}</td>
-                  <td className="tabular" style={{ whiteSpace: "nowrap", color: overdue(i) ? C.red : C.text, fontWeight: overdue(i) ? 650 : 400 }}>{dueText(i)}</td>
-                  <td><div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}>{i.assignee !== "Da assegnare" && i.assignee !== "—" && <Avatar name={i.assignee} size={24} />}<span style={{ color: i.assignee === "Da assegnare" ? C.purple : C.muted, fontWeight: i.assignee === "Da assegnare" ? 650 : 400 }}>{i.assignee}</span></div></td>
-                  <td>{statusChip(i)}</td>
-                  <td onClick={e => e.stopPropagation()} style={{ whiteSpace: "nowrap" }}>{contractAction(i, onCompleteStep, onSendBO, onOpenContract)}</td>
-                </tr>
+        {groups.map(g => (
+          <section key={g.key} style={{ marginBottom: 16 }}>
+            <div style={{ ...sans, display: "flex", alignItems: "baseline", gap: 8, margin: "0 2px 6px", fontSize: 12.5, fontWeight: 700, color: g.color, textTransform: "uppercase", letterSpacing: ".04em" }}>{g.label}<span style={{ color: C.subtle, fontWeight: 500 }}>{g.items.length}</span></div>
+            <div className="table-wrap desktop-only">
+              <table className="data-table" style={{ tableLayout: "fixed", width: "100%" }}>
+                <colgroup><col /><col style={{ width: 190 }} />{showWho && <col style={{ width: 170 }} />}<col style={{ width: 170 }} /></colgroup>
+                <tbody>
+                  {g.items.map(i => (
+                    <tr key={i.key} onClick={() => open(i)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter") open(i); }}>
+                      <td style={{ boxShadow: overdue(i) ? `inset 3px 0 0 ${C.red}` : i.priority === "high" && i.status !== "done" ? `inset 3px 0 0 ${C.yellow}` : undefined }}>
+                        <div style={{ fontWeight: 650, color: C.text, overflowWrap: "anywhere" }}><TitleOf i={i} /></div>
+                        <div style={{ ...sans, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 3, fontSize: 12.5, color: C.muted }}>{chip(i.task ? originLabel(i.task) : ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}{metaOf(i, people)}{sourcingChip(i)}</div>
+                      </td>
+                      <td className="tabular" style={{ color: overdue(i) ? C.red : C.text }}><div style={{ fontWeight: overdue(i) ? 650 : 500 }}>{i.due ? fmtDate(i.due) : "—"}</div><div style={{ fontSize: 12, color: overdue(i) ? C.red : C.muted }}>{relDue(i)}</div>{extraStatus(i) && <div style={{ marginTop: 4 }}>{extraStatus(i)}</div>}</td>
+                      {showWho && <td><div style={{ display: "flex", alignItems: "center", gap: 8 }}>{i.assignee !== "Da assegnare" && <Avatar name={i.assignee} size={24} />}<span style={{ color: i.assignee === "Da assegnare" ? C.purple : C.text, fontWeight: i.assignee === "Da assegnare" ? 650 : 400, fontSize: 13 }}>{i.assignee}</span></div></td>}
+                      <td onClick={e => e.stopPropagation()} style={{ textAlign: "right" }}>{contractAction(i, onCompleteStep, onSendBO, onOpenContract)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="mobile-only" style={{ display: "grid", gap: 8 }}>
+              {g.items.map(i => (
+                <Card key={i.key} onClick={() => open(i)} role="button" tabIndex={0} style={{ padding: "11px 13px", cursor: "pointer", borderRadius: radius.md, borderLeft: overdue(i) ? `4px solid ${C.red}` : undefined }}>
+                  <div style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text, lineHeight: 1.3, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}><TitleOf i={i} /></div>
+                  <div style={{ ...sans, display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 6, fontSize: 12.5, color: C.muted }}>
+                    {chip(i.task ? originLabel(i.task) : ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}
+                    <span className="tabular" style={{ color: overdue(i) ? C.red : C.muted, fontWeight: overdue(i) ? 650 : 400 }}>{i.due ? `${fmtDate(i.due)} · ${relDue(i)}` : "Senza scadenza"}</span>
+                    {showWho && <span title={i.assignee} style={{ marginLeft: "auto" }}>{i.assignee !== "Da assegnare" ? <Avatar name={i.assignee} size={22} /> : chip("Da assegnare", C.purple, C.purpleBg)}</span>}
+                  </div>
+                  {(extraStatus(i) || sourcingChip(i) || contractAction(i, onCompleteStep, onSendBO, onOpenContract)) && <div onClick={e => e.stopPropagation()} style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>{extraStatus(i)}{sourcingChip(i)}{contractAction(i, onCompleteStep, onSendBO, onOpenContract)}</div>}
+                </Card>
               ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="mobile-only">
-          <Grid min={320} gap={12}>
-            {shown.map(i => (
-              <Card key={i.key} className="lift" onClick={() => open(i)} role="button" tabIndex={0} style={{ padding: 14, cursor: "pointer", borderRadius: radius.md, borderLeft: overdue(i) ? `4px solid ${C.red}` : undefined }}>
-                <div style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text }}>{i.title}{sourcingChip(i)}</div>
-                {i.sub && <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginBottom: 8 }}>{i.sub}</div>}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>{chip(i.task ? originLabel(i.task) : ORIGIN_LABEL[i.origin], ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}{statusChip(i)}<span style={{ ...sans, fontSize: 12, color: overdue(i) ? C.red : C.muted }}>{dueText(i)}</span></div>
-                <div style={{ ...sans, fontSize: 12, color: C.subtle, marginTop: 8 }}>{i.assignee}</div>
-                <div onClick={e => e.stopPropagation()} style={{ marginTop: 8 }}>{contractAction(i, onCompleteStep, onSendBO, onOpenContract)}</div>
-              </Card>
-            ))}
-          </Grid>
-        </div>
+            </div>
+          </section>
+        ))}
       </>)}
+      <button className="fab" onClick={() => setCreating(true)} aria-label="Nuovo task"><Plus size={26} /></button>
 
       {creating && <Portal><NewTaskDialog isManager={isManager} buyers={buyers} currentUser={currentUser} fail={fail} onClose={() => setCreating(false)} onCreated={async () => { setCreating(false); notify("Task creato"); await reload(); }} /></Portal>}
-      {openId !== null && <Portal><TaskSheet id={openId} threshold={threshold} isManager={isManager} buyers={buyers} fail={fail} notify={notify} onClose={() => setOpenId(null)} onChanged={reload}
+      {openId !== null && <Portal><TaskSheet id={openId} people={people} threshold={threshold} isManager={isManager} buyers={buyers} fail={fail} notify={notify} onClose={() => setOpenId(null)} onChanged={reload}
         contracts={contracts} plans={plans} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onOpenContract={c => { setOpenId(null); onOpenContract(c); }} /></Portal>}
     </div>
   );
+}
+
+type Quick = "open" | "late" | "sourcing" | "approval" | "unassigned";
+/** Gruppi per urgenza: in ritardo, questa settimana, più avanti, senza scadenza (e i chiusi a parte). */
+function groupItems(list: Item[]) {
+  const defs: { key: string; label: string; color: string; test: (i: Item) => boolean }[] = [
+    { key: "late", label: "In ritardo", color: C.red, test: i => overdue(i) },
+    { key: "week", label: "Questa settimana", color: C.yellow, test: i => i.status !== "done" && !!i.due && daysFrom(i.due) >= 0 && daysFrom(i.due) <= 7 },
+    { key: "later", label: "Più avanti", color: C.muted, test: i => i.status !== "done" && !!i.due && daysFrom(i.due) > 7 },
+    { key: "none", label: "Senza scadenza", color: C.muted, test: i => i.status !== "done" && !i.due },
+    { key: "done", label: "Chiusi di recente", color: C.green, test: i => i.status === "done" },
+  ];
+  return defs.map(d => ({ ...d, items: list.filter(d.test) })).filter(g => g.items.length);
+}
+const relDue = (it: Item) => {
+  if (!it.due) return "";
+  if (it.status === "done") return "";
+  const d = daysFrom(it.due);
+  return d < 0 ? `in ritardo di ${-d} gg` : d === 0 ? "oggi" : d === 1 ? "domani" : `tra ${d} gg`;
+};
+/** Titolo pulito: il numero della RDA diventa una nota piccola davanti al testo. */
+function TitleOf({ i }: { i: Item }) {
+  const m = /^(RDA\s+\S+)\s+·\s+(.*)$/.exec(i.title);
+  if (!m) return <>{i.title}</>;
+  return <><span className="tabular" style={{ ...sans, fontSize: 11.5, fontWeight: 600, color: C.subtle, marginRight: 6 }}>{m[1].replace(/^RDA\s+/, "")}</span>{m[2]}</>;
+}
+/** Riga di dettaglio: richiedente (con il nome se noto) e valore. Rinnovi: oggetto, valore e termini. */
+function metaOf(i: Item, people: Map<string, string>) {
+  if (i.task?.source !== "rda") return i.sub ? <span style={{ overflowWrap: "anywhere" }}>{i.sub}</span> : null;
+  const code = i.task.meta.requestedBy ?? "";
+  const who = code ? people.get(code.toUpperCase()) ?? code : "";
+  const parts = [who && `Richiedente ${who}`, i.task.meta.value ? fmt(i.task.meta.value, i.task.meta.currency ?? "EUR") : ""].filter(Boolean).join(" · ");
+  return parts ? <span>{parts}</span> : null;
+}
+/** Lo stato si mostra solo quando dice qualcosa in più del gruppo in cui sta la riga. */
+function extraStatus(i: Item) {
+  if (i.status === "done" || i.task?.outcome || i.status === "waiting" || i.assigneeId === null) return statusChip(i);
+  return null;
 }
 
 function sourcingChip(i: Item) {
@@ -294,7 +335,34 @@ function NewTaskDialog({ isManager, buyers, currentUser, fail, onClose, onCreate
   );
 }
 
-function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, onChanged, contracts, plans, onCompleteStep, onSendBO, onOpenContract }: { id: number; threshold: number; isManager: boolean; buyers: { id: number; name: string }[]; fail: (e: unknown) => string; notify: (m: string) => void; onClose: () => void; onChanged: () => void;
+const goTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+
+/** "Prossimo passo": cosa manca per portare avanti la pratica, con un pulsante che porta alla sezione giusta. */
+function NextStep({ t, isManager, threshold }: { t: TaskDetail; isManager: boolean; threshold: number }) {
+  type Step = { text: string; action?: { label: string; run: () => void } };
+  const steps: Step[] = [];
+  if (isManager && t.sourcing?.approval === "pending") steps.push({ text: `Approva o respingi l'eccezione al confronto (${t.sourcing.recordedBy})`, action: { label: "Vai alla scelta del fornitore", run: () => goTo("sec-sourcing") } });
+  else if (t.sourcingRequired && t.sourcingStatus === "pending") steps.push({ text: "Eccezione al confronto in attesa dell'approvazione del Manager" });
+  else if (t.sourcingRequired && t.sourcingStatus !== "ok") steps.push({ text: `Sopra ${fmt(threshold)}: serve il confronto tra fornitori (o strategico, single source, eccezione)`, action: { label: "Registra la scelta del fornitore", run: () => goTo("sec-sourcing") } });
+  const io = Object.keys(t.meta.io ?? {})[0] || t.meta.internalOrder;
+  if ((t.source === "rda" || t.source === "manual") && !io) steps.push({ text: "Manca l'internal order del Master Plan", action: { label: "Indicalo nella pratica", run: () => goTo("sec-pratica") } });
+  if (t.source === "contract" && !t.outcome) steps.push({ text: "Registra l'esito del rinnovo (rinnovato, nuovo contratto, prorogato, cessato)" });
+  if (t.source === "contract" && t.outcome && !t.poNumbers.length && !t.noPoReason) steps.push({ text: "Manca il PO (o indica che non serve)", action: { label: "Vai alla pratica", run: () => goTo("sec-pratica") } });
+  if (t.source === "manual" && t.kind === "purchase" && !t.poNumbers.length && !t.noPoReason && !steps.length) steps.push({ text: "Emetti il PO in SAP e indicane il numero (o segna che non serve)", action: { label: "Vai alla pratica", run: () => goTo("sec-pratica") } });
+  const done = steps.length === 0;
+  const text = done ? (t.source === "rda" ? "Nessuna azione richiesta: la RDA si chiude da sola quando in SAP diventa un ordine." : "Tutto a posto: puoi completare la pratica.") : steps[0].text;
+  const tone = done ? [C.green, C.greenBg] : [C.accent, C.accentLight];
+  return (
+    <div style={{ ...sans, background: tone[1], border: `1px solid ${tone[0]}33`, borderRadius: 14, padding: "12px 16px" }}>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: tone[0], textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>{done ? "Situazione" : "Prossimo passo"}</div>
+      <div style={{ fontSize: 14, fontWeight: 650, color: C.text, lineHeight: 1.4 }}>{text}</div>
+      {!done && steps[0].action && <button onClick={steps[0].action.run} style={{ ...btnPrimary, padding: "7px 14px", fontSize: 13, marginTop: 8 }}>{steps[0].action.label}</button>}
+      {steps.length > 1 && <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>{steps.slice(1).map((x, k) => <li key={k}>{x.text}</li>)}</ul>}
+    </div>
+  );
+}
+
+function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onClose, onChanged, contracts, plans, onCompleteStep, onSendBO, onOpenContract }: { id: number; people: Map<string, string>; threshold: number; isManager: boolean; buyers: { id: number; name: string }[]; fail: (e: unknown) => string; notify: (m: string) => void; onClose: () => void; onChanged: () => void;
   contracts: Contract[]; plans: Record<number, PlanStep[]>; onCompleteStep: (contractId: number, stepId: string) => void; onSendBO: (contractId: number) => void; onOpenContract: (c: Contract) => void }) {
   const [t, setT] = useState<TaskDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -334,13 +402,14 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
         {!t && !error && <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><Loader2 className="spin" size={24} color={C.subtle} /></div>}
         {error && <Notice kind="error">{error}</Notice>}
         {t && (
-          <div style={{ display: "grid", gap: 14 }}>
+          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0, 1fr)" }}>
             {t.status === "done" && rda && t.doneReason === "po_created" && <Notice kind="ok"><b>Chiusa automaticamente:</b> in SAP è stato creato l'ordine {t.pos.map(p => p.po).join(", ") || "collegato"}{t.pos[0]?.supplierName ? ` (${t.pos[0].supplierName})` : ""}{t.doneAt ? ` il ${fmtDate(t.doneAt)}` : ""}.</Notice>}
             {t.status === "done" && rda && t.doneReason === "removed_from_sap" && <Notice kind="info"><b>Chiusa automaticamente:</b> la RDA non risulta più aperta in SAP (ordinata, rifiutata o cancellata). Se in seguito arriva l'elenco degli ordini con il suo PO, lo vedrai qui.</Notice>}
             {t.status === "open" && t.pos.length > 0 && <Notice kind="info">Per questa RDA esiste già un ordine ({t.pos.map(p => p.po).join(", ")}): il task si chiude quando la RDA non è più aperta in SAP.</Notice>}
+            {t.status === "open" && (rda || renewal || purchase) && <NextStep t={t} isManager={isManager} threshold={threshold} />}
             <Card>
               <KV rows={[
-                ...(rda ? [["Numero RDA", t.sourceKey ?? ""], ["Gruppo acquisti", t.meta.pgr ?? ""], ["Richiedente", t.meta.requestedBy ?? ""], ["Importo", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Rilasciata il", t.meta.releaseDate ? `${fmtDate(t.meta.releaseDate)}${age !== null ? ` (da ${age} gg)` : ""}` : ""], ["Consegna richiesta", t.meta.delivDate ? fmtDate(t.meta.delivDate) : ""]] as [string, string][] : []),
+                ...(rda ? [["Numero RDA", t.sourceKey ?? ""], ["Gruppo acquisti", t.meta.pgr ?? ""], ["Richiedente", t.meta.requestedBy ? people.get(t.meta.requestedBy.toUpperCase()) ?? t.meta.requestedBy : ""], ["Importo", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Rilasciata il", t.meta.releaseDate ? `${fmtDate(t.meta.releaseDate)}${age !== null ? ` (da ${age} gg)` : ""}` : ""], ["Consegna richiesta", t.meta.delivDate ? fmtDate(t.meta.delivDate) : ""]] as [string, string][] : []),
                 [renewal ? "Da gestire entro" : "Scadenza", t.due ? fmtDate(t.due) : ""], ["Assegnato a", t.assigneeName || "Da assegnare"], ...(!rda && !renewal ? [["Priorità", PRIO[t.priority]], ["Creato da", t.createdBy]] as [string, string][] : []), ...(purchase ? [["Importo stimato", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Fornitore previsto", t.meta.supplier || "—"]] as [string, string][] : []),
               ]} />
               {!rda && t.detail && <div style={{ ...sans, fontSize: 13, color: C.muted, marginTop: 12, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{t.detail}</div>}
@@ -359,10 +428,13 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
               </Card>
             )}
 
+            <div id="sec-pratica-top" />
             {renewal && <RenewalCard t={t} contracts={contracts} plan={t.contractId ? plans[t.contractId] ?? [] : []} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onOpenContract={onOpenContract} />}
             {renewal && <OutcomeCard t={t} contracts={contracts} fail={fail} onOpenContract={onOpenContract} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
             {purchase && <OutcomeCard t={t} contracts={contracts} fail={fail} onOpenContract={onOpenContract} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
+            <div id="sec-pratica" style={{ display: "contents" }}></div>
             {(rda || renewal || purchase) && <PraticaCard t={t} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
+            <div id="sec-sourcing" />
             {(rda || renewal || purchase) && t.status === "open" && (t.sourcingRequired || t.sourcing) && <RfqCard t={t} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} notify={notify} />}
             {(rda || renewal || purchase) && (t.sourcingRequired || t.sourcing) && <SourcingCard t={t} threshold={threshold} isManager={isManager} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
 
@@ -373,9 +445,9 @@ function TaskSheet({ id, threshold, isManager, buyers, fail, notify, onClose, on
               </Card>
             )}
 
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", position: "sticky", bottom: -1, background: "#fff", padding: "10px 0 2px", borderTop: `1px solid ${C.borderLight}`, zIndex: 3 }}>
               {isManager && t.status === "open" && (
-                <select aria-label="Assegna a" value={t.assigneeId ?? ""} onChange={e => patch({ assigneeId: e.target.value ? Number(e.target.value) : null }, "Assegnazione salvata")} disabled={busy} style={{ ...iStyle, width: "auto", minWidth: 200 }}>
+                <select aria-label="Assegna a" value={t.assigneeId ?? ""} onChange={e => patch({ assigneeId: e.target.value ? Number(e.target.value) : null }, "Assegnazione salvata")} disabled={busy} style={{ ...iStyle, width: "auto", minWidth: 0, flex: "1 1 120px", maxWidth: 260 }}>
                   <option value="">Da assegnare</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                 </select>
               )}
