@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Contract, ContractOutcome, PlanStep, Saving, SourcingMode, SourcingQuote, SupplierSummary, Task, TaskDetail, TaskList, User } from "../types.ts";
+import type { Contract, ContractOutcome, PlanStep, RdaSuggestion, Saving, SourcingMode, SourcingQuote, SupplierSummary, Task, TaskDetail, TaskList, User } from "../types.ts";
 import { computeSaving } from "../lib/saving.ts";
 import { OutcomeCard, PraticaCard, RenewalCard } from "./TaskPratica.tsx";
 import { ApiError, importSapFile, portalApi } from "../api.ts";
@@ -38,6 +38,9 @@ const SOURCING_LABEL: Record<SourcingMode, string> = { comparison: "Confronto tr
 const sourcingGap = (t?: Task) => !!t && t.sourcingRequired && t.sourcingStatus !== "ok";
 
 const chip = (label: string, color: string, bg: string) => <span style={{ ...sans, background: bg, color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}>{label}</span>;
+/** Prima le pratiche con RDA già approvata (e le attività a mano), poi i rinnovi che aspettano ancora la RDA. */
+const waitsRda = (i: Item) => i.origin === "contract" && !!i.task && i.task.rdaNumbers.length === 0 && !i.task.outcome;
+const rank = (i: Item) => (waitsRda(i) ? 1 : 0);
 const overdue = (it: Item) => it.status !== "done" && !!it.due && daysFrom(it.due) < 0;
 
 /** Task del team: RDA da SAP, task creati a mano e attività dei piani di rinnovo dei contratti. */
@@ -96,7 +99,7 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
     return items.filter(i => (origin === "all" || i.origin === origin) && (status === "all" || (status === "open" ? i.status !== "done" : i.status === "done"))
       && (!quick || (quick === "late" ? overdue(i) : quick === "sourcing" ? i.status !== "done" && sourcingGap(i.task) : quick === "approval" ? i.task?.sourcing?.approval === "pending" : quick === "unassigned" ? i.status !== "done" && i.assigneeId === null : i.status !== "done"))
       && (who === "all" || (who === "none" ? i.assigneeId === null : String(i.assigneeId) === who)) && (!q || `${i.title} ${i.sub} ${i.assignee}`.toLowerCase().includes(q)))
-      .sort((a, b) => Number(a.status === "done") - Number(b.status === "done") || (a.due ?? "9999").localeCompare(b.due ?? "9999"));
+      .sort((a, b) => Number(a.status === "done") - Number(b.status === "done") || rank(a) - rank(b) || (a.due ?? "9999").localeCompare(b.due ?? "9999"));
   }, [items, origin, status, who, search, quick]);
 
   const open = (i: Item) => { if (i.task) setOpenId(i.task.id); else if (i.contract) onOpenContract(i.contract); };
@@ -233,7 +236,7 @@ function TitleOf({ i }: { i: Item }) {
 }
 /** Riga di dettaglio: richiedente (con il nome se noto) e valore. Rinnovi: oggetto, valore e termini. */
 function metaOf(i: Item, people: Map<string, string>) {
-  if (i.task?.source !== "rda") return i.sub ? <span style={{ overflowWrap: "anywhere" }}>{i.sub}</span> : null;
+  if (i.task?.source !== "rda") return <>{waitsRda(i) && chip("Senza RDA", C.gray, C.grayBg)}{i.sub ? <span className="one-line">{i.sub}</span> : null}</>;
   const code = i.task.meta.requestedBy ?? "";
   const who = code ? people.get(code.toUpperCase()) ?? code : "";
   const parts = [who && `Richiedente ${who}`, i.task.meta.value ? fmt(i.task.meta.value, i.task.meta.currency ?? "EUR") : ""].filter(Boolean).join(" · ");
@@ -321,6 +324,36 @@ function NewTaskDialog({ isManager, buyers, currentUser, fail, onClose, onCreate
 
 const goTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
+/** Rinnovo senza RDA: propone le RDA aperte che sembrano la sua; con un tocco si uniscono in un'unica pratica. */
+function RdaSuggest({ t, fail, onLinked }: { t: TaskDetail; fail: (e: unknown) => string; onLinked: (x: TaskDetail) => void }) {
+  const [list, setList] = useState<RdaSuggestion[] | null>(null);
+  const [busy, setBusy] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => { let off = false; portalApi.suggestRdas(t.id).then(x => { if (!off) setList(x); }).catch(() => { if (!off) setList([]); }); return () => { off = true; }; }, [t.id]);
+  if (!list?.length) return null;
+  const link = async (s: RdaSuggestion) => {
+    setBusy(s.id); setError(null);
+    try { onLinked(await portalApi.setTaskLinks(t.id, { rdaNumbers: [...t.rdaNumbers, s.rda] })); } catch (e) { setError(fail(e)); }
+    setBusy(null);
+  };
+  return (
+    <Card>
+      <CardTitle icon={<Paperclip size={16} />}>Questa RDA è il rinnovo?</CardTitle>
+      <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginBottom: 8 }}>Il rinnovo aspetta ancora la sua RDA. Se una di queste è quella giusta, collegala: diventa un'unica pratica.</div>
+      {list.map(s => (
+        <div key={s.id} style={{ ...sans, display: "flex", gap: 10, alignItems: "center", padding: "8px 0", borderTop: `1px solid ${C.borderLight}` }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="one-line" style={{ fontSize: 13.5, fontWeight: 650, color: C.text }}>{s.rda} · {s.title.replace(/^RDA\s+\S+\s+·\s+/, "")}</div>
+            <div style={{ fontSize: 12, color: C.muted }}>{fmt(s.value, s.currency)} · {s.why.join(" · ")}</div>
+          </div>
+          <button onClick={() => link(s)} disabled={busy !== null} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5, flexShrink: 0 }}>{busy === s.id ? <Loader2 className="spin" size={13} /> : "Collega"}</button>
+        </div>
+      ))}
+      {error && <Notice kind="error">{error}</Notice>}
+    </Card>
+  );
+}
+
 /** "Prossimo passo": cosa manca per portare avanti la pratica, con un pulsante che porta alla sezione giusta. */
 function NextStep({ t, isManager, threshold }: { t: TaskDetail; isManager: boolean; threshold: number }) {
   type Step = { text: string; action?: { label: string; run: () => void } };
@@ -390,6 +423,7 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
             {t.status === "done" && rda && t.doneReason === "po_created" && <Notice kind="ok"><b>Chiusa automaticamente:</b> in SAP è stato creato l'ordine {t.pos.map(p => p.po).join(", ") || "collegato"}{t.pos[0]?.supplierName ? ` (${t.pos[0].supplierName})` : ""}{t.doneAt ? ` il ${fmtDate(t.doneAt)}` : ""}.</Notice>}
             {t.status === "done" && rda && t.doneReason === "removed_from_sap" && <Notice kind="info"><b>Chiusa automaticamente:</b> la RDA non risulta più aperta in SAP (ordinata, rifiutata o cancellata). Se in seguito arriva l'elenco degli ordini con il suo PO, lo vedrai qui.</Notice>}
             {t.status === "open" && t.pos.length > 0 && <Notice kind="info">Per questa RDA esiste già un ordine ({t.pos.map(p => p.po).join(", ")}): il task si chiude quando la RDA non è più aperta in SAP.</Notice>}
+            {t.status === "open" && renewal && t.rdaNumbers.length === 0 && <RdaSuggest t={t} fail={fail} onLinked={x => { setT(x); onChanged(); notify("RDA collegata al rinnovo"); }} />}
             {t.status === "open" && (rda || renewal || purchase) && <NextStep t={t} isManager={isManager} threshold={threshold} />}
             <Card>
               <KV rows={[
