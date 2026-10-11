@@ -97,3 +97,55 @@ export async function resetTestSupplierAccess(user: User, supplierId: number): P
   await db.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'user','update',$2,'Accesso di prova generato')", [user.name, s.email]);
   return { email: s.email as string, password };
 }
+
+// ─── Accessi di prova per ruolo ──────────────────────────────
+export interface TestAccess { role: string; label: string; name: string; email: string; password: string }
+const TEST_USERS = [
+  { role: "buyer", label: "Buyer", name: "Prova Buyer", email: "prova.buyer@procurementlab.test", sap: "" },
+  { role: "bo", label: "Business Owner / Richiedente", name: "Prova Business Owner", email: "prova.bo@procurementlab.test", sap: "PROVA" },
+  { role: "viewer", label: "Controlling / CFO (sola lettura)", name: "Prova Controlling", email: "prova.controlling@procurementlab.test", sap: "" },
+  { role: "finance", label: "Finance", name: "Prova Finance", email: "prova.finance@procurementlab.test", sap: "" },
+] as const;
+
+/** Un utente di prova per ogni ruolo (password nuova a ogni chiamata, mostrata una sola volta), più l'accesso di un fornitore di prova. */
+export async function createTestAccesses(user: User): Promise<TestAccess[]> {
+  if (user.role !== "manager") throw new HttpError(403, "Solo il Manager crea gli accessi di prova");
+  const db = getPool(), out: TestAccess[] = [], ids: Record<string, number> = {};
+  for (const t of TEST_USERS) {
+    const password = `Prova-${randomBytes(5).toString("hex")}!`, hash = await hashPassword(password);
+    const ex = (await db.query("select id from users where lower(email) = $1", [t.email])).rows[0];
+    if (ex) { await db.query("update users set password_hash = $2, active = true, role = $3, sap_user = $4 where id = $1", [ex.id, hash, t.role, t.sap]); ids[t.role] = ex.id; }
+    else ids[t.role] = (await db.query("insert into users (email, name, role, title, password_hash, sap_user) values ($1,$2,$3,'Accesso di prova',$4,$5) returning id", [t.email, t.name, t.role, hash, t.sap])).rows[0].id;
+    out.push({ role: t.role, label: t.label, name: t.name, email: t.email, password });
+  }
+  // Qualcosa da vedere subito: task senza responsabile al buyer; due contratti della simulazione, uno come owner e due come BO.
+  await db.query("update tasks set assignee_id = $1, assignee_auto = false where id in (select id from tasks where status = 'open' and assignee_id is null order by due nulls last limit 4)", [ids.buyer]);
+  await db.query("update contracts set owner = 'Prova Buyer', owner_id = $1 where id in (select id from contracts where category = 'Simulazione' and ceased = false order by id limit 1)", [ids.buyer]);
+  await db.query("update contracts set bo_user_id = $1, bo_email = 'prova.bo@procurementlab.test' where id in (select id from contracts where category = 'Simulazione' and ceased = false and bo_user_id is null order by id desc limit 2)", [ids.bo]);
+  // Fornitore di prova: se non c'è lo crea; in ogni caso password nuova.
+  const rows = (await db.query("select s.id, s.name, s.sap_code from suppliers s join users u on u.id = s.user_id and u.role = 'supplier' order by s.id")).rows;
+  const found = rows.find(r => isTestSupplier(r.name, r.sap_code));
+  const sup = found ? { id: found.id as number, name: found.name as string } : await createDemoSupplier(user);
+  const acc = await resetTestSupplierAccess(user, sup.id);
+  out.push({ role: "supplier", label: "Fornitore", name: sup.name, email: acc.email, password: acc.password });
+  await db.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'user','create','accessi di prova','Accessi di prova generati per ogni ruolo')", [user.name]);
+  return out;
+}
+
+/** Toglie gli utenti di prova: i loro task e contratti tornano senza responsabile. */
+export async function removeTestAccesses(user: User): Promise<number> {
+  if (user.role !== "manager") throw new HttpError(403, "Solo il Manager elimina gli accessi di prova");
+  const db = getPool(), emails = TEST_USERS.map(t => t.email);
+  const ids = (await db.query("select id from users where lower(email) = any($1)", [emails])).rows.map(r => r.id as number);
+  if (!ids.length) return 0;
+  await db.query("update tasks set assignee_id = null where assignee_id = any($1)", [ids]);
+  await db.query("update contracts set owner_id = null where owner_id = any($1)", [ids]);
+  await db.query("update contracts set bo_user_id = null, bo_email = '' where bo_user_id = any($1)", [ids]);
+  let n = 0;
+  for (const id of ids) {
+    try { await db.query("delete from users where id = $1", [id]); n++; }
+    catch { await db.query("update users set active = false, password_hash = 'x' where id = $1", [id]); n++; }
+  }
+  await db.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'user','delete','accessi di prova',$2)", [user.name, `Eliminati ${n} accessi di prova`]);
+  return n;
+}

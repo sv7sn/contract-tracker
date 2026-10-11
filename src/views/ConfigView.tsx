@@ -8,6 +8,7 @@ import { AlertTriangle, Bell, Building2, History, Lock, RotateCcw, ShieldCheck, 
 import { Notice, Portal } from "../components/vendorUi.tsx";
 import { CategoriesCard } from "./CategoriesCard.tsx";
 import { ResetCard } from "./ResetCard.tsx";
+import { TestAccessCard } from "./TestAccessCard.tsx";
 import { BoSettingsCard } from "./BoSettingsCard.tsx";
 
 type Entity = "company" | "industry" | "payment_term";
@@ -185,6 +186,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
       <CategoriesCard fail={fail} notify={notify} />
       <SanctionsCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
       <PrivacyCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
+      <TestAccessCard fail={fail} notify={notify} />
       <ResetCard fail={fail} notify={notify} />
       <AuditCard cfg={cfg} fail={fail} />
 
