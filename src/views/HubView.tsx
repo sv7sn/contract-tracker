@@ -21,10 +21,11 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
   useEffect(() => {
     let off = false;
     const staff = user.role === "manager" || user.role === "buyer";
+    const vendorStaff = staff || user.role === "finance";
     Promise.allSettled([
       staff ? portalApi.taskSummary() : Promise.reject(),
-      portalApi.vendors(),
-      portalApi.monitor(),
+      vendorStaff ? portalApi.vendors() : Promise.reject(),
+      vendorStaff ? portalApi.monitor() : Promise.reject(),
     ]).then(([t, v, m]) => {
       if (off) return;
       const mine = user.role === "finance" ? "approved" : "pending";
