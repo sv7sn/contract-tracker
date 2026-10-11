@@ -51,6 +51,7 @@ export function PlanningView({ contracts, plans, auditLogs, currentUser, onSendB
               const done = step.status === "done", pending = step.status === "pending_bo";
               const color = done ? C.green : pending ? C.yellow : C.subtle;
               const isEditable = canEdit && step.status === "upcoming" && step.stepId !== "expiry";
+              const DateTag = isEditable ? "button" : "span";
               return (
                 <div key={step.stepId} style={{ display: "flex", gap: 14, marginBottom: isLast ? 0 : 6 }}>
                   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: 36, flexShrink: 0 }}>
@@ -60,9 +61,9 @@ export function PlanningView({ contracts, plans, auditLogs, currentUser, onSendB
                   <div style={{ flex: 1, paddingBottom: isLast ? 0 : 16, minWidth: 0 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "baseline" }}>
                       <div style={{ ...sans, fontSize: 14, fontWeight: 650, color: done ? C.green : pending ? C.yellow : C.text }}>{stepLabel(step.stepId, contract)}</div>
-                      <button onClick={() => isEditable && setEditingStep({ step, tmpl })} title={isEditable ? "Cambia la data" : undefined} style={{ ...sans, display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: isEditable ? C.accent : C.subtle, background: "none", border: "none", cursor: isEditable ? "pointer" : "default", padding: 0, fontWeight: step.modified ? 700 : 500 }}>
+                      <DateTag onClick={() => isEditable && setEditingStep({ step, tmpl })} title={isEditable ? "Cambia la data" : undefined} style={{ ...sans, display: "flex", alignItems: "center", gap: 5, fontSize: 12, color: isEditable ? C.accent : C.subtle, background: "none", border: "none", cursor: isEditable ? "pointer" : "default", padding: 0, fontWeight: step.modified ? 700 : 500 }}>
                         {isEditable && <Pencil size={12} />}<span className="tabular">{fmtDate(step.scheduledDate)}</span>
-                      </button>
+                      </DateTag>
                     </div>
                     {step.modified && <div style={{ ...sans, fontSize: 12, color: C.blue, marginTop: 2 }}>Data spostata: {step.modifiedReason}</div>}
                     {step.stepId === "bo_response" && step.boDecision && (

@@ -261,7 +261,9 @@ async function ownSupplierRow(db: Queryable, user: User, lock = false): Promise<
 }
 export async function getMySupplier(user: User): Promise<Supplier> {
   const r = await ownSupplierRow(getPool(), user);
-  return { ...(await loadFull(getPool(), r.id, true))!, privacyNotice: (await loadPrivacy(getPool())).notice };
+  const codes = (r.company_codes ?? []) as string[];
+  const names = codes.length ? (await getPool().query("select code, name from buying_companies where code = any($1) order by name", [codes])).rows : [];
+  return { ...(await loadFull(getPool(), r.id, true))!, privacyNotice: (await loadPrivacy(getPool())).notice, companyNames: names.map(x => x.name as string) };
 }
 
 function sanitizeData(input: unknown): SupplierData {

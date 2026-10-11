@@ -85,7 +85,7 @@ export function KpiView({ onSessionExpired }: { onSessionExpired: () => void }) 
       <Section title="Contratti" text="Le scadenze si contano dalla data limite di disdetta quando il contratto prevede un preavviso.">
         <Grid min={180} gap={12} fill>
           <StatCard label="Contratti attivi" value={c.active} sub={`${c.withNotice} con preavviso di disdetta`} color={C.blue} icon={<FileText size={18} />} />
-          <StatCard label="Scadenze entro 90 giorni" value={c.keyNext90} sub="Scadenza o termine di disdetta" color={C.yellow} icon={<Clock size={18} />} />
+          <StatCard label="Scadenze entro 90 giorni" value={c.keyNext90} sub="Compresi quelli entro 30 giorni · scadenza o disdetta" color={C.yellow} icon={<Clock size={18} />} />
           <StatCard label="Senza decisione del BO" value={c.withoutDecision} sub="Entro 60 giorni dal termine" color={c.withoutDecision ? C.red : C.green} icon={<AlertTriangle size={18} />} />
           <StatCard label="Scaduti senza esito" value={c.missedDeadline} sub="Contratti scaduti senza rinnovo, proroga o cessazione" color={c.missedDeadline ? C.red : C.green} icon={<AlertTriangle size={18} />} />
         </Grid>

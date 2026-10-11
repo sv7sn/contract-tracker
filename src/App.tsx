@@ -412,7 +412,7 @@ export default function App() {
           {view === "vendors" && mode === "api" && <VendorsView initialOpenId={focus?.vendorId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "expiries" && mode === "api" && <ExpiryView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "budget" && mode === "api" && ["manager", "buyer", "finance", "viewer"].includes(currentUser.role) && <BudgetView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
-          {view === "spend" && mode === "api" && ["manager", "buyer", "finance", "viewer"].includes(currentUser.role) && <SpendView onSessionExpired={sessionExpired} />}
+          {view === "spend" && mode === "api" && ["manager", "buyer", "finance", "viewer"].includes(currentUser.role) && <SpendView onSessionExpired={sessionExpired} canImport={currentUser.role === "manager" || currentUser.role === "buyer"} />}
           {view === "kpi" && mode === "api" && (currentUser.role === "manager" || currentUser.role === "viewer") && <KpiView onSessionExpired={sessionExpired} />}
           {view === "config" && mode === "api" && currentUser.role === "manager" && <ConfigView notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "detail" && selected && <ContractDetail onPlanChanged={() => { if (currentUser) void loadAll(currentUser); }} contract={selected} contracts={contracts} onOpen={openDetail} auditLog={auditLogs[selected.id] || []} currentUser={currentUser} canOpenDocuments={mode === "api"} onBack={() => setView("list")} onEdit={() => { setEditingContract(selected); setShowForm(true); }} onDelete={handleDelete} />}

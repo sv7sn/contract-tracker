@@ -127,6 +127,8 @@ export async function createTestAccesses(user: User): Promise<TestAccess[]> {
   const found = rows.find(r => isTestSupplier(r.name, r.sap_code));
   const sup = found ? { id: found.id as number, name: found.name as string } : await createDemoSupplier(user);
   const acc = await resetTestSupplierAccess(user, sup.id);
+  // Il buyer di prova ha come riferimento i fornitori di prova registrati (senza non potrebbe invitare nessuno a un'offerta).
+  await db.query("update suppliers set reference_buyer_id = $1 where status = 'registered' and lifecycle = 'active' and (name ~* '^Fornitore di Prova' or coalesce(sap_code,'') ~ '^(PROVA|SIMV)')", [ids.buyer]);
   out.push({ role: "supplier", label: "Fornitore", name: sup.name, email: acc.email, password: acc.password });
   await db.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'user','create','accessi di prova','Accessi di prova generati per ogni ruolo')", [user.name]);
   return out;

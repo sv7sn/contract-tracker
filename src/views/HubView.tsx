@@ -43,7 +43,7 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
   const metrics: Record<string, Metric[]> = {
     contracts: user.role === "bo" ? [] : [
       { label: "In scadenza entro 30 giorni", value: active.filter(c => daysToDeadline(c) >= 0 && daysToDeadline(c) <= 30).length, tone: "bad" },
-      { label: "In scadenza entro 90 giorni", value: active.filter(c => daysToDeadline(c) > 30 && daysToDeadline(c) <= 90).length, tone: "warn" },
+      { label: "In scadenza tra 31 e 90 giorni", value: active.filter(c => daysToDeadline(c) > 30 && daysToDeadline(c) <= 90).length, tone: "warn" },
       { label: "Contratti attivi", value: active.length },
     ],
     vendors: [
@@ -54,7 +54,7 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
     tasks: live.tasks ? [
       { label: "Task aperti", value: live.tasks.open }, { label: "In ritardo", value: live.tasks.overdue, tone: live.tasks.overdue ? "bad" : "good" },
       ...(user.role === "manager" ? [{ label: "Da assegnare", value: live.tasks.unassigned, tone: live.tasks.unassigned ? "warn" as const : undefined }] : []),
-      { label: "RDA senza confronto fornitori", value: live.tasks.sourcingMissing, tone: live.tasks.sourcingMissing ? "warn" as const : "good" as const },
+      { label: "Pratiche senza confronto fornitori", value: live.tasks.sourcingMissing, tone: live.tasks.sourcingMissing ? "warn" as const : "good" as const },
       ...(user.role === "manager" && live.tasks.exceptionsPending ? [{ label: "Eccezioni da approvare", value: live.tasks.exceptionsPending, tone: "warn" as const }] : []),
     ] : [],
     kpi: [],

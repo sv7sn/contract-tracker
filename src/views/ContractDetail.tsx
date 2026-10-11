@@ -1,6 +1,6 @@
 import type { AuditEntry, Contract, User } from "../types.ts";
 import { C, font, radius, sans, URGENCY_COLORS } from "../theme.ts";
-import { NOW, closedLabel, daysToDeadline, expiredWithoutOutcome, fmt, fmtDate, urgency } from "../lib/format.ts";
+import { NOW, closedLabel, daysToDeadline, daysToExpiry, expiredWithoutOutcome, fmt, fmtDate, urgency } from "../lib/format.ts";
 import { canDeleteContract, canEditContract } from "../permissions.ts";
 import { AuditTrail, Avatar, Card, DaysChip, Grid, RenewalBadge } from "../components/ui.tsx";
 import { AlertTriangle, ArrowLeft, Download, ExternalLink, FileText, Pencil, StickyNote, Trash2 } from "../components/icons.tsx";
@@ -16,7 +16,7 @@ export function ContractDetail({ contract, contracts, auditLog, currentUser, can
   const prev = contract.replaces ? contracts.find(c => c.id === contract.replaces) : undefined;
   const next = contract.replacedBy ? contracts.find(c => c.id === contract.replacedBy) : undefined;
   const link = (c: Contract) => <button onClick={() => onOpen(c)} style={{ ...sans, background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", fontWeight: 650, fontSize: 13.5, textDecoration: "underline" }}>{c.supplier} · scad. {fmtDate(c.end)}</button>;
-  const u = urgency(contract); const days = daysToDeadline(contract);
+  const u = urgency(contract); const days = daysToDeadline(contract); const endDays = daysToExpiry(contract.end);
   const startMs = new Date(contract.start).getTime(), endMs = new Date(contract.end).getTime();
   const prog = contract.start && endMs > startMs ? Math.min(100, Math.max(0, ((NOW.getTime() - startMs) / (endMs - startMs)) * 100)) : 0;
   const uc = URGENCY_COLORS[u];
@@ -63,7 +63,8 @@ export function ContractDetail({ contract, contracts, auditLog, currentUser, can
             <Card>
               <div style={{ display: "flex", justifyContent: "space-between", ...sans, fontSize: 12, color: C.muted, marginBottom: 8 }}><span>Durata del contratto</span><b className="tabular" style={{ color: C.text }}>{Math.round(prog)}% trascorso</b></div>
               <div style={{ height: 8, background: C.borderLight, borderRadius: 4 }}><div style={{ height: "100%", width: `${prog}%`, background: uc, borderRadius: 4 }} /></div>
-              <div style={{ ...sans, fontSize: 13, color: C.muted, marginTop: 10 }}>{days < 0 ? <b style={{ color: C.red }}>Scaduto da {Math.abs(days)} giorni</b> : <span>Scade tra <b style={{ color: uc }}>{days} giorni</b></span>}</div>
+              <div style={{ ...sans, fontSize: 13, color: C.muted, marginTop: 10 }}>{endDays < 0 ? <b style={{ color: C.red }}>Contratto scaduto da {Math.abs(endDays)} giorni</b> : <span>Il contratto scade tra <b className="tabular">{endDays} giorni</b> ({fmtDate(contract.end)})</span>}
+                {contract.noticeDate && <div style={{ marginTop: 4 }}>{days < 0 ? <b style={{ color: C.red }}>Termine di disdetta passato da {Math.abs(days)} giorni</b> : <span>Ultimo giorno per la disdetta tra <b style={{ color: uc }}>{days} giorni</b> ({fmtDate(contract.noticeDate)})</span>}</div>}</div>
             </Card>
           )}
           <Card style={{ padding: "6px 18px" }}>

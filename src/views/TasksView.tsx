@@ -214,7 +214,7 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
       </>)}
       <button className="fab" onClick={() => setCreating(true)} aria-label="Nuovo task"><Plus size={26} /></button>
 
-      {creating && <Portal><NewTaskDialog isManager={isManager} buyers={buyers} currentUser={currentUser} fail={fail} onClose={() => setCreating(false)} onCreated={async () => { setCreating(false); notify("Task creato"); await reload(); }} /></Portal>}
+      {creating && <Portal><NewTaskDialog isManager={isManager} buyers={buyers} currentUser={currentUser} fail={fail} onClose={() => setCreating(false)} onCreated={async id => { setCreating(false); notify("Task creato"); await reload(); if (id) setOpenId(id); }} /></Portal>}
       {openId !== null && <Portal><TaskSheet id={openId} people={people} threshold={threshold} isManager={isManager} buyers={buyers} fail={fail} notify={notify} onClose={() => setOpenId(null)} onChanged={reload}
         contracts={contracts} plans={plans} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onOpenContract={c => { setOpenId(null); onOpenContract(c); }} /></Portal>}
     </div>
@@ -272,7 +272,7 @@ function contractAction(i: Item, done: (c: number, s: string) => void, sendBO: (
   return <button onClick={() => done(i.contract!.id, i.step!.stepId)} style={small} title="Segna come fatta"><Check size={13} />{stepTemplate(i.step.stepId).label}</button>;
 }
 
-function NewTaskDialog({ isManager, buyers, currentUser, fail, onClose, onCreated }: { isManager: boolean; buyers: { id: number; name: string }[]; currentUser: User; fail: (e: unknown) => string; onClose: () => void; onCreated: () => void }) {
+function NewTaskDialog({ isManager, buyers, currentUser, fail, onClose, onCreated }: { isManager: boolean; buyers: { id: number; name: string }[]; currentUser: User; fail: (e: unknown) => string; onClose: () => void; onCreated: (openId: number | null) => void }) {
   const [f, setF] = useState({ title: "", detail: "", due: "", priority: "normal", assigneeId: currentUser.id, kind: "activity" as "activity" | "purchase", value: "", supplier: "", supplierId: null as number | null, rda: "" });
   const [error, setError] = useState<string | null>(null); const [busy, setBusy] = useState(false);
   const [vendors, setVendors] = useState<SupplierSummary[] | null>(null);
@@ -281,9 +281,9 @@ function NewTaskDialog({ isManager, buyers, currentUser, fail, onClose, onCreate
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setError(null);
     try {
-      await portalApi.createTask({ title: f.title, detail: f.detail, due: f.due || null, priority: f.priority, kind: f.kind, ...(isManager ? { assigneeId: f.assigneeId } : {}),
+      const made = await portalApi.createTask({ title: f.title, detail: f.detail, due: f.due || null, priority: f.priority, kind: f.kind, ...(isManager ? { assigneeId: f.assigneeId } : {}),
         ...(purchase ? { value: Number(f.value.replace(",", ".")), supplier: f.supplier, supplierId: f.supplierId, rdaNumbers: f.rda.split(/[\s,;]+/).filter(Boolean) } : {}) });
-      onCreated();
+      onCreated(purchase ? made.id : null);
     }
     catch (err) { setError(fail(err)); setBusy(false); }
   };

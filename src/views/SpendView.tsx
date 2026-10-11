@@ -14,7 +14,7 @@ const SOURCE: Record<string, string> = { net: "Valore netto del PO", pr: "Valore
 const th = { textAlign: "right" as const };
 
 /** Spesa reale dai file ordini SAP: dove va la spesa, quanto è coperta da contratti e quali ordini sfuggono al processo. */
-export function SpendView({ onSessionExpired }: { onSessionExpired: () => void }) {
+export function SpendView({ onSessionExpired, canImport = true }: { onSessionExpired: () => void; canImport?: boolean }) {
   const [year, setYear] = useState<number | undefined>(undefined);
   const [v, setV] = useState<View | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +34,7 @@ export function SpendView({ onSessionExpired }: { onSessionExpired: () => void }
 
   if (error) return <EmptyState icon={<AlertTriangle size={26} />} title="Impossibile calcolare la spesa" text={error} action={<button onClick={load} style={{ ...btnGhost, padding: "9px 16px" }}>Riprova</button>} />;
   if (!v) return <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Loader2 className="spin" size={26} color={C.subtle} /></div>;
-  if (v.year === null) return <EmptyState icon={<Wallet size={26} />} title="Nessun ordine importato" text="La spesa si costruisce dai file ordini di SAP (PO_LAST_7D) caricati dal modulo Task: ogni import aggiunge le righe nuove. Per avere subito lo storico, importa una volta un'estrazione ordini di un periodo più lungo con le stesse colonne." />;
+  if (v.year === null) return <EmptyState icon={<Wallet size={26} />} title="Nessun ordine importato" text={canImport ? "La spesa si costruisce dai file ordini di SAP (PO_LAST_7D) caricati dal modulo Task: ogni import aggiunge le righe nuove. Per avere subito lo storico, importa una volta un'estrazione ordini di un periodo più lungo con le stesse colonne." : "Non sono ancora stati caricati ordini da SAP, quindi non c'è nulla da analizzare. Li carica il Buyer o il Manager dal modulo Task: appena ci sono, qui compaiono spesa, fornitori e categorie."} />;
 
   const unvalued = v.valued.none;
   const fromPr = v.valued.pr + v.valued.gr;
