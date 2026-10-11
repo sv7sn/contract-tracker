@@ -13,7 +13,13 @@ export function SupplierRfqs({ fail, notify }: { fail: (e: unknown) => string; n
   useEffect(() => { let off = false; portalApi.myRfqs().then(x => { if (!off) setRfqs(x); }).catch(() => { if (!off) setRfqs([]); }); return () => { off = true; }; }, []);
   const open = (rfqs ?? []).filter(r => r.status === "open");
   const past = (rfqs ?? []).filter(r => r.status === "closed" && r.myQuote.quotedAt);
-  if (!rfqs || (!open.length && !past.length)) return null;
+  if (!rfqs) return null;
+  if (!open.length && !past.length) return (
+    <Card>
+      <CardTitle icon={<Send size={16} />}>Richieste di offerta</CardTitle>
+      <div style={{ ...sans, fontSize: 13, color: C.muted }}>Nessuna richiesta ricevuta. Quando un buyer ti invita a presentare un'offerta, la trovi qui e puoi rispondere con importo e note.</div>
+    </Card>
+  );
   return (
     <Card>
       <CardTitle icon={<Send size={16} />}>Richieste di offerta</CardTitle>

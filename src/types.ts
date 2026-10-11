@@ -109,6 +109,8 @@ export interface SupplierEvent { at: string; actor: string; action: string; deta
 export interface Supplier {
   id: number; email: string; name: string;
   companyCodes: string[]; industryCode: string; customerCode: string;
+  /** Solo area fornitore: nomi delle società che hanno richiesto la registrazione. */
+  companyNames?: string[];
   referenceBuyerId: number | null; referenceBuyerName: string;
   status: SupplierStatus; data: SupplierData;
   paymentTerms: string | null; sapCode: string | null; sapAccountGroup: string | null;

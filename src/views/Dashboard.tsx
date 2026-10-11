@@ -43,7 +43,7 @@ export function Dashboard({ contracts, plans, currentUser, onNavigate, onNew }: 
         <StatCard label="Da gestire subito" value={red} color={C.red} icon={<AlertTriangle size={18} />} sub="scaduti o entro 30 giorni" />
         {isManager
           ? <StatCard label="In attesa del BO" value={pendingBO} color={C.yellow} icon={<Hourglass size={18} />} sub="decisioni da ricevere" />
-          : <StatCard label="In scadenza" value={yellow} color={C.yellow} icon={<CalendarClock size={18} />} sub="entro 90 giorni" />}
+          : <StatCard label="In scadenza" value={yellow} color={C.yellow} icon={<CalendarClock size={18} />} sub="tra 31 e 90 giorni" />}
       </Grid>
 
       {mine.length === 0 ? (

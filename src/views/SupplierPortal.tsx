@@ -216,7 +216,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
         <div style={{ minWidth: 0 }}>
           <div style={{ ...font, fontSize: 20, fontWeight: 700, color: C.text }}>{s.name}</div>
-          <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginTop: 2 }}>{s.companyCodes.length ? `Registrazione richiesta da: ${s.companyCodes.join(", ")}` : ""}</div>
+          <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginTop: 2 }}>{s.companyCodes.length ? `Registrazione richiesta da: ${s.companyNames?.length ? s.companyNames.join(", ") : s.companyCodes.join(", ")}` : ""}</div>
         </div>
         <StatusBadge status={s.status} update={s.isUpdate} />
       </div>
