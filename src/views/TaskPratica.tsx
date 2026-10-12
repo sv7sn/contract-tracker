@@ -223,7 +223,7 @@ export function PraticaPart({ t, part, fail, onSaved, ctx }: { t: TaskDetail; pa
   return (
     <Card>
       {part === "contract" && (<>
-        {!renewal && ctx && (ctx.currentUser.role === "manager" || ctx.currentUser.role === "buyer") && <Block title="Bozza e revisioni" first><DraftSummary taskId={t.id} canManage={open} onChanged={() => { void portalApi.task(t.id).then(x => onSaved(x, "Bozza aggiornata")).catch(() => undefined); }} /></Block>}
+        {!renewal && ctx && (ctx.currentUser.role === "manager" || ctx.currentUser.role === "buyer") && <Block title="Bozza e revisioni" first><DraftSummary taskId={t.id} canManage={open} currentUser={ctx.currentUser} onChanged={() => { void portalApi.task(t.id).then(x => onSaved(x, "Bozza aggiornata")).catch(() => undefined); }} /></Block>}
         <Block title="Offerta e contratto" first={renewal || !ctx}>
           {docs.length === 0 && <div style={{ marginBottom: 6 }}>Nessun documento allegato.</div>}
           {docs.length > 0 && <div style={{ display: "grid", gap: 4, marginBottom: 6 }}>{docs.map(d => (
