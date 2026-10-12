@@ -3,7 +3,7 @@ import type { ContractOutcome, ImportResult, RdaConfig, RdaMeta, Sourcing, Sourc
 import { computeSaving } from "./_saving.js";
 import { makePlan, reschedulePlan } from "./_plan-rules.js";
 import { FILE_PATH_RE } from "./_blob.js";
-import { getPool, inTransaction, type Queryable } from "./_db.js";
+import { cleanPayload, commit, getPool, inTransaction, type Queryable } from "./_db.js";
 import { HttpError } from "./_http.js";
 import { listEligibleSuppliers } from "./_portal.js";
 import { detectKind, parsePoLines, parsePrLines, parseSheet, type PrLine } from "./_sap-files.js";
@@ -355,7 +355,7 @@ export async function saveSourcing(user: User, id: number, input: Row): Promise<
     approvedBy: mode === "exception" && manager ? user.name : "", approvedAt: mode === "exception" && manager ? now : null, approvalNote: "",
   };
   await getPool().query("update tasks set sourcing = $2, updated_at = now() where id = $1", [id, JSON.stringify(sourcing)]);
-  return getTask(user, id);
+  return closeIfComplete(user, id);
 }
 
 /** Il Manager approva o respinge un'eccezione al confronto tra fornitori. */
@@ -368,7 +368,7 @@ export async function decideSourcingException(user: User, id: number, input: Row
   if (!approve && note.length < 5) bad("Indica il motivo del rifiuto");
   const sourcing: Sourcing = { ...cur.sourcing!, approval: approve ? "approved" : "rejected", approvedBy: user.name, approvedAt: new Date().toISOString(), approvalNote: note };
   await getPool().query("update tasks set sourcing = $2, updated_at = now() where id = $1", [id, JSON.stringify(sourcing)]);
-  return getTask(user, id);
+  return closeIfComplete(user, id);
 }
 
 export async function deleteManualTask(user: User, id: number): Promise<void> {
@@ -477,6 +477,10 @@ async function closeIfComplete(user: User, id: number): Promise<TaskDetail> {
   const t = await getTask(user, id);
   if (t.status === "open" && (t.source === "contract" || (t.source === "manual" && t.kind === "purchase")) && !closeBlocker(t))
     await getPool().query("update tasks set status = 'done', done_at = now(), done_reason = 'outcome', done_by = $2, updated_at = now() where id = $1", [id, user.name]);
+  // RDA: se l'ordine è già in SAP e l'RDA non è più aperta, completato l'ultimo passaggio si chiude subito (senza aspettare il prossimo caricamento).
+  else if (t.status === "open" && t.source === "rda" && t.pos.length > 0 && !closeBlocker(t)
+    && !(await getPool().query("select 1 from rda_lines where pr = $1 limit 1", [t.sourceKey])).rows.length)
+    await getPool().query("update tasks set status = 'done', done_reason = 'po_created', done_by = $2, done_at = coalesce((select min(p.doc_date)::timestamptz from sap_pos p where p.pr = tasks.source_key), now()), updated_at = now() where id = $1", [id, user.name]);
   return getTask(user, id);
 }
 async function attachDoc(db: Queryable, taskId: number, kind: TaskDocKind, doc: Row | undefined, by: string): Promise<{ name: string; path: string } | null> {
@@ -659,6 +663,42 @@ export async function setIoBuyer(user: User, ioIn: unknown, userIn: unknown): Pr
   return { moved: (await inTransaction(tx => assignIoBuyers(tx, [{ io, userId: uid }], user.name))).moved };
 }
 
+/** RDA o acquisto con contratto firmato: lo si inserisce una sola volta qui (stessi campi del modulo Contratti) e nasce nel registro contratti, con il suo piano. */
+export async function registerTaskContract(user: User, id: number, input: Row): Promise<TaskDetail> {
+  const t = await getTask(user, id);
+  if (t.source === "contract" || (t.source === "manual" && t.kind !== "purchase")) bad("Il contratto si registra sulle RDA e sugli acquisti; nei rinnovi si registra con l'esito");
+  if (t.status !== "open") bad("La pratica è chiusa");
+  if (t.newContractId) throw new HttpError(409, "Il contratto di questa pratica è già stato registrato");
+  const c = (input?.contract ?? {}) as Row;
+  const key = (typeof c.noticeDate === "string" && c.noticeDate) || (typeof c.end === "string" ? c.end : "");
+  if (!isoDay(key)) bad("Indica la scadenza del contratto");
+  const payload = cleanPayload({ contract: c, plan: makePlan(0, key), audit: [{ ts: nowTs(), user: user.name, action: "Contratto creato", detail: `Da pratica: ${t.title}` }] });
+  const { contractId } = await commit(user, payload);
+  const db = getPool();
+  const nc = (await db.query("select file_name, file_path, supplier_id, internal_order from contracts where id = $1", [contractId])).rows[0];
+  const io = Object.keys(t.meta.io ?? {})[0] ?? t.meta.internalOrder ?? "";
+  if (io && !nc.internal_order) await db.query("update contracts set internal_order = $2 where id = $1", [contractId, io]);
+  if (t.chosenSupplierId && !nc.supplier_id) await db.query("update contracts set supplier_id = $2 where id = $1 and lower(supplier) = lower($3)", [contractId, t.chosenSupplierId, t.chosenSupplierName]);
+  await db.query("update tasks set new_contract_id = $2, contract_status = 'signed', contract_note = '', updated_at = now() where id = $1", [id, contractId]);
+  if (t.source === "manual") await db.query("update tasks set outcome = 'new_contract' where id = $1", [id]);
+  if (nc.file_path) await db.query("insert into task_documents (task_id, kind, file_name, file_path, uploaded_by) values ($1,'contract',$2,$3,$4)", [id, nc.file_name, nc.file_path, user.name]);
+  return closeIfComplete(user, id);
+}
+
+/** Archivio: tutti i task chiusi (non solo quelli degli ultimi 30 giorni), con ricerca per titolo, RDA, fornitore e fornitore scelto. */
+export async function tasksArchive(user: User, q: string): Promise<Task[]> {
+  const db = getPool();
+  const term = `%${q.trim().replace(/[%_]/g, " ").toLowerCase()}%`;
+  const rows = (await db.query(`${SELECT} where ${visibleSql(user)} and t.status = 'done'
+    and ($1 = '%%' or lower(t.title) like $1 or lower(coalesce(t.source_key,'')) like $1 or lower(t.chosen_supplier_name) like $1 or lower(coalesce(t.meta->>'supplier','')) like $1)
+    order by t.done_at desc nulls last limit 300`, [q.trim() ? term : "%%"])).rows;
+  const prs = rows.filter(r => r.source === "rda").map(r => r.source_key);
+  const pos = prs.length ? (await db.query("select * from sap_pos where pr = any($1) order by doc_date", [prs])).rows : [];
+  const { sourcingThreshold } = await loadRdaSettings(db);
+  const docs = rows.length ? (await db.query("select * from task_documents where task_id = any($1) order by id", [rows.map(r => r.id)])).rows : [];
+  return rows.map(r => mapTask(r, pos, sourcingThreshold, docs));
+}
+
 /** Sceglie il fornitore della pratica tra quelli registrati, attivi e qualificati. */
 export async function setTaskSupplier(user: User, id: number, input: Row): Promise<TaskDetail> {
   const t = await getTask(user, id);
@@ -670,7 +710,7 @@ export async function setTaskSupplier(user: User, id: number, input: Row): Promi
   const ok = (await listEligibleSuppliers()).find(x => x.id === sid);
   if (!ok) throw new HttpError(409, "Il fornitore non è registrato, attivo e qualificato: invitalo o aggiorna i suoi documenti dal modulo Fornitori");
   await getPool().query("update tasks set chosen_supplier_id = $2, chosen_supplier_name = $3, updated_at = now() where id = $1", [id, sid, ok.name]);
-  return getTask(user, id);
+  return closeIfComplete(user, id);
 }
 
 /** Per un rinnovo senza RDA: le RDA aperte che probabilmente sono la sua (stesso richiedente del BO, importo simile, fornitore nel testo). */

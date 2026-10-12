@@ -89,11 +89,11 @@ const minusDays = (iso: string, days: number) => { const d = new Date(`${iso}T00
 const daysBetween = (from: string, to: string) => Math.round((new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()) / 864e5);
 type TextField = "supplier" | "object" | "country" | "boEmail" | "category" | "type" | "currency" | "renewal";
 
-export function ContractForm({ initial, currentUser, users, canUpload, onSave, onClose }: { initial: Contract | null; currentUser: User; users: User[]; canUpload: boolean; onSave: (data: ContractData) => void; onClose: () => void }) {
+export function ContractForm({ initial, currentUser, users, canUpload, onSave, onClose, prefill, serverError, title }: { initial: Contract | null; currentUser: User; users: User[]; canUpload: boolean; onSave: (data: ContractData) => void | Promise<void>; onClose: () => void; /** Dati di partenza per un contratto nuovo (per esempio da un task). */ prefill?: Partial<ContractData>; serverError?: string | null; title?: string }) {
   const isBuyer = currentUser.role === "buyer";
   const owners = users.filter(u => u.active && (u.role === "buyer" || u.role === "manager")).map(u => u.name);
   if (!owners.includes(currentUser.name) && !isBuyer) owners.unshift(currentUser.name);
-  const [form, setForm] = useState<FormState>(initial || { supplier: "", object: "", category: "", country: "Italia", value: "", currency: "EUR", start: "", end: "", owner: isBuyer ? currentUser.name : "", boEmail: "", renewal: "Non definito", type: "Servizi", notes: "", ceased: false, fileName: null, filePath: null, noticeDays: null, noticeDate: "" });
+  const [form, setForm] = useState<FormState>(initial || { supplier: "", object: "", category: "", country: "Italia", value: "", currency: "EUR", start: "", end: "", owner: isBuyer ? currentUser.name : "", boEmail: "", renewal: "Non definito", type: "Servizi", notes: "", ceased: false, fileName: null, filePath: null, noticeDays: null, noticeDate: "", ...prefill });
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   // Anagrafica fornitori (solo con il server): per collegare il contratto al fornitore registrato.
@@ -147,7 +147,7 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
     <div className="sheet-overlay" role="dialog" aria-modal="true">
       <div className="sheet">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-          <h3 style={{ ...font, margin: 0, fontSize: 19, color: C.text }}>{isNew ? "Nuovo contratto" : "Modifica contratto"}</h3>
+          <h3 style={{ ...font, margin: 0, fontSize: 19, color: C.text }}>{title ?? (isNew ? "Nuovo contratto" : "Modifica contratto")}</h3>
           <button onClick={onClose} aria-label="Chiudi" style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, display: "flex", padding: 4 }}><X size={22} /></button>
         </div>
         <div style={two}>
@@ -201,6 +201,7 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
             <label htmlFor="ceased" style={{ ...sans, fontSize: 13, color: form.ceased ? C.gray : C.green, fontWeight: 600, cursor: "pointer" }}>{form.ceased ? "Contratto cessato: andrà in archivio" : "Segna come cessato (va in archivio)"}</label>
           </div>
         )}
+        {serverError && <div role="alert" style={{ ...sans, background: C.redBg, color: C.red, borderRadius: 10, padding: "9px 12px", fontSize: 13, marginBottom: 10 }}>{serverError}</div>}
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={onClose} style={{ ...btnGhost, flex: 1, padding: 12 }}>Annulla</button>
           <button onClick={handleSave} disabled={busy} style={{ ...btnPrimary, flex: 2, padding: 12, opacity: busy ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{busy ? <><Loader2 className="spin" size={16} />Caricamento documento…</> : isNew ? <><Plus size={16} />Aggiungi contratto</> : <><Save size={16} />Salva modifiche</>}</button>

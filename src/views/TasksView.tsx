@@ -50,7 +50,8 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
   const [buyers, setBuyers] = useState<{ id: number; name: string; active: boolean }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [origin, setOrigin] = useState<Origin>("all");
-  const [status, setStatus] = useState<"open" | "done" | "all" | "sourcing">("open");
+  const [status, setStatus] = useState<"open" | "done" | "all" | "sourcing" | "archive">("open");
+  const [archive, setArchive] = useState<Task[] | null>(null);
   const [threshold, setThreshold] = useState(10000);
   const [who, setWho] = useState("all");
   const [quick, setQuick] = useState<Quick | null>(null);
@@ -76,8 +77,16 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
     return () => { off = true; };
   }, [fail]);
 
+  // Archivio: tutti i task chiusi, cercati sul server (la lista normale tiene solo gli ultimi 30 giorni).
+  useEffect(() => {
+    if (status !== "archive") return;
+    let off = false;
+    const h = setTimeout(() => { portalApi.tasksArchive(search).then(x => { if (!off) setArchive(x); }).catch(() => { if (!off) setArchive([]); }); }, 250);
+    return () => { off = true; clearTimeout(h); };
+  }, [status, search]);
+
   // Un task di rinnovo per contratto: la prossima attività del suo piano diventa l'azione rapida in elenco.
-  const items = useMemo<Item[]>(() => (data?.tasks ?? []).map((t): Item => {
+  const items = useMemo<Item[]>(() => (status === "archive" ? archive ?? [] : data?.tasks ?? []).map((t): Item => {
     const c = t.contractId ? contracts.find(x => x.id === t.contractId) : undefined;
     const step = c && !t.outcome && t.status === "open" ? (plans[c.id] ?? []).find(s => s.status !== "done" && s.stepId !== "expiry") : undefined;
     const sub = t.source === "rda" ? [t.meta.requestedBy && `Richiedente ${t.meta.requestedBy}`, t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""].filter(Boolean).join(" · ")
@@ -86,7 +95,7 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
       key: `t:${t.id}`, origin: t.source, title: t.title, sub, due: t.due, assignee: t.assigneeName || "Da assegnare", assigneeId: t.assigneeId,
       status: t.status === "open" && step?.status === "pending_bo" ? "waiting" : t.status, priority: t.priority, doneAt: t.doneAt, task: t, contract: c, step,
     };
-  }), [data, contracts, plans]);
+  }), [data, archive, status, contracts, plans]);
 
   const recentDone = (it: Item) => it.status === "done" && !!it.doneAt && Date.now() - new Date(it.doneAt).getTime() < 7 * 864e5;
   const counts = useMemo(() => ({
@@ -173,7 +182,7 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
           <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca task, RDA, fornitore…" aria-label="Cerca" style={{ ...iStyle, paddingLeft: 36 }} />
         </div>
-        <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label="Stato" style={iStyle}><option value="open">Aperti</option><option value="done">Chiusi di recente</option><option value="all">Tutti</option></select>
+        <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label="Stato" style={iStyle}><option value="open">Aperti</option><option value="done">Chiusi di recente</option><option value="archive">Archivio (tutti i chiusi)</option><option value="all">Tutti</option></select>
         {isManager && <select value={who} onChange={e => setWho(e.target.value)} aria-label="Assegnatario" style={iStyle}><option value="all">Tutto il team</option><option value="none">Da assegnare</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
       </div>
 
@@ -216,7 +225,7 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
       <button className="fab" onClick={() => setCreating(true)} aria-label="Nuovo task"><Plus size={26} /></button>
 
       {creating && <Portal><NewTaskDialog isManager={isManager} buyers={buyers} currentUser={currentUser} fail={fail} onClose={() => setCreating(false)} onCreated={async id => { setCreating(false); notify("Task creato"); await reload(); if (id) setOpenId(id); }} /></Portal>}
-      {openId !== null && <Portal><TaskSheet id={openId} people={people} threshold={threshold} isManager={isManager} buyers={buyers} fail={fail} notify={notify} onClose={() => setOpenId(null)} onChanged={reload}
+      {openId !== null && <Portal><TaskSheet id={openId} currentUser={currentUser} people={people} threshold={threshold} isManager={isManager} buyers={buyers} fail={fail} notify={notify} onClose={() => setOpenId(null)} onChanged={reload}
         contracts={contracts} plans={plans} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onOpenContract={c => { setOpenId(null); onOpenContract(c); }} /></Portal>}
     </div>
   );
@@ -449,7 +458,7 @@ function ChosenSupplier({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown
   );
 }
 
-function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onClose, onChanged, contracts, plans, onCompleteStep, onSendBO, onOpenContract }: { id: number; people: Map<string, string>; threshold: number; isManager: boolean; buyers: { id: number; name: string }[]; fail: (e: unknown) => string; notify: (m: string) => void; onClose: () => void; onChanged: () => void;
+function TaskSheet({ id, currentUser, people, threshold, isManager, buyers, fail, notify, onClose, onChanged, contracts, plans, onCompleteStep, onSendBO, onOpenContract }: { id: number; currentUser: User; people: Map<string, string>; threshold: number; isManager: boolean; buyers: { id: number; name: string }[]; fail: (e: unknown) => string; notify: (m: string) => void; onClose: () => void; onChanged: () => void;
   contracts: Contract[]; plans: Record<number, PlanStep[]>; onCompleteStep: (contractId: number, stepId: string) => void; onSendBO: (contractId: number) => void; onOpenContract: (c: Contract) => void }) {
   const [t, setT] = useState<TaskDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -568,7 +577,7 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
                   </Fold>);
                 else if (st.key === "contract" && !renewal) out.push(
                   <Fold key={id} id={id} title="Contratto" status={st.state} summary={st.detail ?? "da indicare"} defaultOpen={st.state === "current"}>
-                    <PraticaPart t={t} part="contract" fail={fail} onSaved={saved} />
+                    <PraticaPart t={t} part="contract" fail={fail} onSaved={saved} ctx={{ currentUser, buyers, contracts, onOpenContract }} />
                   </Fold>);
                 else if (st.key === "po") out.push(
                   <Fold key={id} id={id} title="PO" status={st.state} summary={st.detail ?? (rda ? "da emettere in SAP" : "da indicare")} defaultOpen={st.state === "current"}>

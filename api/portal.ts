@@ -21,7 +21,7 @@ import { createTestAccesses, removeTestAccesses, createDemoSupplier, resetTestSu
 import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_budget-demo.js";
 import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudget } from "./_budget.js";
 import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
-import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, setIoBuyer, setTaskLinks, setTaskSupplier, suggestRdas, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
+import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, registerTaskContract, setIoBuyer, setTaskLinks, setTaskSupplier, tasksArchive, suggestRdas, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
 import { errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
 import {
@@ -209,6 +209,8 @@ async function handle(request: Request): Promise<Response> {
       if (op === "task-outcome" && method === "POST") return json({ task: await setRenewalOutcome(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-contract" && method === "POST") return json({ task: await registerPurchaseContract(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-rda-suggest" && method === "GET") return json({ suggestions: await suggestRdas(user, idOf(url)) });
+      if (op === "task-contract-register" && method === "POST") return json({ task: await registerTaskContract(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "tasks-archive" && method === "GET") return json({ tasks: await tasksArchive(user, url.searchParams.get("q") ?? "") });
       if (op === "task-supplier" && method === "POST") return json({ task: await setTaskSupplier(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-suppliers" && method === "GET") return json({ suppliers: await listEligibleSuppliers() });
       if (op === "task-links" && method === "POST") return json({ task: await setTaskLinks(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
