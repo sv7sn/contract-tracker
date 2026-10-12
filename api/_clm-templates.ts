@@ -9,10 +9,10 @@ export interface Question {
   key: string; label: L; type: "text" | "longtext" | "date" | "number" | "select" | "bool"; required?: boolean; default?: string;
   options?: { value: string; label: L }[];
   /** Dato che si compila da solo dal task o dall'anagrafica fornitore. */
-  prefill?: "supplier" | "supplierVat" | "supplierAddress" | "value" | "currency" | "title" | "today" | "paymentTerms";
+  prefill?: "supplier" | "supplierVat" | "supplierAddress" | "value" | "currency" | "title" | "today" | "paymentTerms" | "contractObject" | "contractEnd";
 }
-interface Section { id: string; title: L; text?: L; clause?: string; when?: { key: string; equals: string | boolean } }
-export interface Template { code: string; name: L; description: L; kind: "nda" | "services"; questions: Question[]; sections: Section[] }
+interface Section { id: string; title: L; text?: L; clause?: string; when?: { key: string; equals: string | boolean }; whenFilled?: string }
+export interface Template { code: string; name: L; description: L; kind: "nda" | "services" | "addendum"; questions: Question[]; sections: Section[] }
 
 /** Clausole di partenza della libreria: testo standard, alternativa accettabile (ripiego) e frasi non ammesse. */
 export interface ClauseSeed { code: string; title: string; category: string; text: L; fallback: L; forbidden: string[] }
@@ -86,6 +86,26 @@ export const TEMPLATES: Template[] = [
     ],
   },
   {
+    code: "ADDENDUM", kind: "addendum", name: t("Addendum / proroga", "Addendum / extension"),
+    description: t("Proroga o modifica di un contratto esistente, precompilata dal contratto.", "Extension or amendment of an existing contract, prefilled from the contract."),
+    questions: [
+      q("company", "La nostra società (ragione sociale)", "Our company (legal name)", "text", { required: true }),
+      q("counterparty", "Fornitore", "Supplier", "text", { required: true, prefill: "supplier" }),
+      q("originalObject", "Oggetto del contratto originario", "Subject of the original contract", "longtext", { required: true, prefill: "contractObject" }),
+      q("originalEnd", "Scadenza attuale", "Current end date", "date", { required: true, prefill: "contractEnd" }),
+      q("newEnd", "Nuova scadenza", "New end date", "date", { required: true }),
+      q("priceNote", "Variazione del corrispettivo (lascia vuoto se invariato)", "Fee change (leave empty if unchanged)", "text"),
+      q("date", "Data dell'addendum", "Addendum date", "date", { required: true, prefill: "today" }),
+    ],
+    sections: [
+      { id: "parties", title: t("Parti e premesse", "Parties and recitals"), text: t("Tra {{company}} e {{counterparty}} si conviene il presente addendum al contratto avente ad oggetto: {{originalObject}}.", "Between {{company}} and {{counterparty}} this addendum is agreed to the contract relating to: {{originalObject}}.") },
+      { id: "extension", title: t("Proroga", "Extension"), text: t("La scadenza del contratto, fissata al {{originalEnd}}, è prorogata fino al {{newEnd}}.", "The end date of the contract, set at {{originalEnd}}, is extended until {{newEnd}}.") },
+      { id: "fees", title: t("Corrispettivo", "Fees"), whenFilled: "priceNote", text: t("Il corrispettivo è modificato come segue: {{priceNote}}.", "The fee is amended as follows: {{priceNote}}.") },
+      { id: "rest", title: t("Condizioni invariate", "Unchanged terms"), text: t("Restano ferme tutte le altre condizioni del contratto non espressamente modificate dal presente addendum.", "All other terms of the contract not expressly amended by this addendum remain unchanged.") },
+      { id: "sign", title: t("Firme", "Signatures"), text: t("Letto, confermato e sottoscritto in data {{date}}.\n{{company}}: ______________________\n{{counterparty}}: ______________________", "Read, confirmed and signed on {{date}}.\n{{company}}: ______________________\n{{counterparty}}: ______________________") },
+    ],
+  },
+  {
     code: "SERVICES", kind: "services", name: t("Contratto di fornitura di servizi", "Services agreement"),
     description: t("Contratto esterno per servizi, con penali, rinnovo e protezione dei dati opzionali.", "External services contract, with optional penalties, renewal and data protection."),
     questions: [
@@ -144,7 +164,7 @@ export function renderTemplate(tpl: Template, answers: Record<string, unknown>, 
     return raw;
   };
   const fill = (s: string, lang: Lang) => s.replace(/\{\{(\w+)\}\}/g, (_, k: string) => val(k, lang) || "[…]");
-  const on = (s: Section) => !s.when || Boolean(answers[s.when.key] ?? false) === s.when.equals || String(answers[s.when.key]) === String(s.when.equals);
+  const on = (s: Section) => (s.whenFilled ? String(answers[s.whenFilled] ?? "").trim() !== "" : true) && (!s.when || Boolean(answers[s.when.key] ?? false) === s.when.equals || String(answers[s.when.key]) === String(s.when.equals));
   const secs = tpl.sections.filter(on);
   const bodyOf = (s: Section, lang: Lang) => fill(s.clause ? clauseText(s.clause, lang) ?? CLAUSE_SEEDS.find(c => c.code === s.clause)!.text[lang] : s.text![lang], lang);
   // Per ogni sezione: titolo + paragrafi; con due lingue le coppie hanno lo stesso numero di righe.

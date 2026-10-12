@@ -13,7 +13,8 @@ import { listBoMessages, myRequests, postBoMessage } from "./_requests.js";
 import { boInfo, loadBoSettings, runBoNotices, saveBoSettings, sendBoNotice, setBoLead } from "./_bo.js";
 import { addCover, deleteCover, listCover } from "./_cover.js";
 import { resetData, resetPreview } from "./_reset.js";
-import { acceptDeviation, addComment, decideReview, diffDrafts, draftAudit, draftAuditCsv, draftBundle, draftFile, draftFindings, draftFromTemplate, inviteReviewers, myReviews, resolveComment, runReviewReminders, templateInfo, uploadDraft } from "./_clm.js";
+import { clmKpis, acceptDeviation, addComment, decideReview, diffDrafts, draftAudit, draftAuditCsv, draftBundle, draftFile, draftFindings, draftFromTemplate, inviteReviewers, myReviews, resolveComment, runReviewReminders, templateInfo, uploadDraft } from "./_clm.js";
+import { deleteRule, listRules, saveRule } from "./_clm-policy.js";
 import { canReadClauses, decideClauseVersion, listClauses, saveClause } from "./_clm-clauses.js";
 import { myWork } from "./_work.js";
 import { addRating, deleteRating, ratingSummary, supplierScorecard } from "./_rating.js";
@@ -186,7 +187,7 @@ async function handle(request: Request): Promise<Response> {
       if (op === "draft-comment-resolve" && method === "POST") return json(await resolveComment(u, idOf(url), (await body()).resolved !== false));
       if (op === "draft-decide" && method === "POST") return json(await decideReview(u, idOf(url), await body(), originOf(request)));
       if (op === "draft-templates" && method === "GET") return json({ templates: await templateInfo(u, idOf(url)) });
-      if (op === "draft-from-template" && method === "POST") return json(await draftFromTemplate(u, idOf(url), await body()), { status: 201 });
+      if (op === "draft-from-template" && method === "POST") return json(await draftFromTemplate(u, idOf(url), await body(), originOf(request)), { status: 201 });
       if (op === "draft-diff" && method === "GET") return json(await diffDrafts(u, idOf(url), Number(url.searchParams.get("from")), Number(url.searchParams.get("to"))));
       if (op === "draft-findings" && method === "GET") return json(await draftFindings(u, idOf(url), Number(url.searchParams.get("draft")) || undefined));
       if (op === "draft-deviation" && method === "POST") return json(await acceptDeviation(u, idOf(url), await body()));
@@ -199,6 +200,15 @@ async function handle(request: Request): Promise<Response> {
         if (!blob) throw new HttpError(404, "Documento non trovato");
         return fileDownload(blob.stream, f.fileName);
       }
+    }
+
+    // ── Regole su chi rivede (Manager) e indicatori del ciclo di revisione (Manager e Controlling/CFO) ──
+    if (["review-rules", "review-rule-save", "review-rule-delete", "clm-kpis"].includes(op)) {
+      const u = await requireRole(request, ["manager", "viewer"]);
+      if (op === "clm-kpis" && method === "GET") return json(await clmKpis(u));
+      if (op === "review-rules" && method === "GET") return json({ rules: await listRules(u) });
+      if (op === "review-rule-save" && method === "POST") return json({ rules: await saveRule(u, (await readJson(request)) as Record<string, unknown>) });
+      if (op === "review-rule-delete" && method === "POST") return json({ rules: await deleteRule(u, idOf(url)) });
     }
 
     // ── Libreria di clausole (Legal e Manager scrivono; buyer, Compliance e IT Security leggono) ──

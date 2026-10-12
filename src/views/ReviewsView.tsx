@@ -11,10 +11,10 @@ const STATE = { pending: "Da rivedere", approved: "Approvata", approved_comments
 const PRIO: Record<string, string> = { high: "Alta", normal: "Normale", low: "Bassa" };
 
 /** Coda delle revisioni di una funzione (Legal, Compliance, IT Security, Richiedente): stesse scadenze e priorità dei task del buyer. */
-export function ReviewsView({ currentUser, onSessionExpired }: { currentUser: User; onSessionExpired: () => void }) {
+export function ReviewsView({ currentUser, initialOpenId, onSessionExpired }: { currentUser: User; initialOpenId?: number | null; onSessionExpired: () => void }) {
   const [list, setList] = useState<MyReview[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [openId, setOpenId] = useState<number | null>(null);
+  const [openId, setOpenId] = useState<number | null>(initialOpenId ?? null);
   const load = useCallback(() => { portalApi.clm.mine().then(setList).catch(e => { if (e?.status === 401) onSessionExpired(); else setError(e instanceof Error ? e.message : "Errore"); }); }, [onSessionExpired]);
   useEffect(load, [load]);
   if (error) return <EmptyState icon={<AlertTriangle size={26} />} title="Impossibile caricare le revisioni" text={error} />;

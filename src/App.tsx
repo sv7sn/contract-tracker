@@ -59,6 +59,7 @@ export default function App() {
   const [showAccount, setShowAccount] = useState(false);
   const [listSearch, setListSearch] = useState("");
   const [showModules, setShowModules] = useState(false);
+  const [reviewFocus, setReviewFocus] = useState<number | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(() => new URLSearchParams(window.location.search).get("invite"));
 
   // Il dettaglio legge sempre la versione aggiornata del contratto (es. dopo una risposta BO).
@@ -68,6 +69,14 @@ export default function App() {
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
   const resetSession = () => { setCurrentUser(null); setShowAccount(false); setShowForm(false); setEditingContract(null); setBOFormContract(null); setSelectedId(null); setView("dashboard"); if (mode === "api") { setData(EMPTY); setUsers([]); } };
+  /** Link delle email (?review=ID per le funzioni, ?task=ID per il buyer): apre direttamente la bozza o il task. */
+  const applyDeepLink = (user: User) => {
+    const q = new URLSearchParams(window.location.search), rv = Number(q.get("review")), tk = Number(q.get("task"));
+    if (!rv && !tk) return;
+    if (rv > 0 && (REVIEWER_ROLES.includes(user.role) || user.role === "bo")) { setReviewFocus(rv); setView("reviews"); }
+    else if (tk > 0 && (user.role === "manager" || user.role === "buyer")) { setFocus({ taskId: tk }); setView("tasks"); }
+    window.history.replaceState(null, "", window.location.pathname);
+  };
   const sessionExpired = () => { resetSession(); showToast("Sessione scaduta: accedi di nuovo"); };
 
   /** Gestisce gli errori comuni dell'API. Restituisce true se l'errore è stato gestito. */
@@ -96,7 +105,7 @@ export default function App() {
         return;
       }
       if (cancelled) return;
-      setCurrentUser(user); setView(homeFor(user, true));
+      setCurrentUser(user); setView(homeFor(user, true)); applyDeepLink(user);
       await loadAll(user);
     })();
     return () => { cancelled = true; };
@@ -124,7 +133,7 @@ export default function App() {
     }
     try {
       const { user } = await api.login(email, password);
-      setCurrentUser(user); setView(homeFor(user, true)); setSetupRequired(false);
+      setCurrentUser(user); setView(homeFor(user, true)); setSetupRequired(false); applyDeepLink(user);
       await loadAll(user);
       return null;
     } catch (err) { return err instanceof ApiError ? err.message : "Impossibile contattare il server"; }
@@ -408,7 +417,7 @@ export default function App() {
           {view === "team" && canViewTeam(currentUser) && <TeamView contracts={contracts} plans={plans} onApplySuggestion={handleApplySuggestion} />}
           {view === "bo" && currentUser.role === "bo" && <BOView contracts={contracts} plans={plans} currentUser={currentUser} onOpenBOForm={setBOFormContract} />}
           {view === "requests" && mode === "api" && currentUser.role === "bo" && <RequestsView currentUser={currentUser} contracts={contracts} onOpenBOForm={setBOFormContract} onOpenContract={openDetail} onSessionExpired={sessionExpired} />}
-          {view === "reviews" && mode === "api" && (REVIEWER_ROLES.includes(currentUser.role) || currentUser.role === "bo") && <ReviewsView currentUser={currentUser} onSessionExpired={sessionExpired} />}
+          {view === "reviews" && mode === "api" && (REVIEWER_ROLES.includes(currentUser.role) || currentUser.role === "bo") && <ReviewsView currentUser={currentUser} initialOpenId={reviewFocus} onSessionExpired={sessionExpired} />}
           {view === "clauses" && mode === "api" && ["manager", "buyer", "legal", "compliance", "itsec"].includes(currentUser.role) && <ClausesView currentUser={currentUser} onSessionExpired={sessionExpired} />}
           {view === "notifiche" && currentUser.role !== "bo" && <AlertsView contracts={contracts} users={users} />}
           {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} onPurge={handlePurge} />}

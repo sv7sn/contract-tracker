@@ -7,6 +7,7 @@ import { Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
 import { AlertTriangle, Bell, Building2, History, Lock, RotateCcw, ShieldCheck, Inbox, FileCheck2, Loader2, Pencil, Plus, Save, Settings, Sparkles, Trash2, Wallet, FileText, X } from "../components/icons.tsx";
 import { Notice, Portal } from "../components/vendorUi.tsx";
 import { CategoriesCard } from "./CategoriesCard.tsx";
+import { ReviewRulesCard } from "./ReviewRulesCard.tsx";
 import { ResetCard } from "./ResetCard.tsx";
 import { TestAccessCard } from "./TestAccessCard.tsx";
 import { BoSettingsCard } from "./BoSettingsCard.tsx";
@@ -182,6 +183,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
         <button onClick={saveSap} disabled={busy} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}Salva parametri SAP</button>
       </Card>
 
+      <ReviewRulesCard fail={fail} notify={notify} />
       <BoSettingsCard fail={fail} notify={notify} />
       <CategoriesCard fail={fail} notify={notify} />
       <SanctionsCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />

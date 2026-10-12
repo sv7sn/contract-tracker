@@ -553,6 +553,7 @@ export async function setRenewalOutcome(user: User, id: number, input: Row): Pro
   const outcome = input?.outcome as ContractOutcome;
   if (!OUTCOMES.includes(outcome)) bad("Scegli l'esito del rinnovo");
   const note = str(input?.note, 1000);
+  if (outcome !== "ceased") { const gate = await reviewGate(getPool(), id); if (gate) throw new HttpError(409, gate); }
   await inTransaction(async db => {
     const old = (await db.query("select * from contracts where id = $1 for update", [t.contractId])).rows[0];
     if (!old) throw new HttpError(404, "Contratto non trovato");

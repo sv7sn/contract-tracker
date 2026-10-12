@@ -203,6 +203,9 @@ create table if not exists draft_deviations (
   id serial primary key, draft_id integer not null references contract_drafts(id) on delete cascade, para integer not null, clause_code text not null,
   accepted_by text not null, accepted_at timestamptz not null default now(), note text not null default '', unique (draft_id, para, clause_code)
 );
+create table if not exists review_rules (
+  id serial primary key, func text not null check (func in ('legal','compliance','itsec')), min_value numeric, personal_data boolean, countries text[] not null default '{}', label text not null default ''
+);
 create table if not exists clause_library (
   id serial primary key, code text not null unique, title text not null, category text not null default 'Generale', status text not null default 'active' check (status in ('active','retired')),
   created_by text not null default '', created_at timestamptz not null default now()

@@ -66,7 +66,7 @@ export function RenewalCard({ t, contracts, plan, onCompleteStep, onSendBO, onOp
 }
 
 /** Esito del rinnovo: nuovo contratto, proroga o cessazione. Aggiorna il contratto e lo storico. */
-export function OutcomeCard({ t, contracts, fail, onSaved, onOpenContract }: { t: TaskDetail; contracts: Contract[]; fail: (e: unknown) => string; onSaved: Saved; onOpenContract: (c: Contract) => void }) {
+export function OutcomeCard({ t, contracts, fail, onSaved, onOpenContract, currentUser }: { t: TaskDetail; contracts: Contract[]; fail: (e: unknown) => string; onSaved: Saved; onOpenContract: (c: Contract) => void; currentUser?: User }) {
   const purchase = t.source === "manual";
   const [mode, setMode] = useState<ContractOutcome | null>(null);
   const [f, setF] = useState({ supplier: t.meta.supplier ?? "", object: t.meta.object ?? "", value: t.meta.value ? String(t.meta.value) : "", start: t.meta.end ? new Date(new Date(`${t.meta.end}T00:00:00Z`).getTime() + 864e5).toISOString().slice(0, 10) : "", end: "", noticeDays: "", sentDate: "", note: "" });
@@ -83,6 +83,11 @@ export function OutcomeCard({ t, contracts, fail, onSaved, onOpenContract }: { t
     return (
       <Card>
         <CardTitle icon={<CheckCircle2 size={16} />}>{purchase ? "Contratto" : "Esito del rinnovo"}</CardTitle>
+      {!purchase && currentUser && (currentUser.role === "manager" || currentUser.role === "buyer") && !t.outcome && (
+        <div style={{ ...sans, margin: "0 0 12px", paddingBottom: 12, borderBottom: `1px solid ${C.borderLight}` }}>
+          <div style={{ fontSize: 11.5, fontWeight: 700, color: C.subtle, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>Bozza e revisioni (rinnovo, addendum)</div>
+          <DraftSummary taskId={t.id} canManage={t.status === "open"} currentUser={currentUser} />
+        </div>)}
         <div style={{ ...sans, fontSize: 13.5, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
           <b>{OUTCOME_DONE[t.outcome]}</b>
           {nc && <button onClick={() => onOpenContract(nc)} style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }}>Apri il nuovo contratto ({nc.supplier}, scad. {fmtDate(nc.end)})</button>}
