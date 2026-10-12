@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Contract, ContractOutcome, EligibleSupplier, PlanStep, RdaSuggestion, Saving, SourcingMode, SourcingQuote, SupplierSummary, Task, TaskDetail, TaskList, User } from "../types.ts";
 import { computeSaving } from "../lib/saving.ts";
-import { DeliveryField, IoField, OutcomeCard, PraticaPart, RenewalCard } from "./TaskPratica.tsx";
+import { DeliveryField, IoBudget, IoField, OutcomeCard, PraticaPart, RenewalCard } from "./TaskPratica.tsx";
 import { ApiError, importSapFile, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmt, fmtDate, isoDate, NOW } from "../lib/format.ts";
@@ -515,19 +515,28 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
                     <Card>
                       <KV dense rows={[
                         ...(rda ? [
+                          // Chi e cosa → budget → tempi: tre righe da quattro dati.
                           ["Numero RDA", t.sourceKey ?? ""],
-                          ["Internal order", <IoField key="io" t={t} fail={fail} onSaved={saved} />],
-                          ["Gruppo acquisti", t.meta.pgr ?? ""],
                           ["Richiedente", t.meta.requestedBy ? people.get(t.meta.requestedBy.toUpperCase()) ?? t.meta.requestedBy : ""],
+                          ["Gruppo acquisti", t.meta.pgr ?? ""],
+                          ["Assegnato a", t.assigneeName || "Da assegnare"],
                           ["Importo", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""],
+                          ["Internal order", <IoField key="io" t={t} fail={fail} onSaved={saved} />],
+                          ["Centro di costo", t.meta.costCenter ?? ""],
+                          ...(rec && !ioMissing ? [["Budget residuo", <IoBudget key="bd" t={t} />]] : []),
                           ["Rilasciata il", t.meta.releaseDate ? `${fmtDate(t.meta.releaseDate)}${age !== null ? ` (da ${age} gg)` : ""}` : ""],
                           ["Consegna richiesta", <DeliveryField key="dl" t={t} fail={fail} onSaved={saved} />],
-                          ["Centro di costo", t.meta.costCenter ?? ""],
+                          ["Scadenza", t.due ? fmtDate(t.due) : ""],
                         ] as [string, ReactNode][] : []),
-                        ...(purchase ? [["Internal order", <IoField key="io" t={t} fail={fail} onSaved={saved} />]] as [string, ReactNode][] : []),
-                        [renewal ? "Da gestire entro" : "Scadenza", t.due ? fmtDate(t.due) : ""], ["Assegnato a", t.assigneeName || "Da assegnare"],
-                        ...(!rda && !renewal ? [["Priorità", PRIO[t.priority]], ["Creato da", t.createdBy]] as [string, string][] : []),
-                        ...(purchase ? [["Importo stimato", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Fornitore previsto", t.meta.supplier || "—"]] as [string, string][] : []),
+                        ...(purchase ? [
+                          ["Importo stimato", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""],
+                          ["Internal order", <IoField key="io" t={t} fail={fail} onSaved={saved} />],
+                          ...(rec && !ioMissing ? [["Budget residuo", <IoBudget key="bd" t={t} />]] : []),
+                          ["Fornitore previsto", t.meta.supplier || "—"],
+                          ["Assegnato a", t.assigneeName || "Da assegnare"], ["Creato da", t.createdBy], ["Priorità", PRIO[t.priority]],
+                          ["Scadenza", t.due ? fmtDate(t.due) : ""],
+                        ] as [string, ReactNode][] : []),
+                        ...(!rda && !purchase ? [[renewal ? "Da gestire entro" : "Scadenza", t.due ? fmtDate(t.due) : ""], ["Assegnato a", t.assigneeName || "Da assegnare"], ["Priorità", PRIO[t.priority]], ["Creato da", t.createdBy]] as [string, string][] : []),
                       ]} />
                       {rda && t.lines.length > 0 && <div style={{ marginTop: 10 }}>
                         <div style={{ ...sans, fontSize: 11.5, color: C.subtle, fontWeight: 600 }}>Descrizione</div>
