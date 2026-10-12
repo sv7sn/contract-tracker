@@ -3,7 +3,7 @@
 export type Role = "manager" | "buyer" | "finance" | "bo" | "supplier" | "viewer" | "legal" | "compliance" | "itsec";
 export type Urgency = "green" | "yellow" | "red" | "gray";
 export type StepStatus = "upcoming" | "done" | "pending_bo";
-export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub" | "kpi" | "budget" | "spend" | "requests" | "reviews";
+export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub" | "kpi" | "budget" | "spend" | "requests" | "reviews" | "clauses";
 
 /** Utente autenticato, come restituito dall'API (mai con la password). */
 export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean; /** Codice utente SAP del richiedente (solo Business Owner): collega le RDA aperte in SAP a lui. */ sapUser?: string;
@@ -391,5 +391,19 @@ export interface ClmBundle {
   owner: boolean; myFunc: FuncKey | null; canDecide: boolean; gate: string | null;
   /** Business Owner invitabili come Richiedente (solo per buyer/Manager). */
   requesters: { id: number; name: string }[];
+  layout: ClmLayout; generated: boolean;
 }
 export interface MyReview { reviewId: number; taskId: number; func: FuncKey; title: string; supplier: string; due: string | null; taskDue: string | null; priority: string; version: number; invitedAt: string; overdueDays: number; status: ReviewStatus }
+
+export interface ClmLayout { cols?: 1 | 2; langs?: string[]; heads?: number[] }
+export interface ClauseVersionView { id: number; version: number; text: Record<"it" | "en", string>; fallback: Record<"it" | "en", string>; forbidden: string[]; guidance: string; status: "proposed" | "approved" | "rejected"; createdBy: string; createdAt: string; approvedBy: string | null; approvedAt: string | null; note: string }
+export interface ClauseView { id: number; code: string; title: string; category: string; status: string; current: ClauseVersionView | null; versions: ClauseVersionView[] }
+export interface ClmFinding { para: number; code: string; title: string; level: "standard" | "fallback" | "deviates" | "forbidden"; similarity: number; phrase?: string }
+export interface ClmFindings { findings: ClmFinding[]; accepted: { para: number; code: string; by: string; note: string }[] }
+export type ClmDiffOp =
+  | { type: "same"; a: number; b: number; text: string } | { type: "add"; b: number; text: string } | { type: "del"; a: number; text: string }
+  | { type: "mod"; a: number; b: number; from: string; to: string; words: { t: string; k: "same" | "add" | "del" }[] };
+export interface ClmDiff { ops: ClmDiffOp[]; added: number; removed: number; modified: number; from: number; to: number }
+export interface ClmQuestion { key: string; label: { it: string; en: string }; type: "text" | "longtext" | "date" | "number" | "select" | "bool"; required?: boolean; options?: { value: string; label: { it: string; en: string } }[]; value: string }
+export interface ClmTemplateInfo { code: string; name: { it: string; en: string }; description: { it: string; en: string }; questions: ClmQuestion[] }
+export interface ClmAuditEntry { id: number; at: string; actor: string; role: string; action: string; detail: string; draftId: number | null }

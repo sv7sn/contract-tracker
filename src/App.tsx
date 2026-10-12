@@ -29,6 +29,7 @@ import { BudgetView } from "./views/BudgetView.tsx";
 import { SpendView } from "./views/SpendView.tsx";
 import { HubView } from "./views/HubView.tsx";
 import { RequestsView } from "./views/RequestsView.tsx";
+import { ClausesView } from "./views/ClausesView.tsx";
 import { ReviewsView } from "./views/ReviewsView.tsx";
 import { moduleOfView, modulesFor } from "./lib/modules.tsx";
 
@@ -325,7 +326,7 @@ export default function App() {
   const activeModule = modules.find(m => m.key === curModule);
   const navItems = activeModule?.pages ?? [];
   const inContracts = curModule === "contracts";
-  const titles: Record<View, string> = { reviews: "Revisioni", dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", vendors: "Fornitori", expiries: "Scadenze documenti", tasks: "Task", kpi: "Indicatori di processo", budget: "Master Plan", spend: "Spesa", requests: "Le mie RDA e i miei contratti", hub: "Home", config: "Configurazione", supplier: "Area fornitore", detail: selected?.supplier ?? "" };
+  const titles: Record<View, string> = { clauses: "Libreria clausole", reviews: "Revisioni", dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", vendors: "Fornitori", expiries: "Scadenze documenti", tasks: "Task", kpi: "Indicatori di processo", budget: "Master Plan", spend: "Spesa", requests: "Le mie RDA e i miei contratti", hub: "Home", config: "Configurazione", supplier: "Area fornitore", detail: selected?.supplier ?? "" };
   const eyebrow = curModule === "hub" ? "Procurement Lab" : activeModule?.label ?? ROLE_LABELS[currentUser.role];
   const activeNav = view === "detail" ? "list" : view;
   const goModule = (m: { pages: { key: View }[] }) => { setView(m.pages[0].key); setShowModules(false); };
@@ -408,6 +409,7 @@ export default function App() {
           {view === "bo" && currentUser.role === "bo" && <BOView contracts={contracts} plans={plans} currentUser={currentUser} onOpenBOForm={setBOFormContract} />}
           {view === "requests" && mode === "api" && currentUser.role === "bo" && <RequestsView currentUser={currentUser} contracts={contracts} onOpenBOForm={setBOFormContract} onOpenContract={openDetail} onSessionExpired={sessionExpired} />}
           {view === "reviews" && mode === "api" && (REVIEWER_ROLES.includes(currentUser.role) || currentUser.role === "bo") && <ReviewsView currentUser={currentUser} onSessionExpired={sessionExpired} />}
+          {view === "clauses" && mode === "api" && ["manager", "buyer", "legal", "compliance", "itsec"].includes(currentUser.role) && <ClausesView currentUser={currentUser} onSessionExpired={sessionExpired} />}
           {view === "notifiche" && currentUser.role !== "bo" && <AlertsView contracts={contracts} users={users} />}
           {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} onPurge={handlePurge} />}
           {view === "hub" && hubAvailable && <HubView user={currentUser} modules={modules} contracts={contracts} plans={plans} onOpen={(v, f) => { if (f?.contractId) { setSelectedId(f.contractId); setView("detail"); return; } setFocus(f?.taskId || f?.vendorId ? f : null); setView(v); }} />}

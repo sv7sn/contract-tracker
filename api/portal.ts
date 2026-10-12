@@ -13,7 +13,8 @@ import { listBoMessages, myRequests, postBoMessage } from "./_requests.js";
 import { boInfo, loadBoSettings, runBoNotices, saveBoSettings, sendBoNotice, setBoLead } from "./_bo.js";
 import { addCover, deleteCover, listCover } from "./_cover.js";
 import { resetData, resetPreview } from "./_reset.js";
-import { addComment, decideReview, draftBundle, draftFile, inviteReviewers, myReviews, resolveComment, runReviewReminders, uploadDraft } from "./_clm.js";
+import { acceptDeviation, addComment, decideReview, diffDrafts, draftAudit, draftAuditCsv, draftBundle, draftFile, draftFindings, draftFromTemplate, inviteReviewers, myReviews, resolveComment, runReviewReminders, templateInfo, uploadDraft } from "./_clm.js";
+import { canReadClauses, decideClauseVersion, listClauses, saveClause } from "./_clm-clauses.js";
 import { myWork } from "./_work.js";
 import { addRating, deleteRating, ratingSummary, supplierScorecard } from "./_rating.js";
 import { closeRfq, createRfq, listMyRfqs, rfqFile, listTaskRfqs, submitQuote, applyRfq } from "./_rfq.js";
@@ -174,7 +175,7 @@ async function handle(request: Request): Promise<Response> {
     }
 
     // ── CLM: bozze del contratto e pareri delle funzioni (buyer, Manager, Richiedente, Legal, Compliance, IT Security) ──
-    if (["drafts", "draft-upload", "draft-invite", "draft-comment", "draft-comment-resolve", "draft-decide", "draft-file", "my-reviews"].includes(op)) {
+    if (["drafts", "draft-upload", "draft-invite", "draft-comment", "draft-comment-resolve", "draft-decide", "draft-file", "my-reviews", "draft-templates", "draft-from-template", "draft-diff", "draft-findings", "draft-deviation", "draft-audit", "draft-audit-export"].includes(op)) {
       const u = await requireRole(request, ["manager", "buyer", "bo", "legal", "compliance", "itsec"]);
       const body = async () => (await readJson(request)) as Record<string, unknown>;
       if (op === "my-reviews" && method === "GET") return json({ reviews: await myReviews(u) });
@@ -184,12 +185,29 @@ async function handle(request: Request): Promise<Response> {
       if (op === "draft-comment" && method === "POST") return json(await addComment(u, idOf(url), await body()));
       if (op === "draft-comment-resolve" && method === "POST") return json(await resolveComment(u, idOf(url), (await body()).resolved !== false));
       if (op === "draft-decide" && method === "POST") return json(await decideReview(u, idOf(url), await body(), originOf(request)));
+      if (op === "draft-templates" && method === "GET") return json({ templates: await templateInfo(u, idOf(url)) });
+      if (op === "draft-from-template" && method === "POST") return json(await draftFromTemplate(u, idOf(url), await body()), { status: 201 });
+      if (op === "draft-diff" && method === "GET") return json(await diffDrafts(u, idOf(url), Number(url.searchParams.get("from")), Number(url.searchParams.get("to"))));
+      if (op === "draft-findings" && method === "GET") return json(await draftFindings(u, idOf(url), Number(url.searchParams.get("draft")) || undefined));
+      if (op === "draft-deviation" && method === "POST") return json(await acceptDeviation(u, idOf(url), await body()));
+      if (op === "draft-audit" && method === "GET") return json({ entries: await draftAudit(u, idOf(url)) });
+      if (op === "draft-audit-export" && method === "GET") return new Response(await draftAuditCsv(u, idOf(url)), { headers: { ...noStore, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="registro-bozza-${idOf(url)}.csv"` } });
       if (op === "draft-file" && method === "GET") {
         const f = await draftFile(u, idOf(url));
+        if (!f.filePath) return fileDownload(new Blob([new Uint8Array(f.buffer!)]).stream(), f.fileName);
         const blob = await openDocument(f.filePath);
         if (!blob) throw new HttpError(404, "Documento non trovato");
         return fileDownload(blob.stream, f.fileName);
       }
+    }
+
+    // ── Libreria di clausole (Legal e Manager scrivono; buyer, Compliance e IT Security leggono) ──
+    if (["clauses", "clause-save", "clause-decide"].includes(op)) {
+      const u = await requireRole(request, ["manager", "buyer", "legal", "compliance", "itsec"]);
+      if (!canReadClauses(u)) throw new HttpError(403, "Operazione non consentita");
+      if (op === "clauses" && method === "GET") return json({ clauses: await listClauses(u) });
+      if (op === "clause-save" && method === "POST") return json({ clauses: await saveClause(u, (await readJson(request)) as Record<string, unknown>) });
+      if (op === "clause-decide" && method === "POST") { const b = (await readJson(request)) as { approve?: unknown; note?: unknown }; return json({ clauses: await decideClauseVersion(u, idOf(url), b.approve === true, String(b.note ?? "")) }); }
     }
 
     // ── Analisi in sola lettura: anche Controlling e CFO ──

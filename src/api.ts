@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type ClmBundle, type FuncKey, type MyReview, type ReviewStatus, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type EligibleSupplier, type RdaSuggestion, type Task, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type ClauseView, type ClmAuditEntry, type ClmBundle, type ClmDiff, type ClmFindings, type ClmTemplateInfo, type FuncKey, type MyReview, type ReviewStatus, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type EligibleSupplier, type RdaSuggestion, type Task, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -153,6 +153,15 @@ export const portalApi = {
     comment: (taskId: number, c: { draftId: number; body: string; para?: number | null; start?: number | null; end?: number | null; quote?: string; parentId?: number | null }) => post<ClmBundle>(portal("draft-comment", `&id=${taskId}`), c),
     resolve: (commentId: number, resolved: boolean) => post<ClmBundle>(portal("draft-comment-resolve", `&id=${commentId}`), { resolved }),
     decide: (taskId: number, decision: ReviewStatus, note: string) => post<ClmBundle>(portal("draft-decide", `&id=${taskId}`), { decision, note }),
+    templates: (taskId: number) => request<{ templates: ClmTemplateInfo[] }>(portal("draft-templates", `&id=${taskId}`)).then(r => r.templates),
+    fromTemplate: (taskId: number, template: string, langs: string[], answers: Record<string, unknown>) => post<ClmBundle>(portal("draft-from-template", `&id=${taskId}`), { template, langs, answers }),
+    diff: (taskId: number, from: number, to: number) => request<ClmDiff>(portal("draft-diff", `&id=${taskId}&from=${from}&to=${to}`)),
+    findings: (taskId: number, draftId: number) => request<ClmFindings>(portal("draft-findings", `&id=${taskId}&draft=${draftId}`)),
+    acceptDeviation: (taskId: number, para: number, code: string, note: string) => post<ClmFindings>(portal("draft-deviation", `&id=${taskId}`), { para, code, note }),
+    audit: (taskId: number) => request<{ entries: ClmAuditEntry[] }>(portal("draft-audit", `&id=${taskId}`)).then(r => r.entries),
+    clauses: () => request<{ clauses: ClauseView[] }>(portal("clauses")).then(r => r.clauses),
+    saveClause: (c: Record<string, unknown>) => post<{ clauses: ClauseView[] }>(portal("clause-save"), c).then(r => r.clauses),
+    decideClause: (versionId: number, approve: boolean, note: string) => post<{ clauses: ClauseView[] }>(portal("clause-decide", `&id=${versionId}`), { approve, note }).then(r => r.clauses),
     mine: () => request<{ reviews: MyReview[] }>(portal("my-reviews")).then(r => r.reviews),
   },
   deleteTask: (id: number) => request<{ ok: true }>(portal("task", `&id=${id}`), { method: "DELETE" }),
@@ -164,6 +173,7 @@ export const demoSapFileUrl = (kind: "pr" | "po") => `/api/portal?op=budget-demo
 export const budgetTemplateUrl = "/api/portal?op=budget-template";
 export const rfqFileUrl = (id: number, kind: "spec" | "quote", supplierId?: number) => `/api/portal?op=rfq-file&id=${id}&kind=${kind}${supplierId ? `&supplier=${supplierId}` : ""}`;
 export const supplierRfqSpecUrl = (id: number) => `/api/portal?op=supplier-rfq-spec&id=${id}`;
+export const draftAuditUrl = (taskId: number) => `/api/portal?op=draft-audit-export&id=${taskId}`;
 export const draftFileUrl = (draftId: number) => `/api/portal?op=draft-file&id=${draftId}`;
 export const taskDocUrl = (docId: number) => `/api/portal?op=task-doc-download&id=${docId}`;
 export const vendorExportUrl = (id: number) => `/api/portal?op=vendor-export&id=${id}`;

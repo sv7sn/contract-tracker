@@ -191,6 +191,28 @@ create table if not exists draft_comments (
   parent_id integer references draft_comments(id) on delete cascade, created_at timestamptz not null default now()
 );
 create index if not exists draft_comments_draft_idx on draft_comments (draft_id);
+alter table contract_drafts alter column file_path drop not null;
+alter table contract_drafts add column if not exists layout jsonb not null default '{}'::jsonb;
+alter table contract_drafts add column if not exists source jsonb;
+create table if not exists draft_audit (
+  id serial primary key, task_id integer not null references tasks(id) on delete cascade, draft_id integer references contract_drafts(id) on delete set null,
+  at timestamptz not null default now(), actor_id integer, actor_name text not null, actor_role text not null, action text not null, detail text not null default ''
+);
+create index if not exists draft_audit_task_idx on draft_audit (task_id, id);
+create table if not exists draft_deviations (
+  id serial primary key, draft_id integer not null references contract_drafts(id) on delete cascade, para integer not null, clause_code text not null,
+  accepted_by text not null, accepted_at timestamptz not null default now(), note text not null default '', unique (draft_id, para, clause_code)
+);
+create table if not exists clause_library (
+  id serial primary key, code text not null unique, title text not null, category text not null default 'Generale', status text not null default 'active' check (status in ('active','retired')),
+  created_by text not null default '', created_at timestamptz not null default now()
+);
+create table if not exists clause_versions (
+  id serial primary key, clause_id integer not null references clause_library(id) on delete cascade, version integer not null,
+  text jsonb not null, fallback jsonb not null, forbidden text[] not null default '{}', guidance text not null default '',
+  status text not null default 'proposed' check (status in ('proposed','approved','rejected')), created_by text not null default '', created_at timestamptz not null default now(),
+  approved_by text, approved_at timestamptz, note text not null default '', unique (clause_id, version)
+);
 alter table tasks add column if not exists chosen_supplier_id integer references suppliers(id) on delete set null;
 alter table tasks add column if not exists chosen_supplier_name text not null default '';
 alter table tasks add column if not exists contract_status text not null default '';

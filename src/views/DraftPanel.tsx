@@ -4,6 +4,7 @@ import { draftFileUrl, portalApi, uploadDocument } from "../api.ts";
 import { btnGhost, btnPrimary, C, iStyle, sans } from "../theme.ts";
 import { FUNC_LABEL } from "../clmRules.ts";
 import { Portal } from "../components/vendorUi.tsx";
+import { AuditView, DiffView, FindingsView, TemplateWizard } from "./DraftTools.tsx";
 import { AlertTriangle, Check, CheckCircle2, Clock, Download, Loader2, MessageSquare, Send, Upload, X } from "../components/icons.tsx";
 
 // Bozza del contratto: versioni, testo con commenti ancorati, pareri delle funzioni. Riservata a buyer, Manager e funzioni invitate.
@@ -23,7 +24,7 @@ export function ReviewChips({ bundle }: { bundle: ClmBundle }) {
 }
 
 /** Riepilogo nel quadrante del contratto + apertura della bozza a schermo intero. */
-export function DraftSummary({ taskId, canManage, onChanged }: { taskId: number; canManage: boolean; onChanged?: () => void }) {
+export function DraftSummary({ taskId, canManage, onChanged, currentUser }: { taskId: number; canManage: boolean; onChanged?: () => void; currentUser?: User }) {
   const [b, setB] = useState<ClmBundle | null>(null);
   const [open, setOpen] = useState(false);
   const load = useCallback(() => { portalApi.clm.bundle(taskId).then(setB).catch(() => setB(null)); }, [taskId]);
@@ -39,18 +40,18 @@ export function DraftSummary({ taskId, canManage, onChanged }: { taskId: number;
         {!b.gate && <div style={{ ...sans, fontSize: 12.5, color: C.green, display: "flex", gap: 6, alignItems: "center" }}><CheckCircle2 size={14} />Tutte le funzioni hanno approvato: si può firmare</div>}
       </> : <div style={{ ...sans, fontSize: 13, color: C.muted }}>Nessuna bozza caricata. Carica la bozza per farla rivedere a richiedente, Legal, Compliance e IT Security.</div>}
       {canManage && <div><button onClick={() => setOpen(true)} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}><MessageSquare size={14} />{cur ? "Apri bozza e revisioni" : "Carica la bozza"}</button></div>}
-      {open && <DraftDialog taskId={taskId} onClose={close} />}
+      {open && <DraftDialog taskId={taskId} onClose={close} currentUser={currentUser} />}
     </div>
   );
 }
 
-export function DraftDialog({ taskId, onClose }: { taskId: number; onClose: () => void }) {
+export function DraftDialog({ taskId, onClose, currentUser }: { taskId: number; onClose: () => void; currentUser?: User }) {
   return (
     <Portal>
       <div className="dialog-overlay" role="dialog" aria-modal="true" aria-label="Bozza del contratto" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
         <div className="dialog" style={{ maxWidth: 980, padding: 18 }}>
           <div style={{ display: "flex", justifyContent: "flex-end" }}><button onClick={onClose} aria-label="Chiudi" style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}><X size={20} /></button></div>
-          <DraftPanel taskId={taskId} />
+          <DraftPanel taskId={taskId} currentUser={currentUser} />
         </div>
       </div>
     </Portal>
@@ -75,6 +76,8 @@ export function DraftPanel({ taskId, currentUser }: { taskId: number; currentUse
   const [reply, setReply] = useState<{ id: number; text: string } | null>(null);
   const [inviting, setInviting] = useState(false);
   const [note, setNote] = useState("");
+  const [tab, setTab] = useState<"text" | "diff" | "clauses" | "audit">("text");
+  const [wizard, setWizard] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   const load = useCallback((draftId?: number) => { portalApi.clm.bundle(taskId, draftId).then(x => { setB(x); setErr(null); }).catch(e => setErr(errText(e))); }, [taskId]);
@@ -85,7 +88,6 @@ export function DraftPanel({ taskId, currentUser }: { taskId: number; currentUse
   if (!b) return <div style={{ display: "flex", justifyContent: "center", padding: 30 }}><Loader2 className="spin" size={22} color={C.subtle} /></div>;
   const cur = b.drafts.find(d => d.id === b.draftId);
   const isLatest = b.draftId === b.latestId;
-  void currentUser;
 
   const onUpload = (f: File | undefined) => {
     if (!f) return;
@@ -128,9 +130,11 @@ export function DraftPanel({ taskId, currentUser }: { taskId: number; currentUse
         {b.owner && <>
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="Nota sulla nuova versione (facoltativa)" style={{ ...iStyle, flex: 1, minWidth: 160, padding: "6px 10px", fontSize: 12.5 }} />
           <button onClick={() => fileRef.current?.click()} disabled={busy === "upload"} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", gap: 6, alignItems: "center" }}>{busy === "upload" ? <Loader2 className="spin" size={14} /> : <Upload size={14} />}{b.drafts.length ? "Carica nuova versione" : "Carica la bozza"}</button>
+          <button onClick={() => setWizard(true)} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5 }}>Nuova da modello</button>
           <input ref={fileRef} type="file" accept=".docx,.doc,.pdf" hidden onChange={e => onUpload(e.target.files?.[0])} />
         </>}
       </div>
+      {wizard && <TemplateWizard taskId={taskId} onClose={() => setWizard(false)} onDone={nb => { setB(nb); setWizard(false); setTab("text"); }} />}
       {cur && !isLatest && <div style={{ fontSize: 12.5, color: C.yellow }}>Stai guardando una versione precedente: i pareri si danno sull'ultima.</div>}
       {cur?.note && <div style={{ fontSize: 12.5, color: C.muted }}>Nota del buyer: {cur.note}</div>}
 
@@ -159,15 +163,30 @@ export function DraftPanel({ taskId, currentUser }: { taskId: number; currentUse
       {cur && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14, alignItems: "start" }}>
           <div>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: C.subtle, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>Testo{b.paras.length ? " · seleziona una frase per commentarla" : ""}</div>
+            <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
+              {([["text", "Testo"], ["diff", "Confronta"], ["clauses", "Clausole"], ...(b.owner ? [["audit", "Storico"]] : [])] as [typeof tab, string][]).map(([k, n]) => (
+                <button key={k} onClick={() => setTab(k)} style={{ ...btnGhost, padding: "4px 11px", fontSize: 12.5, ...(tab === k ? { borderColor: C.accent, color: C.accent, fontWeight: 650 } : {}) }}>{n}</button>))}
+            </div>
+            {tab === "diff" && <DiffView taskId={taskId} versions={b.drafts.map(d => ({ id: d.id, version: d.version }))} />}
+            {tab === "clauses" && b.draftId && <FindingsView taskId={taskId} draftId={b.draftId} paras={b.paras} canAccept={b.myFunc === "legal" || (b.owner && currentUser?.role === "manager")} onChanged={() => load(b.draftId ?? undefined)} />}
+            {tab === "audit" && <AuditView taskId={taskId} />}
+            {tab === "text" && <>
             {b.paras.length ? (
               <div ref={textRef} onMouseUp={onSelect} onTouchEnd={onSelect} style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 14px", maxHeight: 460, overflowY: "auto", background: "#fff" }}>
-                {b.paras.map((p, i) => (
-                  <p key={i} data-para={i} style={{ margin: "0 0 10px", fontSize: 13.5, lineHeight: 1.55, color: C.text, whiteSpace: "pre-wrap", borderLeft: paraComments(i).length ? `3px solid ${C.accent}` : "3px solid transparent", paddingLeft: 8 }}>
-                    {segments(p, paraComments(i)).map((s, k) => s.ids.length ? <mark key={k} style={{ background: C.yellowBg, borderRadius: 3 }}>{s.t}</mark> : <span key={k}>{s.t}</span>)}
-                  </p>))}
+                {(() => {
+                  const heads = new Set(b.layout.heads ?? []);
+                  const cell = (p: string, i: number) => (
+                    <p key={i} data-para={i} style={{ margin: "0 0 10px", fontSize: 13.5, lineHeight: 1.55, color: C.text, whiteSpace: "pre-wrap", fontWeight: heads.has(i) ? 700 : 400, borderLeft: paraComments(i).length ? `3px solid ${C.accent}` : "3px solid transparent", paddingLeft: 8 }}>
+                      {segments(p, paraComments(i)).map((sg, k) => sg.ids.length ? <mark key={k} style={{ background: C.yellowBg, borderRadius: 3 }}>{sg.t}</mark> : <span key={k}>{sg.t}</span>)}
+                    </p>);
+                  if (b.layout.cols !== 2) return b.paras.map(cell);
+                  const rows: ReactNode[] = [];
+                  for (let i = 0; i < b.paras.length; i += 2) rows.push(<div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>{cell(b.paras[i], i)}{cell(b.paras[i + 1] ?? "", i + 1)}</div>);
+                  return rows;
+                })()}
               </div>
             ) : <div style={{ border: `1px dashed ${C.border}`, borderRadius: 12, padding: 14, fontSize: 13, color: C.muted }}>Anteprima del testo non disponibile per questo formato: scarica il file e usa i commenti generali. Per commentare frase per frase carica la bozza in Word (.docx).</div>}
+            </>}
           </div>
           <div style={{ display: "grid", gap: 10 }}>
             <div style={{ fontSize: 11.5, fontWeight: 700, color: C.subtle, textTransform: "uppercase", letterSpacing: ".04em" }}>Commenti ({top.filter(c => c.status === "open").length} aperti)</div>
