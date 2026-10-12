@@ -333,7 +333,7 @@ export interface Scorecard {
 }
 
 // ─── Il mio lavoro ───────────────────────────────────────────
-export type WorkKind = "po_gap" | "bo_message" | "bo_to_send" | "bo_waiting" | "task_late" | "task_soon" | "sourcing_missing" | "exception" | "unassigned" | "rfq_answers" | "rfq_compare" | "vendor_review" | "vendor_lapsed" | "vendor_unresponsive" | "splits" | "review_late";
+export type WorkKind = "po_gap" | "bo_message" | "bo_to_send" | "bo_waiting" | "task_late" | "task_soon" | "sourcing_missing" | "exception" | "unassigned" | "rfq_answers" | "rfq_compare" | "vendor_review" | "vendor_lapsed" | "vendor_unresponsive" | "splits" | "review_late" | "obligation_due" | "contract_cap";
 export interface WorkItem {
   kind: WorkKind; urgency: 1 | 2 | 3; title: string; detail: string;
   /** Giorni di ritardo (positivo) o mancanti (negativo), se la voce ha una scadenza. */
@@ -381,9 +381,9 @@ export interface EligibleSupplier { id: number; name: string; sapCode: string | 
 /** CLM: funzioni che rivedono il contratto. Il parere di uno qualsiasi dei suoi utenti vale per la funzione. */
 export type FuncKey = "requester" | "legal" | "compliance" | "itsec";
 export type ReviewStatus = "pending" | "approved" | "approved_comments" | "changes";
-export interface ClmDraft { id: number; version: number; fileName: string; size: number; note: string; uploadedBy: string; uploadedAt: string }
+export interface ClmDraft { id: number; version: number; fileName: string; size: number; note: string; uploadedBy: string; uploadedAt: string; origin: "internal" | "supplier"; sharedAt: string | null }
 export interface ClmReview { id: number; func: FuncKey; required: boolean; due: string | null; status: ReviewStatus; note: string; decidedBy: string; decidedAt: string | null; invitedAt: string }
-export interface ClmComment { id: number; draftId: number; authorName: string; func: string; para: number | null; start: number | null; end: number | null; quote: string; body: string; status: "open" | "resolved"; parentId: number | null; createdAt: string; mine: boolean }
+export interface ClmComment { id: number; draftId: number; authorName: string; func: string; para: number | null; start: number | null; end: number | null; quote: string; body: string; status: "open" | "resolved"; parentId: number | null; createdAt: string; mine: boolean; external: boolean }
 export interface ClmBundle {
   drafts: ClmDraft[]; draftId: number | null; latestId: number | null; paras: string[]; reviews: ClmReview[]; comments: ClmComment[];
   brief: { taskId: number; title: string; supplier: string; value: number | null; currency: string; due: string | null; priority: string };
@@ -410,3 +410,7 @@ export interface ClmAuditEntry { id: number; at: string; actor: string; role: st
 export interface ReviewRule { id: number; func: FuncKey; minValue: number | null; personalData: true | null; countries: string[]; label: string }
 export interface ClmRequired { func: FuncKey; reason: string; invited: boolean }
 export interface ClmKpis { drafts: number; inReview: number; cycleDays: number | null; avgVersions: number | null; funcs: { func: FuncKey; decided: number; avgDays: number | null; onTimePct: number | null; pending: number; overdue: number }[] }
+export interface NegotiationSummary { taskId: number; title: string; latestVersion: number; sharedAt: string; openComments: number }
+export interface NegotiationComment { id: number; fromSupplier: boolean; author: string; para: number | null; start: number | null; end: number | null; quote: string; body: string; parentId: number | null; createdAt: string; status: "open" | "resolved" }
+export interface NegotiationBundle { title: string; drafts: { id: number; version: number; origin: "internal" | "supplier"; sharedAt: string; fileName: string }[]; draftId: number; paras: string[]; layout: ClmLayout; comments: NegotiationComment[] }
+export interface Obligation { id: number; contractId: number; kind: "deliverable" | "indexation" | "review" | "payment" | "other"; title: string; due: string; owner: string; note: string; status: "open" | "done"; repeatMonths: number | null; doneAt: string | null; doneBy: string }

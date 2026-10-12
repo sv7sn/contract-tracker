@@ -194,6 +194,16 @@ create index if not exists draft_comments_draft_idx on draft_comments (draft_id)
 alter table contract_drafts alter column file_path drop not null;
 alter table contract_drafts add column if not exists layout jsonb not null default '{}'::jsonb;
 alter table contract_drafts add column if not exists source jsonb;
+alter table contract_drafts add column if not exists shared_at timestamptz;
+alter table contract_drafts add column if not exists shared_by text not null default '';
+alter table contract_drafts add column if not exists origin text not null default 'internal';
+alter table draft_comments add column if not exists external boolean not null default false;
+create table if not exists contract_obligations (
+  id serial primary key, contract_id integer not null references contracts(id) on delete cascade, kind text not null default 'deliverable' check (kind in ('deliverable','indexation','review','payment','other')),
+  title text not null, due date not null, owner_name text not null default '', note text not null default '', status text not null default 'open' check (status in ('open','done')),
+  repeat_months integer, done_at timestamptz, done_by text not null default '', created_by text not null default '', created_at timestamptz not null default now()
+);
+create index if not exists contract_obligations_contract_idx on contract_obligations (contract_id);
 create table if not exists draft_audit (
   id serial primary key, task_id integer not null references tasks(id) on delete cascade, draft_id integer references contract_drafts(id) on delete set null,
   at timestamptz not null default now(), actor_id integer, actor_name text not null, actor_role text not null, action text not null, detail text not null default ''

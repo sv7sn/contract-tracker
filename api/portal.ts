@@ -14,6 +14,8 @@ import { boInfo, loadBoSettings, runBoNotices, saveBoSettings, sendBoNotice, set
 import { addCover, deleteCover, listCover } from "./_cover.js";
 import { resetData, resetPreview } from "./_reset.js";
 import { clmKpis, acceptDeviation, addComment, decideReview, diffDrafts, draftAudit, draftAuditCsv, draftBundle, draftFile, draftFindings, draftFromTemplate, inviteReviewers, myReviews, resolveComment, runReviewReminders, templateInfo, uploadDraft } from "./_clm.js";
+import { myNegotiations, negotiationBundle, shareDraft, supplierComment, supplierDraftFile, supplierUpload } from "./_clm-supplier.js";
+import { completeObligation, deleteObligation, listObligations, saveObligation } from "./_obligations.js";
 import { deleteRule, listRules, saveRule } from "./_clm-policy.js";
 import { canReadClauses, decideClauseVersion, listClauses, saveClause } from "./_clm-clauses.js";
 import { myWork } from "./_work.js";
@@ -110,6 +112,17 @@ async function handle(request: Request): Promise<Response> {
         if (!blob) throw new HttpError(404, "Documento non trovato");
         return fileDownload(blob.stream, doc.fileName);
       }
+      if (op === "supplier-negotiations" && method === "GET") return json({ negotiations: await myNegotiations(user) });
+      if (op === "supplier-negotiation" && method === "GET") return json(await negotiationBundle(user, idOf(url), Number(url.searchParams.get("draft")) || undefined));
+      if (op === "supplier-negotiation-comment" && method === "POST") return json(await supplierComment(user, idOf(url), (await readJson(request)) as Record<string, unknown>, origin));
+      if (op === "supplier-negotiation-upload" && method === "POST") return json(await supplierUpload(user, idOf(url), (await readJson(request)) as Record<string, unknown>, origin), { status: 201 });
+      if (op === "supplier-negotiation-file" && method === "GET") {
+        const f = await supplierDraftFile(user, idOf(url));
+        if (!f.filePath) return fileDownload(new Blob([new Uint8Array(f.buffer!)]).stream(), f.fileName);
+        const blob = await openDocument(f.filePath);
+        if (!blob) throw new HttpError(404, "Documento non trovato");
+        return fileDownload(blob.stream, f.fileName);
+      }
       if (op === "supplier-rfqs" && method === "GET") return json({ rfqs: await listMyRfqs(user) });
       if (op === "supplier-rfq-quote" && method === "POST") return json({ rfqs: await submitQuote(user, idOf(url), (await readJson(request)) as Record<string, unknown>, origin) });
       if (op === "supplier-save" && method === "POST") return json({ supplier: await saveMyData(user, await readJson(request), origin) });
@@ -176,7 +189,7 @@ async function handle(request: Request): Promise<Response> {
     }
 
     // ── CLM: bozze del contratto e pareri delle funzioni (buyer, Manager, Richiedente, Legal, Compliance, IT Security) ──
-    if (["drafts", "draft-upload", "draft-invite", "draft-comment", "draft-comment-resolve", "draft-decide", "draft-file", "my-reviews", "draft-templates", "draft-from-template", "draft-diff", "draft-findings", "draft-deviation", "draft-audit", "draft-audit-export"].includes(op)) {
+    if (["drafts", "draft-upload", "draft-invite", "draft-comment", "draft-comment-resolve", "draft-decide", "draft-file", "my-reviews", "draft-templates", "draft-from-template", "draft-diff", "draft-findings", "draft-deviation", "draft-audit", "draft-audit-export", "draft-share"].includes(op)) {
       const u = await requireRole(request, ["manager", "buyer", "bo", "legal", "compliance", "itsec"]);
       const body = async () => (await readJson(request)) as Record<string, unknown>;
       if (op === "my-reviews" && method === "GET") return json({ reviews: await myReviews(u) });
@@ -186,6 +199,7 @@ async function handle(request: Request): Promise<Response> {
       if (op === "draft-comment" && method === "POST") return json(await addComment(u, idOf(url), await body()));
       if (op === "draft-comment-resolve" && method === "POST") return json(await resolveComment(u, idOf(url), (await body()).resolved !== false));
       if (op === "draft-decide" && method === "POST") return json(await decideReview(u, idOf(url), await body(), originOf(request)));
+      if (op === "draft-share" && method === "POST") return json(await shareDraft(u, idOf(url), await body(), originOf(request)));
       if (op === "draft-templates" && method === "GET") return json({ templates: await templateInfo(u, idOf(url)) });
       if (op === "draft-from-template" && method === "POST") return json(await draftFromTemplate(u, idOf(url), await body(), originOf(request)), { status: 201 });
       if (op === "draft-diff" && method === "GET") return json(await diffDrafts(u, idOf(url), Number(url.searchParams.get("from")), Number(url.searchParams.get("to"))));
@@ -200,6 +214,15 @@ async function handle(request: Request): Promise<Response> {
         if (!blob) throw new HttpError(404, "Documento non trovato");
         return fileDownload(blob.stream, f.fileName);
       }
+    }
+
+    // ── Obblighi dei contratti (buyer e Manager scrivono; il Business Owner del contratto legge) ──
+    if (["obligations", "obligation-save", "obligation-done", "obligation-delete"].includes(op)) {
+      const u = await requireRole(request, ["manager", "buyer", "bo"]);
+      if (op === "obligations" && method === "GET") return json({ obligations: await listObligations(u, idOf(url)) });
+      if (op === "obligation-save" && method === "POST") return json({ obligations: await saveObligation(u, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "obligation-done" && method === "POST") return json({ obligations: await completeObligation(u, idOf(url)) });
+      if (op === "obligation-delete" && method === "POST") return json({ obligations: await deleteObligation(u, idOf(url)) });
     }
 
     // ── Regole su chi rivede (Manager) e indicatori del ciclo di revisione (Manager e Controlling/CFO) ──

@@ -5,6 +5,7 @@ import { canDeleteContract, canEditContract } from "../permissions.ts";
 import { AuditTrail, Avatar, Card, DaysChip, Grid, RenewalBadge } from "../components/ui.tsx";
 import { AlertTriangle, ArrowLeft, Download, ExternalLink, FileText, Pencil, StickyNote, Trash2 } from "../components/icons.tsx";
 import { documentUrl } from "../api.ts";
+import { ObligationsCard } from "./ObligationsCard.tsx";
 import { BoNoticeCard } from "./BoNoticeCard.tsx";
 import { BoMessages } from "./BoMessages.tsx";
 
@@ -91,6 +92,7 @@ export function ContractDetail({ contract, contracts, auditLog, currentUser, can
           ))}
           {canOpenDocuments && (currentUser.role === "bo" || canEditContract(currentUser, contract)) && contract.boEmail && <BoMessages contractId={contract.id} isBo={currentUser.role === "bo"} />}
           {canOpenDocuments && canEditContract(currentUser, contract) && <BoNoticeCard key={`${contract.id}-${contract.boUserId ?? contract.boEmail}`} contract={contract} onChanged={() => onPlanChanged?.()} />}
+          {canOpenDocuments && currentUser.role !== "viewer" && <ObligationsCard key={contract.id} contractId={contract.id} canEdit={canEditContract(currentUser, contract)} />}
           {contract.notes && <Card style={{ background: C.yellowBg, borderColor: "#f3dca0" }}><div style={{ ...sans, display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: C.yellow, fontWeight: 650, marginBottom: 6 }}><StickyNote size={15} />Note</div><div style={{ ...sans, fontSize: 13.5, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{contract.notes}</div></Card>}
         </div>
         <AuditTrail entries={auditLog} />
