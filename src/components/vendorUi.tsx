@@ -51,7 +51,7 @@ export function DocLink({ id, name }: { id: number; name: string }) {
 /** Mostra i dati dell'anagrafica a coppie etichetta/valore. */
 export function KV({ rows, dense }: { rows: [string, ReactNode][]; dense?: boolean }) {
   return (
-    <dl style={{ margin: 0, display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${dense ? 150 : 210}px), 1fr))`, gap: dense ? "8px 14px" : "12px 18px" }}>
+    <dl style={{ margin: 0, display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${dense ? 118 : 210}px), 1fr))`, gap: dense ? "6px 12px" : "12px 18px" }}>
       {rows.map(([k, v]) => (
         <div key={k} style={{ minWidth: 0 }}>
           <dt style={{ ...sans, fontSize: dense ? 11 : 11.5, color: C.subtle, fontWeight: 600 }}>{k}</dt>
