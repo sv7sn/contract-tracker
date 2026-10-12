@@ -105,6 +105,9 @@ const TEST_USERS = [
   { role: "bo", label: "Business Owner / Richiedente", name: "Prova Business Owner", email: "prova.bo@procurementlab.test", sap: "PROVA" },
   { role: "viewer", label: "Controlling / CFO (sola lettura)", name: "Prova Controlling", email: "prova.controlling@procurementlab.test", sap: "" },
   { role: "finance", label: "Finance", name: "Prova Finance", email: "prova.finance@procurementlab.test", sap: "" },
+  { role: "legal", label: "Legal", name: "Prova Legal", email: "prova.legal@procurementlab.test", sap: "" },
+  { role: "compliance", label: "Compliance", name: "Prova Compliance", email: "prova.compliance@procurementlab.test", sap: "" },
+  { role: "itsec", label: "IT Security", name: "Prova IT Security", email: "prova.itsec@procurementlab.test", sap: "" },
 ] as const;
 
 /** Un utente di prova per ogni ruolo (password nuova a ogni chiamata, mostrata una sola volta), più l'accesso di un fornitore di prova. */
