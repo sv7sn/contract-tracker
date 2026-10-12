@@ -494,7 +494,7 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
             {t.status === "done" && rda && t.doneReason === "removed_from_sap" && <Notice kind="info"><b>Chiusa automaticamente:</b> la RDA non risulta più aperta in SAP (ordinata, rifiutata o cancellata). Se in seguito arriva l'elenco degli ordini con il suo PO, lo vedrai qui.</Notice>}
             {t.status === "open" && t.pos.length > 0 && <Notice kind="info">Per questa RDA esiste già un ordine ({t.pos.map(p => p.po).join(", ")}): il task si chiude quando la RDA non è più aperta in SAP.</Notice>}
             {t.status === "open" && renewal && t.rdaNumbers.length === 0 && <RdaSuggest t={t} fail={fail} onLinked={x => { setT(x); onChanged(); notify("RDA collegata al rinnovo"); }} />}
-            {(rda || renewal || purchase) && <TaskProgress t={t} plan={t.contractId ? plans[t.contractId] ?? [] : []} />}
+            <TaskProgress t={t} plan={t.contractId ? plans[t.contractId] ?? [] : []} />
             {t.status === "open" && (rda || renewal || purchase) && <NextStep t={t} isManager={isManager} threshold={threshold} />}
             {(() => {
               const flow = taskSteps(t, t.contractId ? plans[t.contractId] ?? [] : []).filter(x => !x.hidden && x.key !== "closed");
@@ -511,8 +511,8 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
                 const id = st.section ?? st.key;
                 if (shown.has(id)) continue; shown.add(id);
                 if (st.key === "received") out.push(
-                  <Fold key={id} id={id} title={rda ? "Ricevuta da SAP" : "Pratica aperta"} status="done" badge={ioMissing && t.status === "open" ? { label: "Manca l'internal order", color: C.red, bg: C.redBg } : null}
-                    summary={[t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : "", ioStep?.detail && !ioMissing ? `IO ${ioStep.detail}` : ioMissing ? "internal order mancante" : ""].filter(Boolean).join(" · ")} defaultOpen={ioMissing && t.status === "open"}>
+                  <Fold key={id} id={id} title={rda ? "Ricevuta da SAP" : purchase ? "Pratica aperta" : "Dettagli"} status={rda || purchase ? "done" : undefined} badge={ioMissing && t.status === "open" ? { label: "Manca l'internal order", color: C.red, bg: C.redBg } : null}
+                    summary={[t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : "", ioStep?.detail && !ioMissing ? `IO ${ioStep.detail}` : ioMissing ? "internal order mancante" : ""].filter(Boolean).join(" · ")} defaultOpen={(ioMissing || (!rda && !purchase)) && t.status === "open"}>
                     <Card>
               <KV rows={[
                 ...(rda ? [["Numero RDA", t.sourceKey ?? ""], ["Gruppo acquisti", t.meta.pgr ?? ""], ["Richiedente", t.meta.requestedBy ? people.get(t.meta.requestedBy.toUpperCase()) ?? t.meta.requestedBy : ""], ["Importo", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Rilasciata il", t.meta.releaseDate ? `${fmtDate(t.meta.releaseDate)}${age !== null ? ` (da ${age} gg)` : ""}` : ""], ["Consegna richiesta", t.meta.delivDate ? fmtDate(t.meta.delivDate) : ""]] as [string, string][] : []),
@@ -520,7 +520,7 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
               ]} />
               {!rda && t.detail && <div style={{ ...sans, fontSize: 13, color: C.muted, marginTop: 12, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{t.detail}</div>}
             </Card>
-                    <PraticaPart t={t} part="io" fail={fail} onSaved={saved} />
+                    {(rda || purchase) && <PraticaPart t={t} part="io" fail={fail} onSaved={saved} />}
                     {rda && t.lines.length > 0 && (
                       <div style={{ overflowX: "auto" }}>
                         <table className="data-table" style={{ minWidth: 520 }}>
