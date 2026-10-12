@@ -49,13 +49,13 @@ export function DocLink({ id, name }: { id: number; name: string }) {
 }
 
 /** Mostra i dati dell'anagrafica a coppie etichetta/valore. */
-export function KV({ rows }: { rows: [string, ReactNode][] }) {
+export function KV({ rows, dense }: { rows: [string, ReactNode][]; dense?: boolean }) {
   return (
-    <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 210px), 1fr))", gap: "12px 18px" }}>
+    <dl style={{ margin: 0, display: "grid", gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${dense ? 150 : 210}px), 1fr))`, gap: dense ? "8px 14px" : "12px 18px" }}>
       {rows.map(([k, v]) => (
         <div key={k} style={{ minWidth: 0 }}>
-          <dt style={{ ...sans, fontSize: 11.5, color: C.subtle, fontWeight: 600 }}>{k}</dt>
-          <dd style={{ ...sans, margin: "2px 0 0", fontSize: 13.5, color: C.text, overflowWrap: "anywhere" }}>{v || "—"}</dd>
+          <dt style={{ ...sans, fontSize: dense ? 11 : 11.5, color: C.subtle, fontWeight: 600 }}>{k}</dt>
+          <dd style={{ ...sans, margin: dense ? "1px 0 0" : "2px 0 0", fontSize: dense ? 13 : 13.5, color: C.text, overflowWrap: "anywhere" }}>{v || "—"}</dd>
         </div>
       ))}
     </dl>

@@ -55,7 +55,7 @@ export function Grid({ min = 320, gap = 14, children, style, fill = false }: { m
 
 export function Card({ children, style, onClick, ...rest }: { children: ReactNode; style?: CSSProperties; onClick?: () => void } & Omit<React.HTMLAttributes<HTMLDivElement>, "style" | "onClick">) {
   const inFold = useContext(FoldContext);
-  return <div onClick={onClick} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: radius.lg, padding: 18, boxShadow: shadow.sm, ...(inFold ? { background: "transparent", border: "none", boxShadow: "none", padding: "2px 2px 6px" } : {}), ...style }} {...rest}>{children}</div>;
+  return <div onClick={onClick} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: radius.lg, padding: 18, boxShadow: shadow.sm, ...(inFold ? { background: "transparent", border: "none", boxShadow: "none", padding: "2px 2px 2px" } : {}), ...style }} {...rest}>{children}</div>;
 }
 
 /** Quadrante di un passaggio (o sezione) che si apre e si chiude. Con `status` mostra se il passaggio è fatto, in corso o ancora da fare. */
@@ -73,20 +73,20 @@ export function Fold({ id, title, badge, hint, summary, status, defaultOpen, chi
   const b = badge ?? tone?.badge ?? null;
   return (
     <section id={id} style={{ background: C.card, border: `1px solid ${status === "current" ? C.accent : C.border}`, borderLeft: `5px solid ${tone?.bar ?? C.border}`, borderRadius: radius.lg, boxShadow: status === "current" ? shadow.md : shadow.sm, scrollMarginTop: 130, overflow: "hidden" }}>
-      <button onClick={() => setOpen(o => !o)} aria-expanded={open} style={{ ...sans, display: "flex", alignItems: "center", gap: 12, width: "100%", minHeight: 58, padding: "8px 14px 8px 12px", background: tone?.head ?? "none", border: "none", cursor: "pointer", textAlign: "left", color: C.text }}>
-        {status && <span aria-hidden style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 26, height: 26, borderRadius: "50%", flexShrink: 0, boxSizing: "border-box", background: status === "done" ? C.green : status === "current" ? C.accent : "#fff", border: `2px solid ${status === "done" ? C.green : status === "current" ? C.accent : C.border}` }}>
-          {status === "done" ? <Check size={14} color="#fff" /> : status === "current" ? <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#fff" }} /> : null}
+      <button onClick={() => setOpen(o => !o)} aria-expanded={open} style={{ ...sans, display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: 46, padding: "6px 12px 6px 10px", background: tone?.head ?? "none", border: "none", cursor: "pointer", textAlign: "left", color: C.text }}>
+        {status && <span aria-hidden style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", flexShrink: 0, boxSizing: "border-box", background: status === "done" ? C.green : status === "current" ? C.accent : "#fff", border: `2px solid ${status === "done" ? C.green : status === "current" ? C.accent : C.border}` }}>
+          {status === "done" ? <Check size={12} color="#fff" /> : status === "current" ? <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#fff" }} /> : null}
         </span>}
         <span style={{ flex: 1, minWidth: 0 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ ...font, fontSize: 15, fontWeight: 650, opacity: status === "todo" ? 0.85 : 1 }}>{title}</span>
+            <span style={{ ...font, fontSize: 14.5, fontWeight: 650, opacity: status === "todo" ? 0.85 : 1 }}>{title}</span>
             {b && <span style={{ fontSize: 11, fontWeight: 700, color: b.color, background: b.bg, border: status === "current" && !badge ? `1px solid ${C.accent}` : "none", borderRadius: 999, padding: "2px 9px", whiteSpace: "nowrap" }}>{b.label}</span>}
           </span>
-          {(summary || hint) && <span className="one-line" style={{ display: "block", fontSize: 12.5, color: C.muted, marginTop: 2 }}>{summary ?? hint}</span>}
+          {(summary || hint) && <span className="one-line" style={{ display: "block", fontSize: 12, color: C.muted, marginTop: 1 }}>{summary ?? hint}</span>}
         </span>
         <ChevronDown size={18} color={C.subtle} style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s ease" }} />
       </button>
-      {open && <div style={{ padding: "6px 14px 14px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 12, borderTop: `1px solid ${C.borderLight}` }}><FoldContext.Provider value={true}>{children}</FoldContext.Provider></div>}
+      {open && <div style={{ padding: "4px 12px 10px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8, borderTop: `1px solid ${C.borderLight}` }}><FoldContext.Provider value={true}>{children}</FoldContext.Provider></div>}
     </section>
   );
 }

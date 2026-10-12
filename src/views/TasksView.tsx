@@ -383,11 +383,11 @@ function NextStep({ t, isManager, threshold }: { t: TaskDetail; isManager: boole
     : orderIn ? `L'ordine è già in SAP, ma la pratica non è completa: ${steps[0].text}` : steps[0].text;
   const tone = done ? [C.green, C.greenBg] : orderIn ? [C.red, C.redBg] : [C.accent, C.accentLight];
   return (
-    <div style={{ ...sans, background: tone[1], border: `1px solid ${tone[0]}33`, borderRadius: 14, padding: "12px 16px" }}>
-      <div style={{ fontSize: 11.5, fontWeight: 700, color: tone[0], textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>{done ? "Situazione" : "Prossimo passo"}</div>
-      <div style={{ fontSize: 14, fontWeight: 650, color: C.text, lineHeight: 1.4 }}>{text}</div>
-      {!done && steps[0].action && <button onClick={steps[0].action.run} style={{ ...btnPrimary, padding: "7px 14px", fontSize: 13, marginTop: 8 }}>{steps[0].action.label}</button>}
-      {steps.length > 1 && <ul style={{ margin: "10px 0 0", paddingLeft: 18, fontSize: 12.5, color: C.muted, lineHeight: 1.6 }}>{steps.slice(1).map((x, k) => <li key={k}>{x.text}</li>)}</ul>}
+    <div style={{ ...sans, background: tone[1], border: `1px solid ${tone[0]}33`, borderRadius: 12, padding: "9px 14px" }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: tone[0], textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 3 }}>{done ? "Situazione" : "Prossimo passo"}</div>
+      <div style={{ fontSize: 13.5, fontWeight: 650, color: C.text, lineHeight: 1.35 }}>{text}</div>
+      {!done && steps[0].action && <button onClick={steps[0].action.run} style={{ ...btnPrimary, padding: "6px 12px", fontSize: 12.5, marginTop: 6 }}>{steps[0].action.label}</button>}
+      {steps.length > 1 && <ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 12, color: C.muted, lineHeight: 1.5 }}>{steps.slice(1).map((x, k) => <li key={k}>{x.text}</li>)}</ul>}
     </div>
   );
 }
@@ -396,7 +396,7 @@ function NextStep({ t, isManager, threshold }: { t: TaskDetail; isManager: boole
 function TaskProgress({ t, plan }: { t: TaskDetail; plan: PlanStep[] }) {
   const steps = taskSteps(t, plan).filter(x => !x.hidden);
   return (
-    <ol aria-label="Avanzamento della pratica" style={{ listStyle: "none", margin: 0, padding: "2px 0 6px", display: "flex", overflowX: "auto", gap: 0, WebkitOverflowScrolling: "touch" }}>
+    <ol aria-label="Avanzamento della pratica" style={{ listStyle: "none", margin: 0, padding: "0 0 2px", display: "flex", overflowX: "auto", gap: 0, WebkitOverflowScrolling: "touch" }}>
       {steps.map((st, k) => {
         const color = st.state === "done" ? C.green : st.state === "current" ? C.accent : C.subtle;
         const sub = st.detail ?? (st.date ? fmtDate(st.date) : st.state === "current" ? "qui adesso" : "");
@@ -438,7 +438,7 @@ function ChosenSupplier({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown
           {(list ?? []).map(x => <option key={x.id} value={x.id}>{x.name}{x.sapCode ? ` · SAP ${x.sapCode}` : ""}{x.qualification === "expiring" ? " · documenti in scadenza" : ""}</option>)}
         </select>
       </Field>
-      <div style={{ ...sans, fontSize: 12, color: missing ? C.red : C.muted, marginTop: 6 }}>{missing ? "Il fornitore scelto non risulta più qualificato: sceglierne un altro o aggiornare i suoi documenti." : "Solo fornitori registrati, attivi e con qualifica valida. Il fornitore non c'è? Invitalo dal modulo Fornitori."}</div>
+      <div style={{ ...sans, fontSize: 12, color: missing ? C.red : C.muted, marginTop: 6 }}>{missing ? "Il fornitore scelto non risulta più qualificato: sceglierne un altro o aggiornare i suoi documenti." : "Solo fornitori registrati e qualificati. Non c'è? Invitalo dal modulo Fornitori."}</div>
       {err && <Notice kind="error">{err}</Notice>}
     </Card>
   );
@@ -488,7 +488,7 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
         {!t && !error && <div style={{ display: "flex", justifyContent: "center", padding: 40 }}><Loader2 className="spin" size={24} color={C.subtle} /></div>}
         {error && <Notice kind="error">{error}</Notice>}
         {t && (
-          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0, 1fr)" }}>
+          <div style={{ display: "grid", gap: 10, gridTemplateColumns: "minmax(0, 1fr)" }}>
             {t.status === "done" && rda && t.doneReason === "po_created" && <Notice kind="ok"><b>Chiusa automaticamente:</b> in SAP è stato creato l'ordine {t.pos.map(p => p.po).join(", ") || "collegato"}{t.pos[0]?.supplierName ? ` (${t.pos[0].supplierName})` : ""}{t.doneAt ? ` il ${fmtDate(t.doneAt)}` : ""}.</Notice>}
             {t.status === "done" && rda && t.doneReason === "removed_from_sap" && <Notice kind="info"><b>Chiusa automaticamente:</b> la RDA non risulta più aperta in SAP (ordinata, rifiutata o cancellata). Se in seguito arriva l'elenco degli ordini con il suo PO, lo vedrai qui.</Notice>}
             {t.status === "open" && t.pos.length > 0 && <Notice kind="info">Per questa RDA esiste già un ordine ({t.pos.map(p => p.po).join(", ")}): il task si chiude quando la RDA non è più aperta in SAP.</Notice>}
@@ -511,9 +511,9 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
                 if (shown.has(id)) continue; shown.add(id);
                 if (st.key === "received") out.push(
                   <Fold key={id} id={id} title={rda ? "Ricevuta da SAP" : purchase ? "Pratica aperta" : "Dettagli"} status={rda || purchase ? rec?.state : undefined} badge={ioMissing && t.status === "open" ? { label: "Manca l'internal order", color: C.red, bg: C.redBg } : null}
-                    summary={[t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : "", rec?.detail && !ioMissing ? `IO ${rec.detail}` : ioMissing ? "internal order mancante" : ""].filter(Boolean).join(" · ")} defaultOpen={(ioMissing || (!rda && !purchase)) && t.status === "open"}>
+                    summary={rec?.detail && !ioMissing ? `Internal order ${rec.detail}` : ioMissing ? "internal order mancante" : undefined} defaultOpen={(ioMissing || (!rda && !purchase)) && t.status === "open"}>
                     <Card>
-                      <KV rows={[
+                      <KV dense rows={[
                         ...(rda ? [
                           ["Numero RDA", t.sourceKey ?? ""],
                           ["Internal order", <IoField key="io" t={t} fail={fail} onSaved={saved} />],
@@ -529,9 +529,9 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
                         ...(!rda && !renewal ? [["Priorità", PRIO[t.priority]], ["Creato da", t.createdBy]] as [string, string][] : []),
                         ...(purchase ? [["Importo stimato", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Fornitore previsto", t.meta.supplier || "—"]] as [string, string][] : []),
                       ]} />
-                      {rda && t.lines.length > 0 && <div style={{ marginTop: 14 }}>
+                      {rda && t.lines.length > 0 && <div style={{ marginTop: 10 }}>
                         <div style={{ ...sans, fontSize: 11.5, color: C.subtle, fontWeight: 600 }}>Descrizione</div>
-                        <div style={{ ...sans, fontSize: 13.5, color: C.text, marginTop: 2, display: "grid", gap: 2 }}>{t.lines.map((l, k) => <div key={k}>{l.shortText || "—"}</div>)}</div>
+                        <div style={{ ...sans, fontSize: 13, color: C.text, marginTop: 1, display: "grid", gap: 1 }}>{t.lines.map((l, k) => <div key={k}>{l.shortText || "—"}</div>)}</div>
                       </div>}
                       {!rda && t.detail && <div style={{ ...sans, fontSize: 13, color: C.muted, marginTop: 12, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{t.detail}</div>}
                     </Card>

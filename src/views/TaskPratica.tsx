@@ -277,11 +277,11 @@ export function IoField({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown
   const mpLine = mp && <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{mp.description ? `${mp.description} · ` : ""}budget {mp.current !== null ? fmt(mp.current) : "non nel Master Plan"}{mp.residual !== null && <> · residuo <b style={{ color: mp.residual < 0 ? C.red : C.green }}>{fmt(mp.residual)}</b></>}</div>;
   if (sapIos.length > 0) return <><span className="tabular">{sapIos.join(", ")}</span>{mpLine}</>;
   return (
-    <div style={{ border: `1.5px solid ${shown ? C.border : C.red}`, background: shown ? "transparent" : C.redBg, borderRadius: 10, padding: "8px 10px" }}>
-      {!shown && <div style={{ fontSize: 12, fontWeight: 650, color: C.red, marginBottom: 6 }}>Manca: è necessario. Compilalo qui o aspetta che arrivi da SAP.</div>}
+    <div style={{ border: `1.5px solid ${shown ? C.border : C.red}`, background: shown ? "transparent" : C.redBg, borderRadius: 8, padding: "6px 8px" }}>
+      {!shown && <div style={{ fontSize: 12, fontWeight: 650, color: C.red, marginBottom: 6 }}>Manca, è necessario: compilalo o aspetta SAP.</div>}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        <input value={io} onChange={e => setIo(e.target.value)} disabled={!open} placeholder="Internal order del Master Plan" aria-label="Internal order" style={{ ...iStyle, padding: "6px 9px", fontSize: 13, flex: "1 1 160px", minWidth: 0 }} />
-        {open && <button onClick={save} disabled={busy || io.trim() === (t.meta.internalOrder ?? "")} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5 }}>{busy ? <Loader2 className="spin" size={13} /> : "Salva"}</button>}
+        <input value={io} onChange={e => setIo(e.target.value)} disabled={!open} placeholder="Internal order" aria-label="Internal order" style={{ ...iStyle, padding: "5px 7px", fontSize: 12.5, flex: "1 1 96px", minWidth: 0 }} />
+        {open && <button onClick={save} disabled={busy || io.trim() === (t.meta.internalOrder ?? "")} style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }}>{busy ? <Loader2 className="spin" size={13} /> : "Salva"}</button>}
       </div>
       {mpLine}
       {err && <div style={{ fontSize: 12, color: C.red, marginTop: 4 }}>{err}</div>}
@@ -304,10 +304,10 @@ export function DeliveryField({ t, fail, onSaved }: { t: TaskDetail; fail: (e: u
   return (
     <div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        <input type="date" value={d} onChange={e => setD(e.target.value)} disabled={t.status !== "open"} aria-label="Consegna richiesta" style={{ ...iStyle, padding: "6px 9px", fontSize: 13, flex: "1 1 140px", minWidth: 0 }} />
-        {t.status === "open" && <button onClick={save} disabled={busy || d === (t.meta.delivDateManual ?? "")} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5 }}>{busy ? <Loader2 className="spin" size={13} /> : "Salva"}</button>}
+        <input type="date" value={d} onChange={e => setD(e.target.value)} disabled={t.status !== "open"} aria-label="Consegna richiesta" style={{ ...iStyle, padding: "5px 7px", fontSize: 12.5, flex: "1 1 96px", minWidth: 0 }} />
+        {t.status === "open" && <button onClick={save} disabled={busy || d === (t.meta.delivDateManual ?? "")} style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }}>{busy ? <Loader2 className="spin" size={13} /> : "Salva"}</button>}
       </div>
-      <div style={{ fontSize: 11.5, color: C.subtle, marginTop: 3 }}>Non indicata in SAP: puoi inserirla tu.</div>
+      <div style={{ fontSize: 11.5, color: C.subtle, marginTop: 3 }}>Non in SAP: inseriscila.</div>
       {err && <div style={{ fontSize: 12, color: C.red, marginTop: 4 }}>{err}</div>}
     </div>
   );
