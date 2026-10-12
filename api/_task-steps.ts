@@ -52,17 +52,16 @@ export function taskSteps(t: Src, plan: PlanStep[] = []): TaskStep[] {
     steps.push({ key: "received", label: "Creata", state: "done", section: "sec-received" });
     steps.push({ key: "do", label: "Da fare", state: t.status === "done" ? "done" : "todo", date: t.due });
   } else {
-    steps.push({ key: "received", label: t.source === "rda" ? "Ricevuta" : "Aperta", state: "done", section: "sec-received" });
+    // L'internal order è un dato come gli altri della prima sezione: finché manca, quel passaggio non è completo.
+    const ios = Object.keys(t.meta.io ?? {}); const io = ios.length ? ios.join(", ") : t.meta.internalOrder ?? "";
+    steps.push(hasIo(t) ? { key: "received", label: t.source === "rda" ? "Ricevuta" : "Aperta", state: "done", detail: io, section: "sec-received" }
+      : { key: "received", label: t.source === "rda" ? "Ricevuta" : "Aperta", state: "todo", detail: "manca l'internal order", section: "sec-received",
+        blocker: t.source === "rda" ? "Manca l'internal order: compilalo o aspetta che arrivi da SAP" : "Manca l'internal order del Master Plan" });
     // Il fornitore si sceglie sempre tra quelli registrati e qualificati; sopra soglia serve anche come è stato scelto.
     const chosen = t.chosenSupplierId !== null;
     const how = !t.sourcingRequired || t.sourcingStatus === "ok";
     steps.push(chosen && how ? { key: "supplier", label: "Fornitore", state: "done", section: "sec-sourcing" }
       : { key: "supplier", label: "Fornitore", state: "todo", section: "sec-sourcing", blocker: !chosen ? "Scegli il fornitore tra quelli registrati e qualificati" : sourcingBlocker(t) });
-    // Per le RDA l'internal order lo legge il sistema da SAP: il passaggio è solo un controllo. Per gli acquisti manuali lo indica il buyer.
-    const ios = Object.keys(t.meta.io ?? {}); const io = ios.length ? ios.join(", ") : t.meta.internalOrder ?? "";
-    steps.push(hasIo(t) ? { key: "io", label: "Internal order", state: "done", detail: io, section: "sec-received", hidden: true }
-      : { key: "io", label: "Internal order", state: "todo", detail: t.source === "rda" ? "manca in SAP" : undefined, section: "sec-received", hidden: true,
-        blocker: t.source === "rda" ? "La RDA non ha l'internal order in SAP: chiedilo al richiedente (o indicalo nella pratica)" : "Manca l'internal order del Master Plan" });
     steps.push(contractStep(t));
     steps.push(t.source === "rda"
       ? (t.pos.length || t.poNumbers.length ? { key: "po", label: "PO", state: "done", detail: [...new Set([...t.pos.map(p => p.po), ...t.poNumbers])].join(", "), section: "sec-po" } : { key: "po", label: "PO", state: "todo", detail: "da emettere in SAP", section: "sec-po", blocker: "Emetti il PO in SAP: la RDA si chiude quando arriva l'ordine" })

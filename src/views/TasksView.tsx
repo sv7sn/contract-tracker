@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Contract, ContractOutcome, EligibleSupplier, PlanStep, RdaSuggestion, Saving, SourcingMode, SourcingQuote, SupplierSummary, Task, TaskDetail, TaskList, User } from "../types.ts";
 import { computeSaving } from "../lib/saving.ts";
-import { OutcomeCard, PraticaPart, RenewalCard } from "./TaskPratica.tsx";
+import { DeliveryField, IoField, OutcomeCard, PraticaPart, RenewalCard } from "./TaskPratica.tsx";
 import { ApiError, importSapFile, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmt, fmtDate, isoDate, NOW } from "../lib/format.ts";
@@ -358,7 +358,7 @@ function RdaSuggest({ t, fail, onLinked }: { t: TaskDetail; fail: (e: unknown) =
 
 const STEP_ACTION: Record<string, (t: TaskDetail) => { label: string; id: string } | null> = {
   supplier: t => ({ label: t.chosenSupplierId === null ? "Scegli il fornitore" : "Registra il confronto", id: "sec-sourcing" }),
-  io: () => ({ label: "Indica l'internal order", id: "sec-received" }),
+  received: () => ({ label: "Indica l'internal order", id: "sec-received" }),
   contract: t => ({ label: t.source === "contract" ? "Carica il nuovo contratto" : "Aggiorna il contratto", id: t.source === "contract" ? "sec-outcome" : "sec-contract" }),
   po: t => (t.source === "rda" ? null : { label: "Indica il PO", id: "sec-po" }),
   outcome: () => ({ label: "Registra l'esito", id: "sec-outcome" }),
@@ -473,7 +473,6 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
   const rda = t?.source === "rda";
   const renewal = t?.source === "contract";
   const purchase = t?.source === "manual" && t.kind === "purchase";
-  const total = (t?.lines ?? []).reduce((a, l) => a + l.value, 0);
   const age = t?.meta.releaseDate ? Math.round((Date.now() - new Date(t.meta.releaseDate).getTime()) / 864e5) : null;
 
   return (
@@ -498,8 +497,8 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
             {t.status === "open" && (rda || renewal || purchase) && <NextStep t={t} isManager={isManager} threshold={threshold} />}
             {(() => {
               const flow = taskSteps(t, t.contractId ? plans[t.contractId] ?? [] : []).filter(x => !x.hidden && x.key !== "closed");
-              const ioStep = t.steps.find(x => x.key === "io");
-              const ioMissing = !!ioStep && ioStep.state !== "done";
+              const rec = t.steps.find(x => x.key === "received");
+              const ioMissing = !!rec && rec.state !== "done";
               const stateOf = (...keys: string[]): "done" | "current" | "todo" => {
                 const ss = flow.filter(x => keys.includes(x.key)); if (!ss.length) return "todo";
                 return ss.some(x => x.state === "current") ? "current" : ss.every(x => x.state === "done") ? "done" : "todo";
@@ -511,25 +510,31 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
                 const id = st.section ?? st.key;
                 if (shown.has(id)) continue; shown.add(id);
                 if (st.key === "received") out.push(
-                  <Fold key={id} id={id} title={rda ? "Ricevuta da SAP" : purchase ? "Pratica aperta" : "Dettagli"} status={rda || purchase ? "done" : undefined} badge={ioMissing && t.status === "open" ? { label: "Manca l'internal order", color: C.red, bg: C.redBg } : null}
-                    summary={[t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : "", ioStep?.detail && !ioMissing ? `IO ${ioStep.detail}` : ioMissing ? "internal order mancante" : ""].filter(Boolean).join(" · ")} defaultOpen={(ioMissing || (!rda && !purchase)) && t.status === "open"}>
+                  <Fold key={id} id={id} title={rda ? "Ricevuta da SAP" : purchase ? "Pratica aperta" : "Dettagli"} status={rda || purchase ? rec?.state : undefined} badge={ioMissing && t.status === "open" ? { label: "Manca l'internal order", color: C.red, bg: C.redBg } : null}
+                    summary={[t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : "", rec?.detail && !ioMissing ? `IO ${rec.detail}` : ioMissing ? "internal order mancante" : ""].filter(Boolean).join(" · ")} defaultOpen={(ioMissing || (!rda && !purchase)) && t.status === "open"}>
                     <Card>
-              <KV rows={[
-                ...(rda ? [["Numero RDA", t.sourceKey ?? ""], ["Gruppo acquisti", t.meta.pgr ?? ""], ["Richiedente", t.meta.requestedBy ? people.get(t.meta.requestedBy.toUpperCase()) ?? t.meta.requestedBy : ""], ["Importo", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Rilasciata il", t.meta.releaseDate ? `${fmtDate(t.meta.releaseDate)}${age !== null ? ` (da ${age} gg)` : ""}` : ""], ["Consegna richiesta", t.meta.delivDate ? fmtDate(t.meta.delivDate) : ""]] as [string, string][] : []),
-                [renewal ? "Da gestire entro" : "Scadenza", t.due ? fmtDate(t.due) : ""], ["Assegnato a", t.assigneeName || "Da assegnare"], ...(!rda && !renewal ? [["Priorità", PRIO[t.priority]], ["Creato da", t.createdBy]] as [string, string][] : []), ...(purchase ? [["Importo stimato", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Fornitore previsto", t.meta.supplier || "—"]] as [string, string][] : []),
-              ]} />
-              {!rda && t.detail && <div style={{ ...sans, fontSize: 13, color: C.muted, marginTop: 12, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{t.detail}</div>}
-            </Card>
-                    {(rda || purchase) && <PraticaPart t={t} part="io" fail={fail} onSaved={saved} />}
-                    {rda && t.lines.length > 0 && (
-                      <div style={{ overflowX: "auto" }}>
-                        <table className="data-table" style={{ minWidth: 520 }}>
-                          <thead><tr><th>Pos.</th><th>Descrizione</th><th className="num">Importo</th><th>Consegna</th><th>Centro di costo</th></tr></thead>
-                          <tbody>{t.lines.map((l, k) => <tr key={k} style={{ cursor: "default" }}><td>{l.item}</td><td>{l.shortText}</td><td className="num tabular">{fmt(l.value, l.currency)}</td><td className="tabular">{l.delivDate ? fmtDate(l.delivDate) : "—"}</td><td>{l.costCenter || "—"}</td></tr>)}</tbody>
-                        </table>
-                        {t.lines.length > 1 && <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginTop: 8, textAlign: "right" }}>Totale {fmt(total, t.lines[0].currency)}</div>}
-                      </div>
-                    )}
+                      <KV rows={[
+                        ...(rda ? [
+                          ["Numero RDA", t.sourceKey ?? ""],
+                          ["Internal order", <IoField key="io" t={t} fail={fail} onSaved={saved} />],
+                          ["Gruppo acquisti", t.meta.pgr ?? ""],
+                          ["Richiedente", t.meta.requestedBy ? people.get(t.meta.requestedBy.toUpperCase()) ?? t.meta.requestedBy : ""],
+                          ["Importo", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""],
+                          ["Rilasciata il", t.meta.releaseDate ? `${fmtDate(t.meta.releaseDate)}${age !== null ? ` (da ${age} gg)` : ""}` : ""],
+                          ["Consegna richiesta", <DeliveryField key="dl" t={t} fail={fail} onSaved={saved} />],
+                          ["Centro di costo", t.meta.costCenter ?? ""],
+                        ] as [string, ReactNode][] : []),
+                        ...(purchase ? [["Internal order", <IoField key="io" t={t} fail={fail} onSaved={saved} />]] as [string, ReactNode][] : []),
+                        [renewal ? "Da gestire entro" : "Scadenza", t.due ? fmtDate(t.due) : ""], ["Assegnato a", t.assigneeName || "Da assegnare"],
+                        ...(!rda && !renewal ? [["Priorità", PRIO[t.priority]], ["Creato da", t.createdBy]] as [string, string][] : []),
+                        ...(purchase ? [["Importo stimato", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Fornitore previsto", t.meta.supplier || "—"]] as [string, string][] : []),
+                      ]} />
+                      {rda && t.lines.length > 0 && <div style={{ marginTop: 14 }}>
+                        <div style={{ ...sans, fontSize: 11.5, color: C.subtle, fontWeight: 600 }}>Descrizione</div>
+                        <div style={{ ...sans, fontSize: 13.5, color: C.text, marginTop: 2, display: "grid", gap: 2 }}>{t.lines.map((l, k) => <div key={k}>{l.shortText || "—"}</div>)}</div>
+                      </div>}
+                      {!rda && t.detail && <div style={{ ...sans, fontSize: 13, color: C.muted, marginTop: 12, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{t.detail}</div>}
+                    </Card>
                   </Fold>);
                 else if (st.key === "bo_notify" || st.key === "bo_response") out.push(
                   <Fold key={id} id={id} title="Avviso e risposta del Business Owner" status={stateOf("bo_notify", "bo_response")} summary={flow.filter(x => x.key.startsWith("bo_")).map(x => `${x.label}${x.date ? ` ${fmtDate(x.date)}` : ""}`).join(" · ")} defaultOpen={false}>

@@ -141,7 +141,7 @@ export const portalApi = {
   eligibleSuppliers: () => request<{ suppliers: EligibleSupplier[] }>(portal("task-suppliers")).then(r => r.suppliers),
   setTaskSupplier: (id: number, supplierId: number | null) => post<{ task: TaskDetail }>(portal("task-supplier", `&id=${id}`), { supplierId }).then(r => r.task),
   suggestRdas: (id: number) => request<{ suggestions: RdaSuggestion[] }>(portal("task-rda-suggest", `&id=${id}`)).then(r => r.suggestions),
-  setTaskLinks: (id: number, input: { poNumbers?: string[]; rdaNumbers?: string[]; noPoReason?: string; internalOrder?: string }) => post<{ task: TaskDetail }>(portal("task-links", `&id=${id}`), input).then(r => r.task),
+  setTaskLinks: (id: number, input: { poNumbers?: string[]; rdaNumbers?: string[]; noPoReason?: string; internalOrder?: string; delivDate?: string; contractStatus?: string; contractNote?: string }) => post<{ task: TaskDetail }>(portal("task-links", `&id=${id}`), input).then(r => r.task),
   addTaskDoc: (id: number, doc: { kind: string; fileName: string; filePath: string; size: number }) => post<{ task: TaskDetail }>(portal("task-doc", `&id=${id}`), doc).then(r => r.task),
   removeTaskDoc: (id: number, docId: number) => request<{ task: TaskDetail }>(portal("task-doc", `&id=${id}&doc=${docId}`), { method: "DELETE" }).then(r => r.task),
   deleteTask: (id: number) => request<{ ok: true }>(portal("task", `&id=${id}`), { method: "DELETE" }),
