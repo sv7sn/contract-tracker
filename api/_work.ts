@@ -6,6 +6,7 @@ import { getPool } from "./_db.js";
 import { HttpError } from "./_http.js";
 import { listVendors } from "./_portal.js";
 import { spendView } from "./_spend.js";
+import { pendingReviewsOf } from "./_clm.js";
 import { listTasks } from "./_tasks.js";
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -38,6 +39,16 @@ export async function myWork(user: User): Promise<WorkItem[]> {
     }
     const unassigned = open.filter(t => t.assigneeId === null && t.source !== "contract");
     if (manager && unassigned.length) items.push({ kind: "unassigned", urgency: 2, title: `${unassigned.length} ${plural(unassigned.length, "task senza assegnatario", "task senza assegnatario")}`, detail: "Assegnali a un buyer dal modulo Task", days: null, target: { view: "tasks" } });
+  });
+
+  // Revisioni della bozza che aspettano una funzione (Legal, Compliance…): il task del buyer è fermo lì, ma resta da sollecitare.
+  await safe(async () => {
+    const mine = (await pendingReviewsOf(db, null)).filter(r => manager || (r.assigneeId !== null && ids.includes(r.assigneeId)));
+    const F: Record<string, string> = { requester: "Richiedente", legal: "Legal", compliance: "Compliance", itsec: "IT Security" };
+    for (const r of mine) {
+      if (r.overdue <= 0 && r.waitDays < 3) continue;
+      items.push({ kind: "review_late", urgency: r.overdue >= 2 ? 3 : 2, title: r.title, detail: `In attesa di ${F[r.func]} da ${r.waitDays} ${plural(r.waitDays, "giorno", "giorni")}${r.overdue > 0 ? ` (scaduto da ${r.overdue})` : ""}`, days: r.overdue || null, target: { view: "tasks", taskId: r.taskId } });
+    }
   });
 
   // Avvisi ai Business Owner: da inviare (data prevista passata) o senza risposta.

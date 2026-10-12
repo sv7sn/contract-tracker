@@ -1,9 +1,9 @@
 // Tipi condivisi tra frontend (src/) e API (api/).
 /** viewer = Controlling / CFO: consulta contratti, Master Plan, spesa e indicatori senza poter modificare nulla. */
-export type Role = "manager" | "buyer" | "finance" | "bo" | "supplier" | "viewer";
+export type Role = "manager" | "buyer" | "finance" | "bo" | "supplier" | "viewer" | "legal" | "compliance" | "itsec";
 export type Urgency = "green" | "yellow" | "red" | "gray";
 export type StepStatus = "upcoming" | "done" | "pending_bo";
-export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub" | "kpi" | "budget" | "spend" | "requests";
+export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "bo" | "users" | "detail" | "vendors" | "config" | "supplier" | "expiries" | "tasks" | "hub" | "kpi" | "budget" | "spend" | "requests" | "reviews";
 
 /** Utente autenticato, come restituito dall'API (mai con la password). */
 export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean; /** Codice utente SAP del richiedente (solo Business Owner): collega le RDA aperte in SAP a lui. */ sapUser?: string;
@@ -333,7 +333,7 @@ export interface Scorecard {
 }
 
 // ─── Il mio lavoro ───────────────────────────────────────────
-export type WorkKind = "po_gap" | "bo_message" | "bo_to_send" | "bo_waiting" | "task_late" | "task_soon" | "sourcing_missing" | "exception" | "unassigned" | "rfq_answers" | "rfq_compare" | "vendor_review" | "vendor_lapsed" | "vendor_unresponsive" | "splits";
+export type WorkKind = "po_gap" | "bo_message" | "bo_to_send" | "bo_waiting" | "task_late" | "task_soon" | "sourcing_missing" | "exception" | "unassigned" | "rfq_answers" | "rfq_compare" | "vendor_review" | "vendor_lapsed" | "vendor_unresponsive" | "splits" | "review_late";
 export interface WorkItem {
   kind: WorkKind; urgency: 1 | 2 | 3; title: string; detail: string;
   /** Giorni di ritardo (positivo) o mancanti (negativo), se la voce ha una scadenza. */
@@ -377,3 +377,19 @@ export interface CoverView { entries: CoverEntry[]; buyers: CoverBuyer[] }
 export interface TestAccess { role: string; label: string; name: string; email: string; password: string }
 
 export interface EligibleSupplier { id: number; name: string; sapCode: string | null; qualification: Qualification }
+
+/** CLM: funzioni che rivedono il contratto. Il parere di uno qualsiasi dei suoi utenti vale per la funzione. */
+export type FuncKey = "requester" | "legal" | "compliance" | "itsec";
+export type ReviewStatus = "pending" | "approved" | "approved_comments" | "changes";
+export interface ClmDraft { id: number; version: number; fileName: string; size: number; note: string; uploadedBy: string; uploadedAt: string }
+export interface ClmReview { id: number; func: FuncKey; required: boolean; due: string | null; status: ReviewStatus; note: string; decidedBy: string; decidedAt: string | null; invitedAt: string }
+export interface ClmComment { id: number; draftId: number; authorName: string; func: string; para: number | null; start: number | null; end: number | null; quote: string; body: string; status: "open" | "resolved"; parentId: number | null; createdAt: string; mine: boolean }
+export interface ClmBundle {
+  drafts: ClmDraft[]; draftId: number | null; latestId: number | null; paras: string[]; reviews: ClmReview[]; comments: ClmComment[];
+  brief: { taskId: number; title: string; supplier: string; value: number | null; currency: string; due: string | null; priority: string };
+  /** Cosa può fare chi guarda: gestire (buyer/manager) o dare il proprio parere (funzione invitata). */
+  owner: boolean; myFunc: FuncKey | null; canDecide: boolean; gate: string | null;
+  /** Business Owner invitabili come Richiedente (solo per buyer/Manager). */
+  requesters: { id: number; name: string }[];
+}
+export interface MyReview { reviewId: number; taskId: number; func: FuncKey; title: string; supplier: string; due: string | null; taskDue: string | null; priority: string; version: number; invitedAt: string; overdueDays: number; status: ReviewStatus }
