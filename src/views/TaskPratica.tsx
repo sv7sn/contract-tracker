@@ -7,6 +7,7 @@ import { stepLabel, stepTemplate } from "../lib/plan.ts";
 import { Card, CardTitle, Field } from "../components/ui.tsx";
 import { ContractForm } from "../components/Modals.tsx";
 import { Check, CheckCircle2, Clock, FileText, Loader2, Send, Trash2, Upload } from "../components/icons.tsx";
+import { DraftSummary } from "./DraftPanel.tsx";
 import { KV, Notice, Portal, SupplierPicker } from "../components/vendorUi.tsx";
 
 // Una pratica d'acquisto (RDA o rinnovo di contratto) mette insieme: RDA, confronto tra fornitori, offerta/contratto, fornitore e PO.
@@ -222,7 +223,8 @@ export function PraticaPart({ t, part, fail, onSaved, ctx }: { t: TaskDetail; pa
   return (
     <Card>
       {part === "contract" && (<>
-        <Block title="Offerta e contratto" first>
+        {!renewal && ctx && (ctx.currentUser.role === "manager" || ctx.currentUser.role === "buyer") && <Block title="Bozza e revisioni" first><DraftSummary taskId={t.id} canManage={open} onChanged={() => { void portalApi.task(t.id).then(x => onSaved(x, "Bozza aggiornata")).catch(() => undefined); }} /></Block>}
+        <Block title="Offerta e contratto" first={renewal || !ctx}>
           {docs.length === 0 && <div style={{ marginBottom: 6 }}>Nessun documento allegato.</div>}
           {docs.length > 0 && <div style={{ display: "grid", gap: 4, marginBottom: 6 }}>{docs.map(d => (
             <div key={d.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>

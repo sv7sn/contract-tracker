@@ -13,6 +13,7 @@ import { listBoMessages, myRequests, postBoMessage } from "./_requests.js";
 import { boInfo, loadBoSettings, runBoNotices, saveBoSettings, sendBoNotice, setBoLead } from "./_bo.js";
 import { addCover, deleteCover, listCover } from "./_cover.js";
 import { resetData, resetPreview } from "./_reset.js";
+import { addComment, decideReview, draftBundle, draftFile, inviteReviewers, myReviews, resolveComment, runReviewReminders, uploadDraft } from "./_clm.js";
 import { myWork } from "./_work.js";
 import { addRating, deleteRating, ratingSummary, supplierScorecard } from "./_rating.js";
 import { closeRfq, createRfq, listMyRfqs, rfqFile, listTaskRfqs, submitQuote, applyRfq } from "./_rfq.js";
@@ -82,7 +83,8 @@ async function handle(request: Request): Promise<Response> {
       // Liste sanzioni: un errore di download non deve bloccare reminder e pulizia.
       const sanctions = await refreshIfStale().catch(err => ({ error: err instanceof Error ? err.message : "errore" }));
       const boNotices = await runBoNotices(originOf(request)).catch(err => ({ error: err instanceof Error ? err.message : "errore" }));
-      return json({ ...reminders, retention, sanctions, boNotices });
+      const reviews = await runReviewReminders(originOf(request)).catch(err => ({ error: err instanceof Error ? err.message : "errore" }));
+      return json({ ...reminders, retention, sanctions, boNotices, reviews });
     }
 
     // ── Ingresso automatico dei file SAP (es. da una regola sulla casella che riceve le mail di SAP) ──
@@ -169,6 +171,25 @@ async function handle(request: Request): Promise<Response> {
       if (op === "my-requests" && method === "GET") return json({ requests: await myRequests(user) });
       if (op === "bo-messages" && method === "GET") return json({ messages: await listBoMessages(user, idOf(url)) });
       if (op === "bo-message-send" && method === "POST") return json({ messages: await postBoMessage(user, idOf(url), ((await readJson(request)) as { body?: unknown }).body, originOf(request)) });
+    }
+
+    // ── CLM: bozze del contratto e pareri delle funzioni (buyer, Manager, Richiedente, Legal, Compliance, IT Security) ──
+    if (["drafts", "draft-upload", "draft-invite", "draft-comment", "draft-comment-resolve", "draft-decide", "draft-file", "my-reviews"].includes(op)) {
+      const u = await requireRole(request, ["manager", "buyer", "bo", "legal", "compliance", "itsec"]);
+      const body = async () => (await readJson(request)) as Record<string, unknown>;
+      if (op === "my-reviews" && method === "GET") return json({ reviews: await myReviews(u) });
+      if (op === "drafts" && method === "GET") return json(await draftBundle(u, idOf(url), Number(url.searchParams.get("draft")) || undefined));
+      if (op === "draft-upload" && method === "POST") return json(await uploadDraft(u, idOf(url), await body(), originOf(request)), { status: 201 });
+      if (op === "draft-invite" && method === "POST") return json(await inviteReviewers(u, idOf(url), await body(), originOf(request)));
+      if (op === "draft-comment" && method === "POST") return json(await addComment(u, idOf(url), await body()));
+      if (op === "draft-comment-resolve" && method === "POST") return json(await resolveComment(u, idOf(url), (await body()).resolved !== false));
+      if (op === "draft-decide" && method === "POST") return json(await decideReview(u, idOf(url), await body(), originOf(request)));
+      if (op === "draft-file" && method === "GET") {
+        const f = await draftFile(u, idOf(url));
+        const blob = await openDocument(f.filePath);
+        if (!blob) throw new HttpError(404, "Documento non trovato");
+        return fileDownload(blob.stream, f.fileName);
+      }
     }
 
     // ── Analisi in sola lettura: anche Controlling e CFO ──

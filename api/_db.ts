@@ -114,7 +114,7 @@ create table if not exists sap_requests (
 alter table users drop constraint if exists users_role_check;
 alter table users drop constraint if exists users_role_check_v2;
 do $$ begin
-  if not exists (select 1 from pg_constraint where conname = 'users_role_check_v3') then
+  if not exists (select 1 from pg_constraint where conname in ('users_role_check_v3','users_role_check_v4')) then
     alter table users add constraint users_role_check_v3 check (role in ('manager','buyer','finance','bo','supplier','viewer'));
   end if;
 end $$;
@@ -165,6 +165,32 @@ alter table tasks add column if not exists rda_numbers text[] not null default '
 alter table tasks add column if not exists po_numbers text[] not null default '{}';
 alter table tasks add column if not exists no_po_reason text not null default '';
 alter table tasks add column if not exists kind text not null default 'activity';
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'users_role_check_v4') then
+    alter table users drop constraint if exists users_role_check_v3;
+    alter table users add constraint users_role_check_v4 check (role in ('manager','buyer','finance','bo','supplier','viewer','legal','compliance','itsec'));
+  end if;
+end $$;
+-- CLM: bozze del contratto in versioni (testo estratto dal Word per commenti e confronto), revisioni per funzione e commenti sul testo.
+create table if not exists contract_drafts (
+  id serial primary key, task_id integer not null references tasks(id) on delete cascade, version integer not null,
+  file_name text not null, file_path text not null, size integer not null default 0, paras jsonb not null default '[]'::jsonb,
+  note text not null default '', uploaded_by text not null default '', uploaded_at timestamptz not null default now(), unique (task_id, version)
+);
+create table if not exists draft_reviews (
+  id serial primary key, task_id integer not null references tasks(id) on delete cascade, draft_id integer not null references contract_drafts(id) on delete cascade,
+  func text not null check (func in ('requester','legal','compliance','itsec')), user_id integer references users(id) on delete set null,
+  required boolean not null default true, due date, status text not null default 'pending' check (status in ('pending','approved','approved_comments','changes')),
+  note text not null default '', decided_by text not null default '', decided_at timestamptz, invited_by text not null default '', invited_at timestamptz not null default now(),
+  last_reminded date, unique (draft_id, func)
+);
+create table if not exists draft_comments (
+  id serial primary key, task_id integer not null references tasks(id) on delete cascade, draft_id integer not null references contract_drafts(id) on delete cascade,
+  author_id integer references users(id) on delete set null, author_name text not null default '', func text not null default 'buyer',
+  para integer, start_pos integer, end_pos integer, quote text not null default '', body text not null, status text not null default 'open' check (status in ('open','resolved')),
+  parent_id integer references draft_comments(id) on delete cascade, created_at timestamptz not null default now()
+);
+create index if not exists draft_comments_draft_idx on draft_comments (draft_id);
 alter table tasks add column if not exists chosen_supplier_id integer references suppliers(id) on delete set null;
 alter table tasks add column if not exists chosen_supplier_name text not null default '';
 alter table tasks add column if not exists contract_status text not null default '';
@@ -282,7 +308,7 @@ create index if not exists login_attempts_idx on login_attempts (email, at);
 `;
 
 /** Ruoli assegnabili dalla pagina Utenti: i fornitori si creano solo tramite invito. */
-export const ROLES: Role[] = ["manager", "buyer", "finance", "bo", "viewer"];
+export const ROLES: Role[] = ["manager", "buyer", "finance", "bo", "viewer", "legal", "compliance", "itsec"];
 
 let ready: Promise<unknown> | undefined;
 /** Crea le tabelle e, se non esiste ancora nessun utente, il primo amministratore da ADMIN_EMAIL / ADMIN_PASSWORD. */

@@ -2,7 +2,7 @@
 // Si legge il primo foglio (con le stringhe condivise) e si restituisce una matrice di celle come per i file SAP.
 import { inflateRawSync } from "node:zlib";
 
-function unzip(buf: Buffer): Map<string, Buffer> {
+export function unzip(buf: Buffer): Map<string, Buffer> {
   const out = new Map<string, Buffer>();
   // Fine della "central directory": firma 0x06054b50 negli ultimi 64 KB.
   let eocd = -1;

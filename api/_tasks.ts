@@ -1,3 +1,4 @@
+import { reviewGate } from "./_clm.js";
 import { blockerOf, taskSteps } from "./_task-steps.js";
 import type { ContractOutcome, ImportResult, RdaConfig, RdaMeta, Sourcing, SourcingMode, SourcingQuote, SourcingStatus, Task, TaskDetail, TaskDocKind, TaskLine, TaskPo, TaskSummary, User } from "../src/types.ts";
 import { computeSaving } from "./_saving.js";
@@ -614,6 +615,7 @@ export async function setTaskLinks(user: User, id: number, input: Row): Promise<
     if (t.source === "contract") bad("Per i rinnovi il contratto si registra con l'esito");
     const cs = String(input.contractStatus), note = str(input?.contractNote, 500);
     if (!["", "not_needed", "negotiating", "signed"].includes(cs)) bad("Stato del contratto non valido");
+    if (cs === "signed") { const gate = await reviewGate(getPool(), id); if (gate) throw new HttpError(409, gate); }
     if (cs === "signed" && !t.newContractId && !t.documents.some(d => d.kind === "offer" || d.kind === "contract" || d.kind === "addendum")) bad("Allega prima l'offerta accettata o il contratto firmato");
     if (cs === "not_needed" && note.length < 5) bad("Spiega perché non serve un contratto");
     vals.push(cs); sets.push(`contract_status = $${vals.length}`); vals.push(cs === "not_needed" || cs === "negotiating" ? note : ""); sets.push(`contract_note = $${vals.length}`);
@@ -669,6 +671,8 @@ export async function registerTaskContract(user: User, id: number, input: Row): 
   if (t.source === "contract" || (t.source === "manual" && t.kind !== "purchase")) bad("Il contratto si registra sulle RDA e sugli acquisti; nei rinnovi si registra con l'esito");
   if (t.status !== "open") bad("La pratica è chiusa");
   if (t.newContractId) throw new HttpError(409, "Il contratto di questa pratica è già stato registrato");
+  const gate = await reviewGate(getPool(), id);
+  if (gate) throw new HttpError(409, gate);
   const c = (input?.contract ?? {}) as Row;
   const key = (typeof c.noticeDate === "string" && c.noticeDate) || (typeof c.end === "string" ? c.end : "");
   if (!isoDay(key)) bad("Indica la scadenza del contratto");
