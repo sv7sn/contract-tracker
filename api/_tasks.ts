@@ -614,6 +614,11 @@ export async function setTaskLinks(user: User, id: number, input: Row): Promise<
     if (cs === "not_needed" && note.length < 5) bad("Spiega perché non serve un contratto");
     vals.push(cs); sets.push(`contract_status = $${vals.length}`); vals.push(cs === "not_needed" || cs === "negotiating" ? note : ""); sets.push(`contract_note = $${vals.length}`);
   }
+  if (input?.delivDate !== undefined) {
+    const d = typeof input.delivDate === "string" ? input.delivDate : "";
+    if (d && !/^\d{4}-\d{2}-\d{2}$/.test(d)) bad("Data di consegna non valida");
+    vals.push(d); sets.push(`meta = meta || jsonb_build_object('delivDateManual', $${vals.length}::text)`);
+  }
   if (input?.noPoReason !== undefined) { const r = str(input.noPoReason, 500); if (r && r.length < 5) bad("Spiega perché il PO non serve"); vals.push(r); sets.push(`no_po_reason = $${vals.length}`); }
   if (!sets.length) return t;
   // Una RDA già arrivata da SAP come task a sé viene unita a questa pratica, per non lavorarla due volte.

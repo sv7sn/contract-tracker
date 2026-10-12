@@ -159,21 +159,11 @@ const splitList = (s: string) => s.split(/[\s,;]+/).map(x => x.trim()).filter(Bo
 
 /** La pratica in un colpo d'occhio: RDA, confronto, offerta/contratto, fornitore e PO, con i campi per completarla. */
 /** Una parte della pratica per quadrante: dati di partenza (internal order), documenti e contratto, oppure PO e RDA collegate. */
-export function PraticaPart({ t, part, fail, onSaved }: { t: TaskDetail; part: "io" | "contract" | "po"; fail: (e: unknown) => string; onSaved: Saved }) {
+export function PraticaPart({ t, part, fail, onSaved }: { t: TaskDetail; part: "contract" | "po"; fail: (e: unknown) => string; onSaved: Saved }) {
   const [rda, setRda] = useState(t.source === "rda" ? t.rdaNumbers.slice(1).join(", ") : t.rdaNumbers.join(", "));
   const [po, setPo] = useState(t.poNumbers.join(", "));
   const [noPo, setNoPo] = useState(t.noPoReason);
   const [noPoOn, setNoPoOn] = useState(!!t.noPoReason);
-  // Internal order: da SAP per le RDA che lo hanno, altrimenti indicato a mano (pesa sul Master Plan).
-  const sapIos = Object.keys(t.meta.io ?? {});
-  const [io, setIo] = useState(t.meta.internalOrder ?? "");
-  const shownIo = sapIos[0] ?? t.meta.internalOrder ?? "";
-  const [mp, setMp] = useState<BudgetLine | null>(null);
-  useEffect(() => {
-    let off = false;
-    if (shownIo) portalApi.budgetIo(shownIo).then(x => { if (!off) setMp(x.line); }).catch(() => undefined);
-    return () => { off = true; };
-  }, [shownIo]);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -187,7 +177,7 @@ export function PraticaPart({ t, part, fail, onSaved }: { t: TaskDetail; part: "
   const saveLinks = async () => {
     setBusy("links"); setErr(null);
     try {
-      const x = await portalApi.setTaskLinks(t.id, part === "io" ? { internalOrder: io } : { rdaNumbers: splitList(rda), poNumbers: splitList(po), noPoReason: noPoOn ? noPo : "" });
+      const x = await portalApi.setTaskLinks(t.id, { rdaNumbers: splitList(rda), poNumbers: splitList(po), noPoReason: noPoOn ? noPo : "" });
       onSaved(x, x.status === "done" && t.status !== "done" ? "Pratica completa e chiusa" : "Dati salvati");
     } catch (e) { setErr(fail(e)); }
     setBusy(null);
@@ -213,18 +203,6 @@ export function PraticaPart({ t, part, fail, onSaved }: { t: TaskDetail; part: "
   const open = t.status === "open";
   return (
     <Card>
-      {part === "io" && (
-        <Block title="Internal order" first>
-          {sapIos.length > 0
-            ? <div style={{ color: C.text }} className="tabular">{sapIos.join(", ")} <span style={{ color: C.subtle }}>letto da SAP</span></div>
-            : (<>
-              {!shownIo && <div style={{ color: t.source === "rda" ? C.red : C.muted, marginBottom: 6 }}>{t.source === "rda" ? "La RDA non ha l'internal order in SAP: chiedilo al richiedente, oppure indicalo qui." : "Indica l'internal order del Master Plan: serve per imputare la spesa al budget."}</div>}
-              <input value={io} onChange={e => setIo(e.target.value)} disabled={!open} placeholder="Internal order del Master Plan" aria-label="Internal order" style={{ ...iStyle, padding: "7px 10px", fontSize: 13 }} />
-              {open && saveBtn("Salva l'internal order")}
-            </>)}
-          {mp && <div style={{ fontSize: 12, marginTop: 6 }}>{mp.description ? `${mp.description} · ` : ""}budget {mp.current !== null ? fmt(mp.current) : "non presente nel Master Plan"}{mp.residual !== null && <> · residuo <b style={{ color: mp.residual < 0 ? C.red : C.green }}>{fmt(mp.residual)}</b></>}</div>}
-        </Block>
-      )}
       {part === "contract" && (<>
         <Block title="Offerta e contratto" first>
           {docs.length === 0 && <div style={{ marginBottom: 6 }}>Nessun documento allegato.</div>}
@@ -274,5 +252,63 @@ export function PraticaPart({ t, part, fail, onSaved }: { t: TaskDetail; part: "
       </>)}
       {err && <div style={{ marginTop: 8 }}><Notice kind="error">{err}</Notice></div>}
     </Card>
+  );
+}
+
+/** Internal order come gli altri campi: se c'è si legge (e il budget residuo), se manca si evidenzia e si compila qui. */
+export function IoField({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown) => string; onSaved: Saved }) {
+  const sapIos = Object.keys(t.meta.io ?? {});
+  const [io, setIo] = useState(t.meta.internalOrder ?? "");
+  const shown = sapIos[0] ?? t.meta.internalOrder ?? "";
+  const [mp, setMp] = useState<BudgetLine | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    let off = false;
+    if (shown) portalApi.budgetIo(shown).then(x => { if (!off) setMp(x.line); }).catch(() => undefined);
+    return () => { off = true; };
+  }, [shown]);
+  const save = async () => {
+    setBusy(true); setErr(null);
+    try { onSaved(await portalApi.setTaskLinks(t.id, { internalOrder: io }), "Internal order salvato"); } catch (e) { setErr(fail(e)); }
+    setBusy(false);
+  };
+  const open = t.status === "open";
+  const mpLine = mp && <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{mp.description ? `${mp.description} · ` : ""}budget {mp.current !== null ? fmt(mp.current) : "non nel Master Plan"}{mp.residual !== null && <> · residuo <b style={{ color: mp.residual < 0 ? C.red : C.green }}>{fmt(mp.residual)}</b></>}</div>;
+  if (sapIos.length > 0) return <><span className="tabular">{sapIos.join(", ")}</span>{mpLine}</>;
+  return (
+    <div style={{ border: `1.5px solid ${shown ? C.border : C.red}`, background: shown ? "transparent" : C.redBg, borderRadius: 10, padding: "8px 10px" }}>
+      {!shown && <div style={{ fontSize: 12, fontWeight: 650, color: C.red, marginBottom: 6 }}>Manca: è necessario. Compilalo qui o aspetta che arrivi da SAP.</div>}
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <input value={io} onChange={e => setIo(e.target.value)} disabled={!open} placeholder="Internal order del Master Plan" aria-label="Internal order" style={{ ...iStyle, padding: "6px 9px", fontSize: 13, flex: "1 1 160px", minWidth: 0 }} />
+        {open && <button onClick={save} disabled={busy || io.trim() === (t.meta.internalOrder ?? "")} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5 }}>{busy ? <Loader2 className="spin" size={13} /> : "Salva"}</button>}
+      </div>
+      {mpLine}
+      {err && <div style={{ fontSize: 12, color: C.red, marginTop: 4 }}>{err}</div>}
+    </div>
+  );
+}
+
+/** Consegna richiesta: da SAP se c'è, altrimenti si può indicare a mano (come l'internal order). */
+export function DeliveryField({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown) => string; onSaved: Saved }) {
+  const sap = t.meta.delivDate ?? "";
+  const [d, setD] = useState(t.meta.delivDateManual ?? "");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  if (sap) return <span className="tabular">{fmtDate(sap)}</span>;
+  const save = async () => {
+    setBusy(true); setErr(null);
+    try { onSaved(await portalApi.setTaskLinks(t.id, { delivDate: d }), "Consegna salvata"); } catch (e) { setErr(fail(e)); }
+    setBusy(false);
+  };
+  return (
+    <div>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <input type="date" value={d} onChange={e => setD(e.target.value)} disabled={t.status !== "open"} aria-label="Consegna richiesta" style={{ ...iStyle, padding: "6px 9px", fontSize: 13, flex: "1 1 140px", minWidth: 0 }} />
+        {t.status === "open" && <button onClick={save} disabled={busy || d === (t.meta.delivDateManual ?? "")} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5 }}>{busy ? <Loader2 className="spin" size={13} /> : "Salva"}</button>}
+      </div>
+      <div style={{ fontSize: 11.5, color: C.subtle, marginTop: 3 }}>Non indicata in SAP: puoi inserirla tu.</div>
+      {err && <div style={{ fontSize: 12, color: C.red, marginTop: 4 }}>{err}</div>}
+    </div>
   );
 }

@@ -190,7 +190,7 @@ export type TaskPriority = "low" | "normal" | "high";
 export interface TaskPo { po: string; supplierName: string; docDate: string | null }
 export interface RdaMeta { pgr?: string; requestedBy?: string; createdBy?: string; value?: number; currency?: string; lines?: number; releaseDate?: string | null; delivDate?: string | null; plant?: string; firstSeen?: string;
   /** Valore per internal order (RDA da SAP) o internal order indicato a mano (pratiche, RDA senza ordine). */
-  io?: Record<string, number>; internalOrder?: string; costCenter?: string;
+  io?: Record<string, number>; internalOrder?: string; /** Consegna indicata a mano quando SAP non la porta. */ delivDateManual?: string; costCenter?: string;
   /** Solo task di rinnovo: dati del contratto di origine al momento della creazione. */
   supplier?: string; object?: string; keyDate?: string; end?: string; noticeDate?: string;
   /** Valore del contratto in scadenza, dopo che l'esito ha registrato il nuovo valore. */
