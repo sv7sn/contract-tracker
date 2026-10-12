@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import type { BudgetLine, Contract, ContractOutcome, PlanStep, SupplierSummary, TaskContractStatus, TaskDetail, TaskDocKind } from "../types.ts";
+import type { BudgetLine, Contract, ContractData, ContractOutcome, PlanStep, SupplierSummary, TaskContractStatus, TaskDetail, TaskDocKind, User } from "../types.ts";
 import { checkDocument, portalApi, taskDocUrl, uploadDocument } from "../api.ts";
 import { btnGhost, btnPrimary, C, iStyle, sans } from "../theme.ts";
 import { fmt, fmtDate } from "../lib/format.ts";
 import { stepLabel, stepTemplate } from "../lib/plan.ts";
 import { Card, CardTitle, Field } from "../components/ui.tsx";
+import { ContractForm } from "../components/Modals.tsx";
 import { Check, CheckCircle2, Clock, FileText, Loader2, Send, Trash2, Upload } from "../components/icons.tsx";
-import { KV, Notice, SupplierPicker } from "../components/vendorUi.tsx";
+import { KV, Notice, Portal, SupplierPicker } from "../components/vendorUi.tsx";
 
 // Una pratica d'acquisto (RDA o rinnovo di contratto) mette insieme: RDA, confronto tra fornitori, offerta/contratto, fornitore e PO.
 
@@ -159,7 +160,7 @@ const splitList = (s: string) => s.split(/[\s,;]+/).map(x => x.trim()).filter(Bo
 
 /** La pratica in un colpo d'occhio: RDA, confronto, offerta/contratto, fornitore e PO, con i campi per completarla. */
 /** Una parte della pratica per quadrante: dati di partenza (internal order), documenti e contratto, oppure PO e RDA collegate. */
-export function PraticaPart({ t, part, fail, onSaved }: { t: TaskDetail; part: "contract" | "po"; fail: (e: unknown) => string; onSaved: Saved }) {
+export function PraticaPart({ t, part, fail, onSaved, ctx }: { t: TaskDetail; part: "contract" | "po"; fail: (e: unknown) => string; onSaved: Saved; ctx?: { currentUser: User; buyers: { id: number; name: string }[]; contracts: Contract[]; onOpenContract: (c: Contract) => void } }) {
   const [rda, setRda] = useState(t.source === "rda" ? t.rdaNumbers.slice(1).join(", ") : t.rdaNumbers.join(", "));
   const [po, setPo] = useState(t.poNumbers.join(", "));
   const [noPo, setNoPo] = useState(t.noPoReason);
@@ -171,6 +172,10 @@ export function PraticaPart({ t, part, fail, onSaved }: { t: TaskDetail; part: "
   const sapPos = t.pos.map(p => p.po);
   const docs = t.documents;
   const [cs, setCs] = useState<TaskContractStatus>(t.contractStatus);
+  const [showForm, setShowForm] = useState(false);
+  const [prefill, setPrefill] = useState<Partial<ContractData>>({});
+  const [formErr, setFormErr] = useState<string | null>(null);
+  const registered = t.newContractId ? ctx?.contracts.find(c => c.id === t.newContractId) : undefined;
   const [csNote, setCsNote] = useState(t.contractNote);
   const needPo = !renewal || t.outcome === "renewed" || t.outcome === "replaced";
 
@@ -186,6 +191,19 @@ export function PraticaPart({ t, part, fail, onSaved }: { t: TaskDetail; part: "
     setBusy("contract"); setErr(null);
     try { onSaved(await portalApi.setTaskLinks(t.id, { contractStatus: cs, contractNote: csNote }), "Stato del contratto aggiornato"); } catch (e) { setErr(fail(e)); }
     setBusy(null);
+  };
+  /** Apre lo stesso modulo del registro Contratti, già compilato con i dati della pratica: si registra una volta sola. */
+  const openForm = async () => {
+    setFormErr(null);
+    const req = (t.meta.requestedBy ?? "").toUpperCase();
+    const bo = req ? (await portalApi.boUsers().catch(() => [])).find(u => u.sapUser && u.sapUser.toUpperCase() === req) : undefined;
+    const object = t.title.replace(/^RDA\s+\S+\s+·\s+/, "").replace(/\s\(\+\d+\)$/, "");
+    setPrefill({ supplier: t.chosenSupplierName, supplierId: t.chosenSupplierId ?? undefined, object, value: t.meta.value ?? 0, currency: t.meta.currency ?? "EUR", owner: t.assigneeName, boEmail: bo?.email ?? "", boUserId: bo?.id, internalOrder: Object.keys(t.meta.io ?? {})[0] ?? t.meta.internalOrder ?? "", start: new Date().toISOString().slice(0, 10) });
+    setShowForm(true);
+  };
+  const registerContract = async (data: ContractData) => {
+    setFormErr(null);
+    try { const x = await portalApi.registerTaskContract(t.id, { contract: data }); setShowForm(false); onSaved(x, "Contratto registrato nel registro contratti"); } catch (e) { setFormErr(fail(e)); }
   };
   const addOffer = async (f: File | undefined) => {
     if (!f) return;
@@ -223,8 +241,14 @@ export function PraticaPart({ t, part, fail, onSaved }: { t: TaskDetail; part: "
               ))}
             </div>
             {(cs === "not_needed" || cs === "negotiating") && <input value={csNote} onChange={e => setCsNote(e.target.value)} placeholder={cs === "not_needed" ? "Perché non serve (es. ordine semplice, offerta accettata)" : "Note sulla trattativa (opzionale)"} aria-label="Note sul contratto" style={{ ...iStyle, padding: "7px 10px", fontSize: 13, marginTop: 8 }} />}
-            {cs === "signed" && <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>Allega prima l'offerta accettata o il contratto firmato qui sopra.</div>}
-            <button onClick={saveContract} disabled={busy === "contract" || cs === t.contractStatus && csNote === t.contractNote || !cs} style={{ ...btnGhost, marginTop: 8, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>{busy === "contract" && <Loader2 className="spin" size={13} />}Salva lo stato del contratto</button>
+            {cs === "signed" && (registered
+              ? <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><span style={{ color: C.green, fontWeight: 650 }}>Contratto registrato</span>{ctx && <button onClick={() => ctx.onOpenContract(registered)} style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }}>Apri nel registro ({registered.supplier}, scad. {fmtDate(registered.end)})</button>}</div>
+              : t.newContractId ? <div style={{ marginTop: 8, color: C.green, fontWeight: 650 }}>Contratto registrato nel registro contratti</div>
+              : ctx && <div style={{ marginTop: 8 }}>
+                  <div style={{ fontSize: 12, color: C.muted, marginBottom: 6 }}>Compili una volta sola i dati del contratto firmato: nasce nel registro Contratti, con scadenza, preavviso e piano di rinnovo.</div>
+                  <button onClick={openForm} disabled={t.chosenSupplierId === null} title={t.chosenSupplierId === null ? "Scegli prima il fornitore" : undefined} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 7 }}><FileText size={15} />Registra il contratto firmato</button>
+                </div>)}
+            {cs !== "signed" && <button onClick={saveContract} disabled={busy === "contract" || cs === t.contractStatus && csNote === t.contractNote || !cs} style={{ ...btnGhost, marginTop: 8, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>{busy === "contract" && <Loader2 className="spin" size={13} />}Salva lo stato del contratto</button>}
           </Block>
         )}
         {!renewal && !open && t.contractStatus && <Block title="Contratto">{t.contractStatus === "signed" ? "Firmato" : t.contractStatus === "not_needed" ? `Non serve${t.contractNote ? `: ${t.contractNote}` : ""}` : "In negoziazione"}</Block>}
@@ -251,6 +275,7 @@ export function PraticaPart({ t, part, fail, onSaved }: { t: TaskDetail; part: "
         {open && saveBtn("Salva PO e RDA")}
       </>)}
       {err && <div style={{ marginTop: 8 }}><Notice kind="error">{err}</Notice></div>}
+      {showForm && ctx && <Portal><ContractForm initial={null} currentUser={ctx.currentUser} users={ctx.buyers.map(b => ({ id: b.id, email: "", name: b.name, role: "buyer", title: "", active: true }))} canUpload prefill={prefill} serverError={formErr} title="Registra il contratto firmato" onSave={registerContract} onClose={() => setShowForm(false)} /></Portal>}
     </Card>
   );
 }

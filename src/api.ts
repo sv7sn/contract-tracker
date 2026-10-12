@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type EligibleSupplier, type RdaSuggestion, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type EligibleSupplier, type RdaSuggestion, type Task, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -138,6 +138,8 @@ export const portalApi = {
   setOutcome: (id: number, input: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-outcome", `&id=${id}`), input).then(r => r.task),
   registerContract: (id: number, input: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-contract", `&id=${id}`), input).then(r => r.task),
   setIoBuyer: (io: string, userId: number | null) => post<{ moved: number }>(portal("io-buyer"), { io, userId }),
+  registerTaskContract: (id: number, body: { contract: unknown }) => post<{ task: TaskDetail }>(portal("task-contract-register", `&id=${id}`), body).then(r => r.task),
+  tasksArchive: (q: string) => request<{ tasks: Task[] }>(portal("tasks-archive", `&q=${encodeURIComponent(q)}`)).then(r => r.tasks),
   eligibleSuppliers: () => request<{ suppliers: EligibleSupplier[] }>(portal("task-suppliers")).then(r => r.suppliers),
   setTaskSupplier: (id: number, supplierId: number | null) => post<{ task: TaskDetail }>(portal("task-supplier", `&id=${id}`), { supplierId }).then(r => r.task),
   suggestRdas: (id: number) => request<{ suggestions: RdaSuggestion[] }>(portal("task-rda-suggest", `&id=${id}`)).then(r => r.suggestions),
