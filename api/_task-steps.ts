@@ -47,6 +47,10 @@ export function taskSteps(t: Src, plan: PlanStep[] = []): TaskStep[] {
       : { key: "outcome", label: "Esito", state: "done", detail: outLabel, section: "sec-outcome" });
     if (t.sourcingRequired && needsMore) steps.push(t.sourcingStatus === "ok" ? { key: "supplier", label: "Fornitore", state: "done", section: "sec-sourcing" } : { key: "supplier", label: "Fornitore", state: "todo", section: "sec-sourcing", blocker: sourcingBlocker(t) });
     if (needsMore) steps.push(poKnown || t.noPoReason ? { key: "po", label: "PO", state: "done", detail: t.poNumbers.join(", ") || undefined, section: "sec-po" } : { key: "po", label: "PO", state: "todo", section: "sec-po", blocker: "Indica il numero di PO, oppure perché non serve" });
+  } else if (t.source === "manual" && t.kind !== "purchase") {
+    // Attività semplice: nessun fornitore, contratto o PO, ma anche lei ha un flusso (creata → da fare → completata).
+    steps.push({ key: "received", label: "Creata", state: "done", section: "sec-received" });
+    steps.push({ key: "do", label: "Da fare", state: t.status === "done" ? "done" : "todo", date: t.due });
   } else {
     steps.push({ key: "received", label: t.source === "rda" ? "Ricevuta" : "Aperta", state: "done", section: "sec-received" });
     // Il fornitore si sceglie sempre tra quelli registrati e qualificati; sopra soglia serve anche come è stato scelto.
@@ -64,7 +68,7 @@ export function taskSteps(t: Src, plan: PlanStep[] = []): TaskStep[] {
       ? (t.pos.length || t.poNumbers.length ? { key: "po", label: "PO", state: "done", detail: [...new Set([...t.pos.map(p => p.po), ...t.poNumbers])].join(", "), section: "sec-po" } : { key: "po", label: "PO", state: "todo", detail: "da emettere in SAP", section: "sec-po", blocker: "Emetti il PO in SAP: la RDA si chiude quando arriva l'ordine" })
       : (t.poNumbers.length || t.noPoReason ? { key: "po", label: "PO", state: "done", detail: t.poNumbers.join(", ") || undefined, section: "sec-po" } : { key: "po", label: "PO", state: "todo", section: "sec-po", blocker: "Indica il numero di PO, oppure perché non serve" }));
   }
-  steps.push({ key: "closed", label: "Chiusa", state: t.status === "done" ? "done" : "todo" });
+  steps.push({ key: "closed", label: t.source === "manual" && t.kind !== "purchase" ? "Completata" : "Chiusa", state: t.status === "done" ? "done" : "todo" });
   // Il primo passaggio bloccante non fatto è "qui adesso".
   const cur = steps.findIndex(s => s.state !== "done" && !s.info && !s.hidden);
   if (cur >= 0 && t.status === "open") steps[cur] = { ...steps[cur], state: "current" };
