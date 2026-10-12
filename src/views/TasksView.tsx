@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Contract, ContractOutcome, EligibleSupplier, PlanStep, RdaSuggestion, Saving, SourcingMode, SourcingQuote, SupplierSummary, Task, TaskDetail, TaskList, User } from "../types.ts";
 import { computeSaving } from "../lib/saving.ts";
-import { OutcomeCard, PraticaCard, RenewalCard } from "./TaskPratica.tsx";
+import { OutcomeCard, PraticaPart, RenewalCard } from "./TaskPratica.tsx";
 import { ApiError, importSapFile, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmt, fmtDate, isoDate, NOW } from "../lib/format.ts";
@@ -358,10 +358,10 @@ function RdaSuggest({ t, fail, onLinked }: { t: TaskDetail; fail: (e: unknown) =
 
 const STEP_ACTION: Record<string, (t: TaskDetail) => { label: string; id: string } | null> = {
   supplier: t => ({ label: t.chosenSupplierId === null ? "Scegli il fornitore" : "Registra il confronto", id: "sec-sourcing" }),
-  io: () => ({ label: "Indica l'internal order", id: "sec-pratica" }),
-  contract: t => ({ label: t.source === "contract" ? "Carica il nuovo contratto" : "Aggiorna il contratto", id: t.source === "contract" ? "sec-esito" : "sec-pratica" }),
-  po: t => (t.source === "rda" ? null : { label: "Indica il PO", id: "sec-pratica" }),
-  outcome: () => ({ label: "Registra l'esito", id: "sec-esito" }),
+  io: () => ({ label: "Indica l'internal order", id: "sec-received" }),
+  contract: t => ({ label: t.source === "contract" ? "Carica il nuovo contratto" : "Aggiorna il contratto", id: t.source === "contract" ? "sec-outcome" : "sec-contract" }),
+  po: t => (t.source === "rda" ? null : { label: "Indica il PO", id: "sec-po" }),
+  outcome: () => ({ label: "Registra l'esito", id: "sec-outcome" }),
 };
 
 /** "Prossimo passo": cosa manca per portare avanti la pratica, con un pulsante che porta alla sezione giusta. */
@@ -496,51 +496,67 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
             {t.status === "open" && renewal && t.rdaNumbers.length === 0 && <RdaSuggest t={t} fail={fail} onLinked={x => { setT(x); onChanged(); notify("RDA collegata al rinnovo"); }} />}
             {(rda || renewal || purchase) && <TaskProgress t={t} plan={t.contractId ? plans[t.contractId] ?? [] : []} />}
             {t.status === "open" && (rda || renewal || purchase) && <NextStep t={t} isManager={isManager} threshold={threshold} />}
-            <Card>
+            {(() => {
+              const flow = taskSteps(t, t.contractId ? plans[t.contractId] ?? [] : []).filter(x => !x.hidden && x.key !== "closed");
+              const ioStep = t.steps.find(x => x.key === "io");
+              const ioMissing = !!ioStep && ioStep.state !== "done";
+              const stateOf = (...keys: string[]): "done" | "current" | "todo" => {
+                const ss = flow.filter(x => keys.includes(x.key)); if (!ss.length) return "todo";
+                return ss.some(x => x.state === "current") ? "current" : ss.every(x => x.state === "done") ? "done" : "todo";
+              };
+              const detailOf = (k: string) => flow.find(x => x.key === k)?.detail;
+              const saved = (x: TaskDetail, m: string) => { setT(x); onChanged(); notify(m); };
+              const out: ReactNode[] = []; const shown = new Set<string>();
+              for (const st of flow) {
+                const id = st.section ?? st.key;
+                if (shown.has(id)) continue; shown.add(id);
+                if (st.key === "received") out.push(
+                  <Fold key={id} id={id} title={rda ? "Ricevuta da SAP" : "Pratica aperta"} status="done" badge={ioMissing && t.status === "open" ? { label: "Manca l'internal order", color: C.red, bg: C.redBg } : null}
+                    summary={[t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : "", ioStep?.detail && !ioMissing ? `IO ${ioStep.detail}` : ioMissing ? "internal order mancante" : ""].filter(Boolean).join(" · ")} defaultOpen={ioMissing && t.status === "open"}>
+                    <Card>
               <KV rows={[
                 ...(rda ? [["Numero RDA", t.sourceKey ?? ""], ["Gruppo acquisti", t.meta.pgr ?? ""], ["Richiedente", t.meta.requestedBy ? people.get(t.meta.requestedBy.toUpperCase()) ?? t.meta.requestedBy : ""], ["Importo", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Rilasciata il", t.meta.releaseDate ? `${fmtDate(t.meta.releaseDate)}${age !== null ? ` (da ${age} gg)` : ""}` : ""], ["Consegna richiesta", t.meta.delivDate ? fmtDate(t.meta.delivDate) : ""]] as [string, string][] : []),
                 [renewal ? "Da gestire entro" : "Scadenza", t.due ? fmtDate(t.due) : ""], ["Assegnato a", t.assigneeName || "Da assegnare"], ...(!rda && !renewal ? [["Priorità", PRIO[t.priority]], ["Creato da", t.createdBy]] as [string, string][] : []), ...(purchase ? [["Importo stimato", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""], ["Fornitore previsto", t.meta.supplier || "—"]] as [string, string][] : []),
               ]} />
               {!rda && t.detail && <div style={{ ...sans, fontSize: 13, color: C.muted, marginTop: 12, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{t.detail}</div>}
             </Card>
-
-            {(renewal || purchase) && (
-              <Fold id="sec-esito" title={renewal ? "Esito del rinnovo" : "Contratto della pratica"} badge={t.outcome ? { label: OUTCOME_LABEL[t.outcome] ?? "Registrato", color: C.green, bg: C.greenBg } : t.status === "open" ? { label: "Da registrare", color: C.yellow, bg: C.yellowBg } : null} defaultOpen={!t.outcome && t.status === "open"}>
-                <OutcomeCard t={t} contracts={contracts} fail={fail} onOpenContract={onOpenContract} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />
-              </Fold>
-            )}
-            {(rda || purchase || (renewal && (t.sourcingRequired || t.sourcing))) && (
-              <Fold id="sec-sourcing" title="Scelta del fornitore" badge={t.sourcing?.approval === "pending" ? { label: "Eccezione da approvare", color: C.purple, bg: C.purpleBg } : t.steps.find(x => x.key === "supplier")?.state === "done" ? { label: "Completa", color: C.green, bg: C.greenBg } : t.status === "open" ? { label: "Da fare", color: C.yellow, bg: C.yellowBg } : null} defaultOpen={t.status === "open" && t.steps.find(x => x.key === "supplier")?.state !== "done"}>
-                {!renewal && <ChosenSupplier t={t} fail={fail} onSaved={(x, m) => { setT({ ...x }); onChanged(); notify(m); }} />}
-                {(t.sourcingRequired || t.sourcing) && t.status === "open" && <RfqCard t={t} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} notify={notify} />}
-                {(t.sourcingRequired || t.sourcing) && <SourcingCard t={t} threshold={threshold} isManager={isManager} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />}
-              </Fold>
-            )}
-            {(rda || renewal || purchase) && (
-              <Fold id="sec-pratica" title="Pratica" hint="internal order, RDA, PO, documenti" defaultOpen={t.status === "open"}>
-                <PraticaCard t={t} fail={fail} onSaved={(x, m) => { setT(x); onChanged(); notify(m); }} />
-              </Fold>
-            )}
-            {renewal && (
-              <Fold id="sec-piano" title="Contratto e piano di rinnovo" hint={t.meta.supplier} defaultOpen={false}>
-                <RenewalCard t={t} contracts={contracts} plan={t.contractId ? plans[t.contractId] ?? [] : []} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onOpenContract={onOpenContract} />
-              </Fold>
-            )}
-            {rda && t.lines.length > 0 && (
-              <Fold title={`Righe della RDA (${t.lines.length})`} hint={t.lines.length > 1 ? `totale ${fmt(total, t.lines[0].currency)}` : undefined} defaultOpen={false}>
-                <div style={{ overflowX: "auto" }}>
-                  <table className="data-table" style={{ minWidth: 520 }}>
-                    <thead><tr><th>Pos.</th><th>Descrizione</th><th className="num">Importo</th><th>Consegna</th><th>Centro di costo</th></tr></thead>
-                    <tbody>{t.lines.map((l, k) => <tr key={k} style={{ cursor: "default" }}><td>{l.item}</td><td>{l.shortText}</td><td className="num tabular">{fmt(l.value, l.currency)}</td><td className="tabular">{l.delivDate ? fmtDate(l.delivDate) : "—"}</td><td>{l.costCenter || "—"}</td></tr>)}</tbody>
-                  </table>
-                </div>
-              </Fold>
-            )}
-            {t.pos.length > 0 && (
-              <Fold title="Ordini collegati" hint={t.pos.map(p => p.po).join(", ")} defaultOpen={false}>
-                {t.pos.map(p => <div key={p.po} style={{ ...sans, display: "flex", gap: 10, padding: "6px 0", fontSize: 13, flexWrap: "wrap" }}><b>{p.po}</b><span style={{ color: C.muted }}>{p.supplierName}</span><span style={{ color: C.subtle }}>{p.docDate ? fmtDate(p.docDate) : ""}</span></div>)}
-              </Fold>
-            )}
+                    <PraticaPart t={t} part="io" fail={fail} onSaved={saved} />
+                    {rda && t.lines.length > 0 && (
+                      <div style={{ overflowX: "auto" }}>
+                        <table className="data-table" style={{ minWidth: 520 }}>
+                          <thead><tr><th>Pos.</th><th>Descrizione</th><th className="num">Importo</th><th>Consegna</th><th>Centro di costo</th></tr></thead>
+                          <tbody>{t.lines.map((l, k) => <tr key={k} style={{ cursor: "default" }}><td>{l.item}</td><td>{l.shortText}</td><td className="num tabular">{fmt(l.value, l.currency)}</td><td className="tabular">{l.delivDate ? fmtDate(l.delivDate) : "—"}</td><td>{l.costCenter || "—"}</td></tr>)}</tbody>
+                        </table>
+                        {t.lines.length > 1 && <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginTop: 8, textAlign: "right" }}>Totale {fmt(total, t.lines[0].currency)}</div>}
+                      </div>
+                    )}
+                  </Fold>);
+                else if (st.key === "bo_notify" || st.key === "bo_response") out.push(
+                  <Fold key={id} id={id} title="Avviso e risposta del Business Owner" status={stateOf("bo_notify", "bo_response")} summary={flow.filter(x => x.key.startsWith("bo_")).map(x => `${x.label}${x.date ? ` ${fmtDate(x.date)}` : ""}`).join(" · ")} defaultOpen={false}>
+                    <RenewalCard t={t} contracts={contracts} plan={t.contractId ? plans[t.contractId] ?? [] : []} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onOpenContract={onOpenContract} />
+                  </Fold>);
+                else if (st.key === "outcome") out.push(
+                  <Fold key={id} id={id} title="Esito e contratto" status={stateOf("outcome", "contract")} summary={[detailOf("outcome"), detailOf("contract") && `contratto ${detailOf("contract")}`].filter(Boolean).join(" · ") || undefined} defaultOpen={stateOf("outcome", "contract") === "current"}>
+                    <OutcomeCard t={t} contracts={contracts} fail={fail} onOpenContract={onOpenContract} onSaved={saved} />
+                  </Fold>);
+                else if (st.key === "supplier") out.push(
+                  <Fold key={id} id={id} title="Fornitore" status={st.state} badge={t.sourcing?.approval === "pending" ? { label: "Eccezione da approvare", color: C.purple, bg: C.purpleBg } : null}
+                    summary={[t.chosenSupplierName, t.sourcing ? (t.sourcing.mode === "comparison" ? `${t.sourcing.quotes.length} offerte` : t.sourcing.mode === "strategic" ? "fornitura strategica" : t.sourcing.mode === "single_source" ? "single source" : "eccezione") : t.sourcingRequired ? "confronto da registrare" : ""].filter(Boolean).join(" · ") || "da scegliere"} defaultOpen={st.state === "current"}>
+                    {!renewal && <ChosenSupplier t={t} fail={fail} onSaved={(x, m) => { setT({ ...x }); onChanged(); notify(m); }} />}
+                    {(t.sourcingRequired || t.sourcing) && t.status === "open" && <RfqCard t={t} fail={fail} onSaved={saved} notify={notify} />}
+                    {(t.sourcingRequired || t.sourcing) && <SourcingCard t={t} threshold={threshold} isManager={isManager} fail={fail} onSaved={saved} />}
+                  </Fold>);
+                else if (st.key === "contract" && !renewal) out.push(
+                  <Fold key={id} id={id} title="Contratto" status={st.state} summary={st.detail ?? "da indicare"} defaultOpen={st.state === "current"}>
+                    <PraticaPart t={t} part="contract" fail={fail} onSaved={saved} />
+                  </Fold>);
+                else if (st.key === "po") out.push(
+                  <Fold key={id} id={id} title="PO" status={st.state} summary={st.detail ?? (rda ? "da emettere in SAP" : "da indicare")} defaultOpen={st.state === "current"}>
+                    <PraticaPart t={t} part="po" fail={fail} onSaved={saved} />
+                  </Fold>);
+              }
+              return out;
+            })()}
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center", padding: "14px 0 4px", borderTop: `1px solid ${C.borderLight}` }}>
               {isManager && t.status === "open" && (

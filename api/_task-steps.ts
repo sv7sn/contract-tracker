@@ -17,17 +17,17 @@ export function sourcingBlocker(t: Pick<Src, "source" | "sourcingStatus">): stri
 function contractStep(t: Src): TaskStep {
   const label = "Contratto";
   if (t.source === "contract") {
-    if (!t.outcome) return { key: "contract", label, state: "todo", section: "sec-esito" };
+    if (!t.outcome) return { key: "contract", label, state: "todo", section: "sec-outcome" };
     if (t.outcome === "renewed" || t.outcome === "replaced") return t.newContractId
-      ? { key: "contract", label, state: "done", detail: "firmato", section: "sec-esito" }
-      : { key: "contract", label, state: "todo", detail: "da caricare", section: "sec-esito", blocker: "Carica il nuovo contratto" };
-    return { key: "contract", label, state: "done", detail: "non serve", section: "sec-esito" };
+      ? { key: "contract", label, state: "done", detail: "firmato", section: "sec-outcome" }
+      : { key: "contract", label, state: "todo", detail: "da caricare", section: "sec-outcome", blocker: "Carica il nuovo contratto" };
+    return { key: "contract", label, state: "done", detail: "non serve", section: "sec-outcome" };
   }
-  if (t.newContractId) return { key: "contract", label, state: "done", detail: "firmato", section: "sec-esito" };
-  if (t.contractStatus === "signed") return { key: "contract", label, state: "done", detail: "firmato", section: "sec-pratica" };
-  if (t.contractStatus === "not_needed") return { key: "contract", label, state: "done", detail: "non serve", section: "sec-pratica" };
-  if (t.contractStatus === "negotiating") return { key: "contract", label, state: "todo", detail: "in negoziazione", section: "sec-pratica", blocker: "Il contratto è ancora in negoziazione" };
-  return { key: "contract", label, state: "todo", section: "sec-pratica", blocker: "Indica se serve un contratto: non serve, in negoziazione o firmato" };
+  if (t.newContractId) return { key: "contract", label, state: "done", detail: "firmato", section: "sec-outcome" };
+  if (t.contractStatus === "signed") return { key: "contract", label, state: "done", detail: "firmato", section: "sec-contract" };
+  if (t.contractStatus === "not_needed") return { key: "contract", label, state: "done", detail: "non serve", section: "sec-contract" };
+  if (t.contractStatus === "negotiating") return { key: "contract", label, state: "todo", detail: "in negoziazione", section: "sec-contract", blocker: "Il contratto è ancora in negoziazione" };
+  return { key: "contract", label, state: "todo", section: "sec-contract", blocker: "Indica se serve un contratto: non serve, in negoziazione o firmato" };
 }
 
 /** Passaggi in ordine di lavoro. Il primo non fatto è "qui adesso". `plan` (solo rinnovi) dà le date dell'avviso al BO e della sua risposta. */
@@ -37,17 +37,18 @@ export function taskSteps(t: Src, plan: PlanStep[] = []): TaskStep[] {
   const poKnown = t.pos.length > 0 || t.poNumbers.length > 0;
   if (t.source === "contract") {
     const n = pdone("bo_notify"), r = pdone("bo_response");
-    if (n) steps.push({ key: "bo_notify", label: "Avviso BO", state: n.status === "done" || n.status === "pending_bo" ? "done" : "todo", info: true, date: n.scheduledDate, section: "sec-piano" });
-    if (r) steps.push({ key: "bo_response", label: "Risposta BO", state: r.status === "done" ? "done" : "todo", info: true, date: r.scheduledDate, detail: r.boDecision ?? undefined, section: "sec-piano" });
-    steps.push(t.outcome
-      ? { key: "outcome", label: "Esito", state: "done", detail: t.outcome === "renewed" ? "rinnovato" : t.outcome === "replaced" ? "nuovo contratto" : t.outcome === "extended" ? "proroga" : "cessato", section: "sec-esito" }
-      : { key: "outcome", label: "Esito", state: "todo", date: t.due, section: "sec-esito", blocker: "Registra prima l'esito del rinnovo: rinnovo, nuovo contratto, proroga o cessazione" });
+    if (n) steps.push({ key: "bo_notify", label: "Avviso BO", state: n.status === "done" || n.status === "pending_bo" ? "done" : "todo", info: true, date: n.scheduledDate, section: "sec-plan" });
+    if (r) steps.push({ key: "bo_response", label: "Risposta BO", state: r.status === "done" ? "done" : "todo", info: true, date: r.scheduledDate, detail: r.boDecision ?? undefined, section: "sec-plan" });
     const needsMore = t.outcome === "renewed" || t.outcome === "replaced";
+    const outLabel = t.outcome === "renewed" ? "rinnovato" : t.outcome === "replaced" ? "nuovo contratto" : t.outcome === "extended" ? "proroga" : "cessato";
+    // L'esito comprende il contratto: per rinnovo e nuovo contratto serve anche il nuovo contratto caricato.
+    steps.push(!t.outcome ? { key: "outcome", label: "Esito", state: "todo", date: t.due, section: "sec-outcome", blocker: "Registra prima l'esito del rinnovo: rinnovo, nuovo contratto, proroga o cessazione" }
+      : needsMore && !t.newContractId ? { key: "outcome", label: "Esito", state: "todo", detail: `${outLabel} · carica il contratto`, section: "sec-outcome", blocker: "Carica il nuovo contratto" }
+      : { key: "outcome", label: "Esito", state: "done", detail: outLabel, section: "sec-outcome" });
     if (t.sourcingRequired && needsMore) steps.push(t.sourcingStatus === "ok" ? { key: "supplier", label: "Fornitore", state: "done", section: "sec-sourcing" } : { key: "supplier", label: "Fornitore", state: "todo", section: "sec-sourcing", blocker: sourcingBlocker(t) });
-    steps.push(contractStep(t));
-    if (needsMore) steps.push(poKnown || t.noPoReason ? { key: "po", label: "PO", state: "done", detail: t.poNumbers.join(", ") || undefined, section: "sec-pratica" } : { key: "po", label: "PO", state: "todo", section: "sec-pratica", blocker: "Indica il numero di PO, oppure perché non serve" });
+    if (needsMore) steps.push(poKnown || t.noPoReason ? { key: "po", label: "PO", state: "done", detail: t.poNumbers.join(", ") || undefined, section: "sec-po" } : { key: "po", label: "PO", state: "todo", section: "sec-po", blocker: "Indica il numero di PO, oppure perché non serve" });
   } else {
-    steps.push({ key: "received", label: t.source === "rda" ? "Ricevuta" : "Aperta", state: "done" });
+    steps.push({ key: "received", label: t.source === "rda" ? "Ricevuta" : "Aperta", state: "done", section: "sec-received" });
     // Il fornitore si sceglie sempre tra quelli registrati e qualificati; sopra soglia serve anche come è stato scelto.
     const chosen = t.chosenSupplierId !== null;
     const how = !t.sourcingRequired || t.sourcingStatus === "ok";
@@ -55,17 +56,17 @@ export function taskSteps(t: Src, plan: PlanStep[] = []): TaskStep[] {
       : { key: "supplier", label: "Fornitore", state: "todo", section: "sec-sourcing", blocker: !chosen ? "Scegli il fornitore tra quelli registrati e qualificati" : sourcingBlocker(t) });
     // Per le RDA l'internal order lo legge il sistema da SAP: il passaggio è solo un controllo. Per gli acquisti manuali lo indica il buyer.
     const ios = Object.keys(t.meta.io ?? {}); const io = ios.length ? ios.join(", ") : t.meta.internalOrder ?? "";
-    steps.push(hasIo(t) ? { key: "io", label: "Internal order", state: "done", detail: io, section: "sec-pratica", hidden: t.source === "rda" }
-      : { key: "io", label: "Internal order", state: "todo", detail: t.source === "rda" ? "manca in SAP" : undefined, section: "sec-pratica",
+    steps.push(hasIo(t) ? { key: "io", label: "Internal order", state: "done", detail: io, section: "sec-received", hidden: true }
+      : { key: "io", label: "Internal order", state: "todo", detail: t.source === "rda" ? "manca in SAP" : undefined, section: "sec-received", hidden: true,
         blocker: t.source === "rda" ? "La RDA non ha l'internal order in SAP: chiedilo al richiedente (o indicalo nella pratica)" : "Manca l'internal order del Master Plan" });
     steps.push(contractStep(t));
     steps.push(t.source === "rda"
-      ? (t.pos.length || t.poNumbers.length ? { key: "po", label: "PO", state: "done", detail: [...new Set([...t.pos.map(p => p.po), ...t.poNumbers])].join(", "), section: "sec-pratica" } : { key: "po", label: "PO", state: "todo", detail: "da emettere in SAP", section: "sec-pratica", blocker: "Emetti il PO in SAP: la RDA si chiude quando arriva l'ordine" })
-      : (t.poNumbers.length || t.noPoReason ? { key: "po", label: "PO", state: "done", detail: t.poNumbers.join(", ") || undefined, section: "sec-pratica" } : { key: "po", label: "PO", state: "todo", section: "sec-pratica", blocker: "Indica il numero di PO, oppure perché non serve" }));
+      ? (t.pos.length || t.poNumbers.length ? { key: "po", label: "PO", state: "done", detail: [...new Set([...t.pos.map(p => p.po), ...t.poNumbers])].join(", "), section: "sec-po" } : { key: "po", label: "PO", state: "todo", detail: "da emettere in SAP", section: "sec-po", blocker: "Emetti il PO in SAP: la RDA si chiude quando arriva l'ordine" })
+      : (t.poNumbers.length || t.noPoReason ? { key: "po", label: "PO", state: "done", detail: t.poNumbers.join(", ") || undefined, section: "sec-po" } : { key: "po", label: "PO", state: "todo", section: "sec-po", blocker: "Indica il numero di PO, oppure perché non serve" }));
   }
   steps.push({ key: "closed", label: "Chiusa", state: t.status === "done" ? "done" : "todo" });
   // Il primo passaggio bloccante non fatto è "qui adesso".
-  const cur = steps.findIndex(s => s.state !== "done" && !s.info);
+  const cur = steps.findIndex(s => s.state !== "done" && !s.info && !s.hidden);
   if (cur >= 0 && t.status === "open") steps[cur] = { ...steps[cur], state: "current" };
   return steps;
 }

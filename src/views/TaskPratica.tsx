@@ -5,7 +5,7 @@ import { btnGhost, btnPrimary, C, iStyle, sans } from "../theme.ts";
 import { fmt, fmtDate } from "../lib/format.ts";
 import { stepLabel, stepTemplate } from "../lib/plan.ts";
 import { Card, CardTitle, Field } from "../components/ui.tsx";
-import { Check, CheckCircle2, Clock, FileText, Loader2, Paperclip, Send, Trash2, Upload } from "../components/icons.tsx";
+import { Check, CheckCircle2, Clock, FileText, Loader2, Send, Trash2, Upload } from "../components/icons.tsx";
 import { KV, Notice, SupplierPicker } from "../components/vendorUi.tsx";
 
 // Una pratica d'acquisto (RDA o rinnovo di contratto) mette insieme: RDA, confronto tra fornitori, offerta/contratto, fornitore e PO.
@@ -148,17 +148,18 @@ export function OutcomeCard({ t, contracts, fail, onSaved, onOpenContract }: { t
   );
 }
 
-const Row = ({ ok, title, children }: { ok: boolean | null; title: string; children: ReactNode }) => (
-  <div style={{ ...sans, display: "grid", gridTemplateColumns: "22px minmax(110px, 150px) minmax(0,1fr)", gap: 10, alignItems: "start", padding: "10px 0", borderTop: `1px solid ${C.borderLight}`, fontSize: 13 }}>
-    <span aria-hidden style={{ marginTop: 1 }}>{ok === null ? <span style={{ display: "inline-block", width: 14, height: 14, borderRadius: 7, border: `2px solid ${C.border}` }} /> : ok ? <CheckCircle2 size={17} color={C.green} /> : <Clock size={17} color={C.yellow} />}</span>
-    <b style={{ fontWeight: 650 }}>{title}<span style={{ position: "absolute", left: -9999 }}>{ok === null ? " (non necessario)" : ok ? " (completo)" : " (da completare)"}</span></b>
+/** Voce di un quadrante: titolo piccolo e contenuto, senza spunte (lo stato è del quadrante). */
+const Block = ({ title, first, children }: { title: string; first?: boolean; children: ReactNode }) => (
+  <div style={{ ...sans, padding: "10px 0", borderTop: first ? "none" : `1px solid ${C.borderLight}`, fontSize: 13 }}>
+    <div style={{ fontSize: 11.5, fontWeight: 700, color: C.subtle, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 6 }}>{title}</div>
     <div style={{ minWidth: 0, color: C.muted, overflowWrap: "anywhere" }}>{children}</div>
   </div>
 );
 const splitList = (s: string) => s.split(/[\s,;]+/).map(x => x.trim()).filter(Boolean);
 
 /** La pratica in un colpo d'occhio: RDA, confronto, offerta/contratto, fornitore e PO, con i campi per completarla. */
-export function PraticaCard({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown) => string; onSaved: Saved }) {
+/** Una parte della pratica per quadrante: dati di partenza (internal order), documenti e contratto, oppure PO e RDA collegate. */
+export function PraticaPart({ t, part, fail, onSaved }: { t: TaskDetail; part: "io" | "contract" | "po"; fail: (e: unknown) => string; onSaved: Saved }) {
   const [rda, setRda] = useState(t.source === "rda" ? t.rdaNumbers.slice(1).join(", ") : t.rdaNumbers.join(", "));
   const [po, setPo] = useState(t.poNumbers.join(", "));
   const [noPo, setNoPo] = useState(t.noPoReason);
@@ -178,19 +179,16 @@ export function PraticaCard({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unk
   const fileRef = useRef<HTMLInputElement>(null);
   const renewal = t.source === "contract";
   const sapPos = t.pos.map(p => p.po);
-  const allPos = [...new Set([...sapPos, ...t.poNumbers])];
-  const supplier = t.pos[0]?.supplierName || t.sourcing?.quotes.find(q => q.chosen)?.supplier || t.meta.supplier || "";
   const docs = t.documents;
   const [cs, setCs] = useState<TaskContractStatus>(t.contractStatus);
   const [csNote, setCsNote] = useState(t.contractNote);
-  const contractDone = t.steps.find(x => x.key === "contract")?.state === "done";
   const needPo = !renewal || t.outcome === "renewed" || t.outcome === "replaced";
 
   const saveLinks = async () => {
     setBusy("links"); setErr(null);
     try {
-      const x = await portalApi.setTaskLinks(t.id, { rdaNumbers: splitList(rda), poNumbers: splitList(po), noPoReason: noPoOn ? noPo : "", ...(sapIos.length ? {} : { internalOrder: io }) });
-      onSaved(x, x.status === "done" && t.status !== "done" ? "Pratica completa e chiusa" : "Pratica aggiornata");
+      const x = await portalApi.setTaskLinks(t.id, part === "io" ? { internalOrder: io } : { rdaNumbers: splitList(rda), poNumbers: splitList(po), noPoReason: noPoOn ? noPo : "" });
+      onSaved(x, x.status === "done" && t.status !== "done" ? "Pratica completa e chiusa" : "Dati salvati");
     } catch (e) { setErr(fail(e)); }
     setBusy(null);
   };
@@ -210,61 +208,71 @@ export function PraticaCard({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unk
     if (!window.confirm("Rimuovere il documento?")) return;
     try { onSaved(await portalApi.removeTaskDoc(t.id, id), "Documento rimosso"); } catch (e) { setErr(fail(e)); }
   };
-  const sourcingOk = !t.sourcingRequired ? (t.sourcing ? true : null) : t.sourcingStatus === "ok";
 
+  const saveBtn = (label: string) => <button onClick={saveLinks} disabled={busy === "links"} style={{ ...btnGhost, marginTop: 10, padding: "8px 14px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 7 }}>{busy === "links" && <Loader2 className="spin" size={14} />}{label}</button>;
+  const open = t.status === "open";
   return (
     <Card>
-      <CardTitle icon={<Paperclip size={16} />}>Pratica</CardTitle>
-      <Row ok={shownIo ? true : false} title="Budget (IO)">
-        {sapIos.length > 0 ? <div style={{ color: C.text }} className="tabular">{sapIos.join(", ")} <span style={{ color: C.subtle }}>da SAP</span></div>
-          : <input value={io} onChange={e => setIo(e.target.value)} placeholder="Internal order del Master Plan" aria-label="Internal order" style={{ ...iStyle, padding: "7px 10px", fontSize: 13 }} />}
-        {mp && <div style={{ fontSize: 12, marginTop: 4 }}>{mp.description ? `${mp.description} · ` : ""}budget {mp.current !== null ? fmt(mp.current) : "non presente nel Master Plan"}{mp.residual !== null && <> · residuo <b style={{ color: mp.residual < 0 ? C.red : C.green }}>{fmt(mp.residual)}</b></>}</div>}
-      </Row>
-      <Row ok={(t.source === "rda" || t.rdaNumbers.length > 0) ? true : null} title="RDA">
-        {t.source === "rda" && <div style={{ color: C.text }}>{t.sourceKey}</div>}
-        <input value={rda} onChange={e => setRda(e.target.value)} placeholder={t.source === "rda" ? "Altre RDA collegate (opzionale)" : "Numero RDA, se c'è"} aria-label="Numeri RDA" style={{ ...iStyle, padding: "7px 10px", fontSize: 13, marginTop: t.source === "rda" ? 6 : 0 }} />
-      </Row>
-      <Row ok={sourcingOk} title="Confronto">
-        {t.sourcing ? <>{t.sourcing.mode === "comparison" ? `${t.sourcing.quotes.length} offerte` : t.sourcing.mode === "strategic" ? "Fornitura strategica" : t.sourcing.mode === "single_source" ? "Single source" : "Eccezione"}{t.saving ? <> · saving <b style={{ color: t.saving.amount >= 0 ? C.green : C.red }}>{fmt(t.saving.amount, t.meta.currency ?? "EUR")} ({t.saving.pct}%)</b></> : null}</>
-          : t.sourcingRequired ? "Da registrare qui sotto (importo sopra soglia)" : "Non necessario sotto soglia"}
-      </Row>
-      <Row ok={renewal ? (docs.some(d => d.kind === "offer" || d.kind === "contract" || d.kind === "addendum") ? true : t.outcome === "ceased" ? null : false) : contractDone} title={renewal ? "Contratto" : "Offerta e contratto"}>
-        {docs.length > 0 && <div style={{ display: "grid", gap: 4, marginBottom: 6 }}>{docs.map(d => (
-          <div key={d.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <span style={{ fontSize: 11.5, color: C.subtle }}>{DOC_LABEL[d.kind]}</span>
-            <a href={taskDocUrl(d.id)} target="_blank" rel="noopener noreferrer" style={{ color: C.blue, fontWeight: 600, textDecoration: "none" }}>{d.fileName}</a>
-            {(d.kind === "offer" || d.kind === "other") && t.status === "open" && <button onClick={() => removeDoc(d.id)} aria-label={`Rimuovi ${d.fileName}`} style={{ background: "none", border: "none", cursor: "pointer", color: C.subtle, padding: 2 }}><Trash2 size={14} /></button>}
-          </div>))}</div>}
-        <input ref={fileRef} type="file" hidden accept=".pdf,.doc,.docx" onChange={e => addOffer(e.target.files?.[0])} />
-        <button onClick={() => fileRef.current?.click()} disabled={busy === "doc"} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>{busy === "doc" ? <Loader2 className="spin" size={14} /> : <Upload size={14} />}Allega offerta</button>
-      </Row>
-      {!renewal && t.status === "open" && (
-        <div style={{ ...sans, padding: "0 0 12px 0", fontSize: 13 }}>
-          <div style={{ fontSize: 12, color: C.subtle, margin: "4px 0 6px" }}>Serve un contratto?</div>
-          <div role="radiogroup" aria-label="Stato del contratto" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {([["not_needed", "Non serve"], ["negotiating", "In negoziazione"], ["signed", "Firmato"]] as [TaskContractStatus, string][]).map(([k, l]) => (
-              <button key={k} role="radio" aria-checked={cs === k} onClick={() => setCs(k)} style={{ ...sans, padding: "6px 12px", borderRadius: 999, border: `1px solid ${cs === k ? C.accent : C.border}`, background: cs === k ? C.accentLight : "#fff", color: cs === k ? C.accent : C.muted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{l}</button>
-            ))}
-          </div>
-          {(cs === "not_needed" || cs === "negotiating") && <input value={csNote} onChange={e => setCsNote(e.target.value)} placeholder={cs === "not_needed" ? "Perché non serve (es. ordine semplice, offerta accettata)" : "Note sulla trattativa (opzionale)"} aria-label="Note sul contratto" style={{ ...iStyle, padding: "7px 10px", fontSize: 13, marginTop: 8 }} />}
-          {cs === "signed" && <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>Allega prima l'offerta accettata o il contratto firmato qui sopra.</div>}
-          <button onClick={saveContract} disabled={busy === "contract" || cs === t.contractStatus && csNote === t.contractNote || !cs} style={{ ...btnGhost, marginTop: 8, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>{busy === "contract" && <Loader2 className="spin" size={13} />}Salva lo stato del contratto</button>
-        </div>
+      {part === "io" && (
+        <Block title="Internal order" first>
+          {sapIos.length > 0
+            ? <div style={{ color: C.text }} className="tabular">{sapIos.join(", ")} <span style={{ color: C.subtle }}>letto da SAP</span></div>
+            : (<>
+              {!shownIo && <div style={{ color: t.source === "rda" ? C.red : C.muted, marginBottom: 6 }}>{t.source === "rda" ? "La RDA non ha l'internal order in SAP: chiedilo al richiedente, oppure indicalo qui." : "Indica l'internal order del Master Plan: serve per imputare la spesa al budget."}</div>}
+              <input value={io} onChange={e => setIo(e.target.value)} disabled={!open} placeholder="Internal order del Master Plan" aria-label="Internal order" style={{ ...iStyle, padding: "7px 10px", fontSize: 13 }} />
+              {open && saveBtn("Salva l'internal order")}
+            </>)}
+          {mp && <div style={{ fontSize: 12, marginTop: 6 }}>{mp.description ? `${mp.description} · ` : ""}budget {mp.current !== null ? fmt(mp.current) : "non presente nel Master Plan"}{mp.residual !== null && <> · residuo <b style={{ color: mp.residual < 0 ? C.red : C.green }}>{fmt(mp.residual)}</b></>}</div>}
+        </Block>
       )}
-      <Row ok={renewal ? !!supplier : t.chosenSupplierId !== null} title="Fornitore">{t.chosenSupplierName || supplier || (renewal ? "Si ricava dal PO, dal confronto o dal contratto" : "Da scegliere nella sezione «Scelta del fornitore»")}</Row>
-      <Row ok={!needPo ? null : allPos.length > 0 || !!t.noPoReason} title="PO">
-        {sapPos.length > 0 && <div style={{ color: C.text, marginBottom: 6 }}>Da SAP: {t.pos.map(p => `${p.po}${p.supplierName ? ` (${p.supplierName})` : ""}`).join(", ")}</div>}
-        {needPo && (<>
-          <input value={po} onChange={e => setPo(e.target.value)} disabled={noPoOn} placeholder="Numero di PO (più numeri separati da virgola)" aria-label="Numeri PO" style={{ ...iStyle, padding: "7px 10px", fontSize: 13 }} />
-          <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, cursor: "pointer", color: C.text }}>
-            <input type="checkbox" checked={noPoOn} onChange={e => setNoPoOn(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.accent }} />Non serve un PO
-          </label>
-          {noPoOn && <input value={noPo} onChange={e => setNoPo(e.target.value)} placeholder="Perché (es. contratto quadro con ordini a chiamata)" aria-label="Motivo" style={{ ...iStyle, padding: "7px 10px", fontSize: 13, marginTop: 6 }} />}
-        </>)}
-        {!needPo && "Non serve per proroghe e cessazioni"}
-      </Row>
+      {part === "contract" && (<>
+        <Block title="Offerta e contratto" first>
+          {docs.length === 0 && <div style={{ marginBottom: 6 }}>Nessun documento allegato.</div>}
+          {docs.length > 0 && <div style={{ display: "grid", gap: 4, marginBottom: 6 }}>{docs.map(d => (
+            <div key={d.id} style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 11.5, color: C.subtle }}>{DOC_LABEL[d.kind]}</span>
+              <a href={taskDocUrl(d.id)} target="_blank" rel="noopener noreferrer" style={{ color: C.blue, fontWeight: 600, textDecoration: "none" }}>{d.fileName}</a>
+              {(d.kind === "offer" || d.kind === "other") && open && <button onClick={() => removeDoc(d.id)} aria-label={`Rimuovi ${d.fileName}`} style={{ background: "none", border: "none", cursor: "pointer", color: C.subtle, padding: 2 }}><Trash2 size={14} /></button>}
+            </div>))}</div>}
+          {open && <><input ref={fileRef} type="file" hidden accept=".pdf,.doc,.docx" onChange={e => addOffer(e.target.files?.[0])} />
+          <button onClick={() => fileRef.current?.click()} disabled={busy === "doc"} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>{busy === "doc" ? <Loader2 className="spin" size={14} /> : <Upload size={14} />}Allega offerta</button></>}
+        </Block>
+        {!renewal && open && (
+          <Block title="Serve un contratto?">
+            <div role="radiogroup" aria-label="Stato del contratto" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {([["not_needed", "Non serve"], ["negotiating", "In negoziazione"], ["signed", "Firmato"]] as [TaskContractStatus, string][]).map(([k, l]) => (
+                <button key={k} role="radio" aria-checked={cs === k} onClick={() => setCs(k)} style={{ ...sans, padding: "6px 12px", borderRadius: 999, border: `1px solid ${cs === k ? C.accent : C.border}`, background: cs === k ? C.accentLight : "#fff", color: cs === k ? C.accent : C.muted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{l}</button>
+              ))}
+            </div>
+            {(cs === "not_needed" || cs === "negotiating") && <input value={csNote} onChange={e => setCsNote(e.target.value)} placeholder={cs === "not_needed" ? "Perché non serve (es. ordine semplice, offerta accettata)" : "Note sulla trattativa (opzionale)"} aria-label="Note sul contratto" style={{ ...iStyle, padding: "7px 10px", fontSize: 13, marginTop: 8 }} />}
+            {cs === "signed" && <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>Allega prima l'offerta accettata o il contratto firmato qui sopra.</div>}
+            <button onClick={saveContract} disabled={busy === "contract" || cs === t.contractStatus && csNote === t.contractNote || !cs} style={{ ...btnGhost, marginTop: 8, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}>{busy === "contract" && <Loader2 className="spin" size={13} />}Salva lo stato del contratto</button>
+          </Block>
+        )}
+        {!renewal && !open && t.contractStatus && <Block title="Contratto">{t.contractStatus === "signed" ? "Firmato" : t.contractStatus === "not_needed" ? `Non serve${t.contractNote ? `: ${t.contractNote}` : ""}` : "In negoziazione"}</Block>}
+      </>)}
+      {part === "po" && (<>
+        <Block title="Ordini in SAP" first>
+          {sapPos.length > 0 ? <div style={{ color: C.text }}>{t.pos.map(p => `${p.po}${p.supplierName ? ` (${p.supplierName})` : ""}${p.docDate ? ` · ${fmtDate(p.docDate)}` : ""}`).join(" — ")}</div>
+            : <div>{t.source === "rda" ? "Nessun ordine ancora. Il PO lo emette il buyer in SAP: quando arriva nell'estrazione, la RDA si chiude da sola se tutti i passaggi sono fatti." : "Nessun ordine ancora in SAP."}</div>}
+        </Block>
+        {needPo && (
+          <Block title={t.source === "rda" ? "PO emesso (facoltativo)" : "Numero di PO"}>
+            <input value={po} onChange={e => setPo(e.target.value)} disabled={noPoOn || !open} placeholder="Numero di PO (più numeri separati da virgola)" aria-label="Numeri PO" style={{ ...iStyle, padding: "7px 10px", fontSize: 13 }} />
+            {t.source !== "rda" && <label style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8, cursor: "pointer", color: C.text }}>
+              <input type="checkbox" checked={noPoOn} disabled={!open} onChange={e => setNoPoOn(e.target.checked)} style={{ width: 16, height: 16, accentColor: C.accent }} />Non serve un PO
+            </label>}
+            {noPoOn && t.source !== "rda" && <input value={noPo} onChange={e => setNoPo(e.target.value)} disabled={!open} placeholder="Perché (es. contratto quadro con ordini a chiamata)" aria-label="Motivo" style={{ ...iStyle, padding: "7px 10px", fontSize: 13, marginTop: 6 }} />}
+          </Block>
+        )}
+        {!needPo && <Block title="PO">Non serve per proroghe e cessazioni.</Block>}
+        <Block title="RDA collegate">
+          {t.source === "rda" && <div style={{ color: C.text, marginBottom: 6 }}>{t.sourceKey}</div>}
+          <input value={rda} onChange={e => setRda(e.target.value)} disabled={!open} placeholder={t.source === "rda" ? "Altre RDA collegate (opzionale)" : "Numero RDA, se c'è"} aria-label="Numeri RDA" style={{ ...iStyle, padding: "7px 10px", fontSize: 13 }} />
+        </Block>
+        {open && saveBtn("Salva PO e RDA")}
+      </>)}
       {err && <div style={{ marginTop: 8 }}><Notice kind="error">{err}</Notice></div>}
-      <button onClick={saveLinks} disabled={busy === "links"} style={{ ...btnGhost, marginTop: 8, padding: "8px 14px", fontSize: 13, display: "inline-flex", alignItems: "center", gap: 7 }}>{busy === "links" && <Loader2 className="spin" size={14} />}Salva budget, RDA e PO</button>
     </Card>
   );
 }
