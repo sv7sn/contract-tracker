@@ -255,38 +255,44 @@ export function PraticaPart({ t, part, fail, onSaved }: { t: TaskDetail; part: "
   );
 }
 
-/** Internal order come gli altri campi: se c'è si legge (e il budget residuo), se manca si evidenzia e si compila qui. */
+/** Internal order come gli altri campi: se c'è si legge, se manca si evidenzia e si compila qui. */
 export function IoField({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown) => string; onSaved: Saved }) {
   const sapIos = Object.keys(t.meta.io ?? {});
   const [io, setIo] = useState(t.meta.internalOrder ?? "");
-  const shown = sapIos[0] ?? t.meta.internalOrder ?? "";
-  const [mp, setMp] = useState<BudgetLine | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => {
-    let off = false;
-    if (shown) portalApi.budgetIo(shown).then(x => { if (!off) setMp(x.line); }).catch(() => undefined);
-    return () => { off = true; };
-  }, [shown]);
   const save = async () => {
     setBusy(true); setErr(null);
     try { onSaved(await portalApi.setTaskLinks(t.id, { internalOrder: io }), "Internal order salvato"); } catch (e) { setErr(fail(e)); }
     setBusy(false);
   };
   const open = t.status === "open";
-  const mpLine = mp && <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{mp.description ? `${mp.description} · ` : ""}budget {mp.current !== null ? fmt(mp.current) : "non nel Master Plan"}{mp.residual !== null && <> · residuo <b style={{ color: mp.residual < 0 ? C.red : C.green }}>{fmt(mp.residual)}</b></>}</div>;
-  if (sapIos.length > 0) return <><span className="tabular">{sapIos.join(", ")}</span>{mpLine}</>;
+  if (sapIos.length > 0) return <span className="tabular">{sapIos.join(", ")}</span>;
+  const has = !!t.meta.internalOrder;
   return (
-    <div style={{ border: `1.5px solid ${shown ? C.border : C.red}`, background: shown ? "transparent" : C.redBg, borderRadius: 8, padding: "6px 8px" }}>
-      {!shown && <div style={{ fontSize: 12, fontWeight: 650, color: C.red, marginBottom: 6 }}>Manca, è necessario: compilalo o aspetta SAP.</div>}
+    <div style={{ border: `1.5px solid ${has ? C.border : C.red}`, background: has ? "transparent" : C.redBg, borderRadius: 8, padding: "6px 8px" }}>
+      {!has && <div style={{ fontSize: 11.5, fontWeight: 650, color: C.red, marginBottom: 4 }}>Manca, è necessario: compilalo o aspetta SAP.</div>}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         <input value={io} onChange={e => setIo(e.target.value)} disabled={!open} placeholder="Internal order" aria-label="Internal order" style={{ ...iStyle, padding: "5px 7px", fontSize: 12.5, flex: "1 1 96px", minWidth: 0 }} />
         {open && <button onClick={save} disabled={busy || io.trim() === (t.meta.internalOrder ?? "")} style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }}>{busy ? <Loader2 className="spin" size={13} /> : "Salva"}</button>}
       </div>
-      {mpLine}
       {err && <div style={{ fontSize: 12, color: C.red, marginTop: 4 }}>{err}</div>}
     </div>
   );
+}
+
+/** Budget residuo della riga di Master Plan dell'internal order, in una cella come gli altri dati. */
+export function IoBudget({ t }: { t: TaskDetail }) {
+  const code = Object.keys(t.meta.io ?? {})[0] ?? t.meta.internalOrder ?? "";
+  const [mp, setMp] = useState<BudgetLine | null | undefined>(undefined);
+  useEffect(() => {
+    let off = false;
+    if (code) portalApi.budgetIo(code).then(x => { if (!off) setMp(x.line); }).catch(() => { if (!off) setMp(null); });
+    return () => { off = true; };
+  }, [code]);
+  if (!code || mp === undefined) return <span>—</span>;
+  if (!mp || mp.current === null) return <span style={{ color: C.muted }}>non nel Master Plan</span>;
+  return <span title={mp.description}><b className="tabular" style={{ color: (mp.residual ?? 0) < 0 ? C.red : C.green }}>{mp.residual !== null ? fmt(mp.residual) : "—"}</b> <span style={{ color: C.subtle, fontSize: 11.5 }}>su {fmt(mp.current)}</span></span>;
 }
 
 /** Consegna richiesta: da SAP se c'è, altrimenti si può indicare a mano (come l'internal order). */
