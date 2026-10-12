@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type ClauseView, type ClmAuditEntry, type ClmBundle, type ClmDiff, type ClmFindings, type ClmTemplateInfo, type FuncKey, type MyReview, type ReviewStatus, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type EligibleSupplier, type RdaSuggestion, type Task, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type ClmKpis, type ReviewRule, type ClauseView, type ClmAuditEntry, type ClmBundle, type ClmDiff, type ClmFindings, type ClmTemplateInfo, type FuncKey, type MyReview, type ReviewStatus, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type EligibleSupplier, type RdaSuggestion, type Task, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -162,6 +162,10 @@ export const portalApi = {
     clauses: () => request<{ clauses: ClauseView[] }>(portal("clauses")).then(r => r.clauses),
     saveClause: (c: Record<string, unknown>) => post<{ clauses: ClauseView[] }>(portal("clause-save"), c).then(r => r.clauses),
     decideClause: (versionId: number, approve: boolean, note: string) => post<{ clauses: ClauseView[] }>(portal("clause-decide", `&id=${versionId}`), { approve, note }).then(r => r.clauses),
+    rules: () => request<{ rules: ReviewRule[] }>(portal("review-rules")).then(r => r.rules),
+    saveRule: (rule: Record<string, unknown>) => post<{ rules: ReviewRule[] }>(portal("review-rule-save"), rule).then(r => r.rules),
+    deleteRule: (id: number) => post<{ rules: ReviewRule[] }>(portal("review-rule-delete", `&id=${id}`), {}).then(r => r.rules),
+    kpis: () => request<ClmKpis>(portal("clm-kpis")),
     mine: () => request<{ reviews: MyReview[] }>(portal("my-reviews")).then(r => r.reviews),
   },
   deleteTask: (id: number) => request<{ ok: true }>(portal("task", `&id=${id}`), { method: "DELETE" }),

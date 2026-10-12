@@ -1,6 +1,6 @@
 // CLM (fase 1): bozze del contratto in versioni, commenti sul testo, revisione delle funzioni (Richiedente, Legal, Compliance, IT Security)
 // e blocco della firma finché ogni funzione invitata non approva. Le bozze sono riservate: le vedono solo buyer, Manager e funzioni invitate.
-import type { ClmAuditEntry, ClmBundle, ClmComment, ClmDiff, ClmDraft, ClmFindings, ClmReview, ClmTemplateInfo, FuncKey, MyReview, ReviewStatus, User } from "../src/types.ts";
+import type { ClmAuditEntry, ClmBundle, ClmKpis, ClmRequired, ClmComment, ClmDiff, ClmDraft, ClmFindings, ClmReview, ClmTemplateInfo, FuncKey, MyReview, ReviewStatus, User } from "../src/types.ts";
 import { FILE_PATH_RE, openDocument } from "./_blob.js";
 import { getPool, type Queryable } from "./_db.js";
 import { HttpError } from "./_http.js";
@@ -11,6 +11,8 @@ import { buildDocx } from "./_docx.js";
 import { diffParas } from "./_clm-diff.js";
 import { analyzeParas, liveClauses } from "./_clm-clauses.js";
 import { renderTemplate, TEMPLATES, LANGS, type Lang } from "./_clm-templates.js";
+import { requiredFuncs } from "./_clm-policy.js";
+import { listEligibleSuppliers } from "./_portal.js";
 import { unzip } from "./_xlsx.js";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -64,6 +66,10 @@ export async function reviewGate(db: Queryable, taskId: number): Promise<string 
   if (open.length) msgs.push(`${open.map(r => `${FUNC_LABEL[r.func as FuncKey]} ${r.status === "changes" ? "chiede modifiche" : "non ha ancora approvato"}`).join(", ")}`);
   const forb = (await openForbidden(db, d)).map(f => `${f.code} (par. ${f.para + 1})`);
   if (forb.length) msgs.push(`clausole non ammesse senza l'ok del Legal: ${forb.join(", ")}`);
+  const have = new Set((await db.query("select func from draft_reviews where draft_id = $1", [d.id])).rows.map(r => r.func));
+  for (const q of await requiredFuncs(db, taskId)) if (!have.has(q.func)) msgs.push(`manca la revisione di ${FUNC_LABEL[q.func]} (${q.reason})`);
+  const tk = (await db.query("select chosen_supplier_id, chosen_supplier_name from tasks where id = $1", [taskId])).rows[0];
+  if (tk?.chosen_supplier_id && !(await listEligibleSuppliers()).some(x => x.id === tk.chosen_supplier_id)) msgs.push(`il fornitore ${tk.chosen_supplier_name || "scelto"} non è attivo e qualificato (documenti scaduti, bloccato o escluso)`);
   return msgs.length ? `Firma bloccata: ${msgs.join("; ")}` : null;
 }
 
@@ -98,6 +104,7 @@ export async function draftBundle(user: User, taskId: number, draftId?: number):
     brief: { taskId, title: t.title, supplier: t.chosenSupplierName || String(t.meta.supplier ?? ""), value: Number(t.meta.value) || null, currency: String(t.meta.currency ?? "EUR"), due: t.due, priority: t.priority },
     owner, myFunc: func, canDecide: !!mine && cur?.id === latest?.id, gate: await reviewGate(db, taskId),
     layout: cur?.layout ?? {}, generated: !!cur?.generated,
+    required: (await requiredFuncs(db, taskId)).map((q): ClmRequired => ({ ...q, invited: reviews.some(r => r.func === q.func) })),
     requesters: owner ? (await db.query("select id, name from users where active and role = 'bo' order by name")).rows : [],
   };
 }
@@ -112,14 +119,26 @@ async function recipients(db: Queryable, func: FuncKey, userId: number | null): 
   if (func === "requester") return (await db.query("select email, name from users where id = $1 and active and role = 'bo'", [userId])).rows;
   return (await db.query("select email, name from users where active and role = $1 order by id", [FUNC_ROLE[func]])).rows;
 }
-const mail = async (db: Queryable, to: { email: string; name: string }, template: "review_invite" | "review_reminder" | "review_decided", origin: string, reason: string, detail: string, deadline = "") =>
-  sendMail(db, { to: to.email, template, vars: { name: to.name, link: `${origin}/`, reason: reason.slice(0, 160), detail, deadline } }).catch(() => "failed");
+const mail = async (db: Queryable, to: { email: string; name: string }, template: "review_invite" | "review_reminder" | "review_decided", origin: string, reason: string, detail: string, deadline = "", target = "") =>
+  sendMail(db, { to: to.email, template, vars: { name: to.name, link: `${origin}/${target}`, reason: reason.slice(0, 160), detail, deadline } }).catch(() => "failed");
+
+/** Invita da sole le funzioni richieste dalle regole (tranne il Richiedente, che è una persona da scegliere) se hanno utenti. */
+async function ensureRequired(db: Queryable, by: User, t: { id: number; title: string; due: string | null }, draft: { id: number; version: number }, origin: string): Promise<void> {
+  const have = new Set((await db.query("select func from draft_reviews where draft_id = $1", [draft.id])).rows.map(r => r.func));
+  for (const q of await requiredFuncs(db, t.id)) {
+    if (q.func === "requester" || have.has(q.func)) continue;
+    const to = await recipients(db, q.func, null);
+    if (!to.length) continue;
+    const due = dueFor(t.due);
+    await db.query("insert into draft_reviews (task_id, draft_id, func, user_id, required, due, invited_by) values ($1,$2,$3,null,true,$4,$5) on conflict do nothing", [t.id, draft.id, q.func, due, `${by.name} (regola: ${q.reason})`]);
+    for (const r of to) await mail(db, r, "review_invite", origin, t.title, `Per le regole aziendali (${q.reason}) serve il parere di ${FUNC_LABEL[q.func]} sulla bozza, versione ${draft.version}.`, `entro il ${due.split("-").reverse().join("/")}`, `?review=${t.id}`);
+  }
+}
 
 export async function uploadDraft(user: User, taskId: number, input: Row, origin: string): Promise<ClmBundle> {
   if (user.role !== "manager" && user.role !== "buyer") throw new HttpError(403, "Solo il buyer carica la bozza");
   const t = await getTask(user, taskId);
   if (t.status !== "open") bad("La pratica è chiusa");
-  if (t.source === "contract") bad("Per i rinnovi la bozza si gestisce con il contratto esistente");
   const path = String(input?.filePath ?? ""), name = String(input?.fileName ?? "").trim().slice(0, 200);
   if (!FILE_PATH_RE.test(path) || !name) bad("Documento non valido");
   if (!/\.(docx|doc|pdf)$/i.test(name)) bad("Carica la bozza in Word (.docx) per commentare il testo, oppure in PDF");
@@ -138,9 +157,10 @@ export async function uploadDraft(user: User, taskId: number, input: Row, origin
     const old = (await db.query("select * from draft_reviews where draft_id = $1", [prev.id])).rows;
     for (const r of old) {
       await db.query("insert into draft_reviews (task_id, draft_id, func, user_id, required, due, invited_by) values ($1,$2,$3,$4,$5,$6,$7)", [taskId, id, r.func, r.user_id, r.required, due, user.name]);
-      for (const to of await recipients(db, r.func, r.user_id)) await mail(db, to, "review_invite", origin, t.title, `${user.name} ha caricato la versione ${version} della bozza: serve di nuovo il tuo parere.`, `entro il ${due.split("-").reverse().join("/")}`);
+      for (const to of await recipients(db, r.func, r.user_id)) await mail(db, to, "review_invite", origin, t.title, `${user.name} ha caricato la versione ${version} della bozza: serve di nuovo il tuo parere.`, `entro il ${due.split("-").reverse().join("/")}`, `?review=${taskId}`);
     }
   }
+  await ensureRequired(db, user, t, { id, version }, origin);
   await logDraft(db, user, taskId, id, "Bozza caricata", `versione ${version}: ${name}`);
   return draftBundle(user, taskId, id);
 }
@@ -166,7 +186,7 @@ export async function inviteReviewers(user: User, taskId: number, input: Row, or
     const had = (await db.query("select 1 from draft_reviews where draft_id = $1 and func = $2", [d.id, func])).rows.length > 0;
     await db.query(`insert into draft_reviews (task_id, draft_id, func, user_id, required, due, invited_by) values ($1,$2,$3,$4,true,$5,$6)
       on conflict (draft_id, func) do update set user_id = excluded.user_id, due = excluded.due`, [taskId, d.id, func, userId, due, user.name]);
-    if (!had) for (const to of await recipients(db, func, userId)) await mail(db, to, "review_invite", origin, t.title, `${user.name} ti chiede di rivedere la bozza (versione ${d.version})${message ? `:\n${message}` : "."}`, `entro il ${due.split("-").reverse().join("/")}`);
+    if (!had) for (const to of await recipients(db, func, userId)) await mail(db, to, "review_invite", origin, t.title, `${user.name} ti chiede di rivedere la bozza (versione ${d.version})${message ? `:\n${message}` : "."}`, `entro il ${due.split("-").reverse().join("/")}`, `?review=${taskId}`);
   }
   await logDraft(db, user, taskId, d.id, "Funzioni invitate", list.map((f: Row) => FUNC_LABEL[f.func as FuncKey]).join(", "));
   return draftBundle(user, taskId);
@@ -215,7 +235,7 @@ export async function decideReview(user: User, taskId: number, input: Row, origi
   const t = (await db.query("select t.title, u.email, u.name from tasks t left join users u on u.id = t.assignee_id where t.id = $1", [taskId])).rows[0];
   if (t?.email) {
     const verdict = decision === "approved" ? "ha approvato" : decision === "approved_comments" ? "ha approvato con commenti" : "chiede modifiche a";
-    await mail(db, { email: t.email, name: t.name }, "review_decided", origin, t.title, `${FUNC_LABEL[func]} (${user.name}) ${verdict} la bozza (versione ${d.version}).${note ? `\n\n${note}` : ""}`);
+    await mail(db, { email: t.email, name: t.name }, "review_decided", origin, t.title, `${FUNC_LABEL[func]} (${user.name}) ${verdict} la bozza (versione ${d.version}).${note ? `\n\n${note}` : ""}`, "", `?task=${taskId}`);
   }
   return draftBundle(user, taskId);
 }
@@ -253,15 +273,15 @@ export async function pendingReviewsOf(db: Queryable, taskIds: number[] | null):
 /** Solleciti alle funzioni in ritardo (ogni 2 giorni) e, dopo 2 giorni di ritardo, avviso anche al Manager. */
 export async function runReviewReminders(origin: string): Promise<{ reminders: number; escalations: number }> {
   const db = getPool(), t0 = today();
-  const rows = (await db.query(`select r.id, r.func, r.user_id, r.due, t.title, t.assignee_id from draft_reviews r join contract_drafts d on d.id = r.draft_id join tasks t on t.id = r.task_id
+  const rows = (await db.query(`select r.id, r.task_id, r.func, r.user_id, r.due, t.title, t.assignee_id from draft_reviews r join contract_drafts d on d.id = r.draft_id join tasks t on t.id = r.task_id
     where r.status = 'pending' and t.status = 'open' and r.due is not null and r.due <= $1 and (r.last_reminded is null or r.last_reminded <= $2)
       and d.version = (select max(version) from contract_drafts where task_id = r.task_id)`, [t0, addDays(t0, -2)])).rows;
   let reminders = 0, escalations = 0;
   const managers = (await db.query("select email, name from users where active and role = 'manager'")).rows;
   for (const r of rows) {
     const late = daysBetween(t0, day(r.due)!);
-    for (const to of await recipients(db, r.func, r.user_id)) { await mail(db, to, "review_reminder", origin, r.title, `La bozza aspetta il parere di ${FUNC_LABEL[r.func as FuncKey]}${late > 0 ? ` da ${late} ${late === 1 ? "giorno" : "giorni"} oltre la scadenza` : " (scade oggi)"}.`); reminders++; }
-    if (late >= 2) for (const m of managers) { await mail(db, m, "review_reminder", origin, r.title, `Escalation: ${FUNC_LABEL[r.func as FuncKey]} non ha ancora dato il parere sulla bozza, ${late} giorni oltre la scadenza. Il task del buyer è fermo su questa revisione.`); escalations++; }
+    for (const to of await recipients(db, r.func, r.user_id)) { await mail(db, to, "review_reminder", origin, r.title, `La bozza aspetta il parere di ${FUNC_LABEL[r.func as FuncKey]}${late > 0 ? ` da ${late} ${late === 1 ? "giorno" : "giorni"} oltre la scadenza` : " (scade oggi)"}.`, "", `?review=${r.task_id}`); reminders++; }
+    if (late >= 2) for (const m of managers) { await mail(db, m, "review_reminder", origin, r.title, `Escalation: ${FUNC_LABEL[r.func as FuncKey]} non ha ancora dato il parere sulla bozza, ${late} giorni oltre la scadenza. Il task del buyer è fermo su questa revisione.`, "", `?task=${r.task_id}`); escalations++; }
     await db.query("update draft_reviews set last_reminded = $2 where id = $1", [r.id, t0]);
   }
   return { reminders, escalations };
@@ -290,23 +310,25 @@ export async function templateInfo(user: User, taskId: number): Promise<ClmTempl
   if (user.role !== "manager" && user.role !== "buyer") throw new HttpError(403, "Operazione non consentita");
   const t = await getTask(user, taskId);
   const db = getPool();
-  const sup = t.chosenSupplierId ? (await db.query("select name, data, payment_terms from suppliers where id = $1", [t.chosenSupplierId])).rows[0] : null;
+  const con = t.source === "contract" && t.contractId ? (await db.query("select supplier, object, end_date, value, currency, supplier_id from contracts where id = $1", [t.contractId])).rows[0] : null;
+  const supId = t.chosenSupplierId ?? con?.supplier_id ?? null;
+  const sup = supId ? (await db.query("select name, data, payment_terms from suppliers where id = $1", [supId])).rows[0] : null;
   const a = sup?.data?.address ?? {};
   const pre: Record<string, string> = {
-    supplier: t.chosenSupplierName || sup?.data?.company?.legalName || sup?.name || String(t.meta.supplier ?? ""),
+    supplier: t.chosenSupplierName || sup?.data?.company?.legalName || sup?.name || con?.supplier || String(t.meta.supplier ?? ""),
+    contractObject: con?.object ?? "", contractEnd: con?.end_date ? new Date(con.end_date).toISOString().slice(0, 10) : "",
     supplierVat: sup?.data?.company?.vatCode ?? "", supplierAddress: [`${a.street ?? ""} ${a.houseNumber ?? ""}`.trim(), `${a.postalCode ?? ""} ${a.city ?? ""}`.trim(), a.country ?? ""].filter(Boolean).join(", "),
-    value: t.meta.value ? String(t.meta.value) : "", currency: String(t.meta.currency ?? "EUR"), title: t.title, today: new Date().toISOString().slice(0, 10), paymentTerms: termDays(sup?.payment_terms),
+    value: t.meta.value ? String(t.meta.value) : con?.value ? String(con.value) : "", currency: String(t.meta.currency ?? con?.currency ?? "EUR"), title: t.title, today: new Date().toISOString().slice(0, 10), paymentTerms: termDays(sup?.payment_terms),
   };
   return TEMPLATES.map(tp => ({ code: tp.code, name: tp.name, description: tp.description,
     questions: tp.questions.map(q => ({ key: q.key, label: q.label, type: q.type, required: q.required, options: q.options, value: (q.prefill && pre[q.prefill]) || q.default || "" })) }));
 }
 
 /** Crea una nuova versione della bozza dal modello e dalle risposte. Il file Word si genera quando serve (scarico). */
-export async function draftFromTemplate(user: User, taskId: number, input: Row): Promise<ClmBundle> {
+export async function draftFromTemplate(user: User, taskId: number, input: Row, origin: string): Promise<ClmBundle> {
   if (user.role !== "manager" && user.role !== "buyer") throw new HttpError(403, "Solo il buyer crea la bozza");
   const t = await getTask(user, taskId);
   if (t.status !== "open") bad("La pratica è chiusa");
-  if (t.source === "contract") bad("Per i rinnovi la bozza si gestisce con il contratto esistente");
   const tpl = TEMPLATES.find(x => x.code === input?.template);
   if (!tpl) bad("Modello non trovato");
   const langs = (Array.isArray(input?.langs) ? input.langs : ["it"]).filter((l: unknown): l is Lang => LANGS.includes(l as Lang));
@@ -324,6 +346,7 @@ export async function draftFromTemplate(user: User, taskId: number, input: Row):
     const due = dueFor(t.due);
     for (const r of old) await db.query("insert into draft_reviews (task_id, draft_id, func, user_id, required, due, invited_by) values ($1,$2,$3,$4,$5,$6,$7)", [taskId, id, r.func, r.user_id, r.required, due, user.name]);
   }
+  await ensureRequired(db, user, t, { id, version }, origin);
   await logDraft(db, user, taskId, id, "Bozza creata dal modello", `${tpl!.name.it} (${out.langs.join("+")}), versione ${version}`);
   return draftBundle(user, taskId, id);
 }
@@ -362,4 +385,27 @@ export async function acceptDeviation(user: User, taskId: number, input: Row): P
   await db.query("insert into draft_deviations (draft_id, para, clause_code, accepted_by, note) values ($1,$2,$3,$4,$5) on conflict (draft_id, para, clause_code) do update set accepted_by = excluded.accepted_by, note = excluded.note, accepted_at = now()", [d!.id, para, code, user.name, note]);
   await logDraft(db, user, taskId, d!.id, "Deviazione accettata", `${code} al paragrafo ${para + 1}${note ? `: ${note}` : ""}`);
   return draftFindings(user, taskId, d!.id);
+}
+
+// ─── Indicatori sul ciclo di revisione ───────────────────────
+/** Tempi e rispetto delle scadenze per funzione: numeri aggregati, senza testi né nomi (li vede anche Controlling/CFO). */
+export async function clmKpis(user: User): Promise<ClmKpis> {
+  if (user.role !== "manager" && user.role !== "viewer") throw new HttpError(403, "Operazione non consentita");
+  const db = getPool(), t0 = today();
+  const a = (await db.query(`select count(distinct task_id)::int as drafts, avg(mv)::float as avg_versions from (select task_id, max(version) as mv from contract_drafts group by task_id) x`)).rows[0];
+  const latest = `d.version = (select max(version) from contract_drafts where task_id = r.task_id)`;
+  const inReview = (await db.query(`select count(distinct r.task_id)::int as n from draft_reviews r join contract_drafts d on d.id = r.draft_id join tasks t on t.id = r.task_id where r.status = 'pending' and t.status = 'open' and ${latest}`)).rows[0].n;
+  const cyc = (await db.query(`select avg(extract(epoch from (done - first)) / 86400)::float as days from (
+      select r.task_id, max(r.decided_at) as done, (select min(uploaded_at) from contract_drafts where task_id = r.task_id) as first
+      from draft_reviews r join contract_drafts d on d.id = r.draft_id where ${latest} group by r.task_id
+      having bool_and(r.status in ('approved','approved_comments'))) y`)).rows[0].days;
+  const funcs = [];
+  for (const f of ["requester", "legal", "compliance", "itsec"] as FuncKey[]) {
+    const dec = (await db.query(`select count(*)::int as n, avg(extract(epoch from (decided_at - invited_at)) / 86400)::float as days,
+        avg(case when due is null then null when decided_at::date <= due then 1.0 else 0.0 end)::float as ontime from draft_reviews where func = $1 and decided_at is not null`, [f])).rows[0];
+    const pend = (await db.query(`select count(*)::int as n, count(*) filter (where r.due is not null and r.due < $2)::int as late from draft_reviews r join contract_drafts d on d.id = r.draft_id join tasks t on t.id = r.task_id
+        where r.func = $1 and r.status = 'pending' and t.status = 'open' and ${latest}`, [f, t0])).rows[0];
+    funcs.push({ func: f, decided: dec.n, avgDays: dec.days === null ? null : Math.round(dec.days * 10) / 10, onTimePct: dec.ontime === null ? null : Math.round(dec.ontime * 100), pending: pend.n, overdue: pend.late });
+  }
+  return { drafts: a.drafts, inReview, cycleDays: cyc === null ? null : Math.round(cyc * 10) / 10, avgVersions: a.avg_versions === null ? null : Math.round(a.avg_versions * 10) / 10, funcs };
 }

@@ -391,7 +391,7 @@ export interface ClmBundle {
   owner: boolean; myFunc: FuncKey | null; canDecide: boolean; gate: string | null;
   /** Business Owner invitabili come Richiedente (solo per buyer/Manager). */
   requesters: { id: number; name: string }[];
-  layout: ClmLayout; generated: boolean;
+  layout: ClmLayout; generated: boolean; required: ClmRequired[];
 }
 export interface MyReview { reviewId: number; taskId: number; func: FuncKey; title: string; supplier: string; due: string | null; taskDue: string | null; priority: string; version: number; invitedAt: string; overdueDays: number; status: ReviewStatus }
 
@@ -407,3 +407,6 @@ export interface ClmDiff { ops: ClmDiffOp[]; added: number; removed: number; mod
 export interface ClmQuestion { key: string; label: { it: string; en: string }; type: "text" | "longtext" | "date" | "number" | "select" | "bool"; required?: boolean; options?: { value: string; label: { it: string; en: string } }[]; value: string }
 export interface ClmTemplateInfo { code: string; name: { it: string; en: string }; description: { it: string; en: string }; questions: ClmQuestion[] }
 export interface ClmAuditEntry { id: number; at: string; actor: string; role: string; action: string; detail: string; draftId: number | null }
+export interface ReviewRule { id: number; func: FuncKey; minValue: number | null; personalData: true | null; countries: string[]; label: string }
+export interface ClmRequired { func: FuncKey; reason: string; invited: boolean }
+export interface ClmKpis { drafts: number; inReview: number; cycleDays: number | null; avgVersions: number | null; funcs: { func: FuncKey; decided: number; avgDays: number | null; onTimePct: number | null; pending: number; overdue: number }[] }

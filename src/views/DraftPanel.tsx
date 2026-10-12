@@ -153,6 +153,7 @@ export function DraftPanel({ taskId, currentUser }: { taskId: number; currentUse
               {r.note && <span style={{ color: C.muted, fontSize: 12.5 }}>— {r.note}</span>}
             </div>); })}
           {!b.reviews.length && <div style={{ fontSize: 13, color: C.muted }}>Nessuna funzione invitata.</div>}
+          {b.required.some(q => !q.invited) && <div style={{ fontSize: 12.5, color: C.yellow }}>Richieste dalle regole e non ancora invitate: {b.required.filter(q => !q.invited).map(q => `${FUNC_LABEL[q.func]} (${q.reason})`).join("; ")}.</div>}
           {inviting && <InviteForm bundle={b} busy={busy === "invite"} onSend={(funcs, msg) => run("invite", () => portalApi.clm.invite(taskId, funcs, msg)).then(ok => { if (ok) setInviting(false); })} />}
           {b.gate ? <div style={{ fontSize: 12.5, color: C.red }}>{b.gate}</div> : cur && b.reviews.length > 0 && <div style={{ fontSize: 12.5, color: C.green }}>Tutte le funzioni hanno approvato.</div>}
           {b.canDecide && b.myFunc && <DecideForm func={b.myFunc} mine={b.reviews.find(r => r.func === b.myFunc)?.status} busy={busy === "decide"} onDecide={(d, n) => run("decide", () => portalApi.clm.decide(taskId, d, n))} />}
@@ -234,7 +235,7 @@ function CommentCard({ c, thread, owner, busy, reply, setReply, onResolve, onRep
 }
 
 function InviteForm({ bundle, busy, onSend }: { bundle: ClmBundle; busy: boolean; onSend: (funcs: { func: FuncKey; userId?: number }[], msg: string) => void }) {
-  const [picked, setPicked] = useState<Record<string, boolean>>({});
+  const [picked, setPicked] = useState<Record<string, boolean>>(() => Object.fromEntries(bundle.required.filter(q => !q.invited).map(q => [q.func, true])));
   const [req, setReq] = useState<number>(bundle.requesters[0]?.id ?? 0);
   const [msg, setMsg] = useState("");
   const list = (["requester", "legal", "compliance", "itsec"] as FuncKey[]).filter(f => !bundle.reviews.some(r => r.func === f));

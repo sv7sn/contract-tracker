@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import type { Kpis } from "../types.ts";
+import type { ClmKpis, Kpis } from "../types.ts";
+import { FUNC_LABEL } from "../clmRules.ts";
 import { ApiError, portalApi } from "../api.ts";
 import { btnGhost, C, font, sans } from "../theme.ts";
 import { fmt } from "../lib/format.ts";
@@ -24,6 +25,8 @@ function Section({ title, text, children }: { title: string; text: string; child
 export function KpiView({ onSessionExpired }: { onSessionExpired: () => void }) {
   const [k, setK] = useState<Kpis | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [clm, setClm] = useState<ClmKpis | null>(null);
+  useEffect(() => { portalApi.clm.kpis().then(setClm).catch(() => setClm(null)); }, []);
   const fail = useCallback((err: unknown) => {
     if (err instanceof ApiError && err.status === 401) { onSessionExpired(); return "Sessione scaduta"; }
     return err instanceof Error ? err.message : "Caricamento non riuscito";
@@ -42,6 +45,23 @@ export function KpiView({ onSessionExpired }: { onSessionExpired: () => void }) 
         <div style={{ ...sans, fontSize: 12.5, color: C.muted }}>Calcolati il {new Date(k.generatedAt).toLocaleString("it-IT", { dateStyle: "medium", timeStyle: "short" })} · periodo: ultimi 90 giorni dove non indicato</div>
         <button onClick={load} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 12px", fontSize: 12.5 }}><RotateCcw size={14} />Aggiorna</button>
       </div>
+
+      {clm && clm.drafts > 0 && (
+        <Section title="Revisione dei contratti" text="Tempi delle funzioni (Richiedente, Legal, Compliance, IT Security) sulle bozze: dall'invito al parere, e rispetto della scadenza data.">
+          <Grid min={180} gap={12} fill>
+            <StatCard label="Bozze in revisione" value={clm.inReview} sub={`${clm.drafts} task con una bozza`} color={C.blue} icon={<FileText size={18} />} />
+            <StatCard label="Ciclo completo" value={days(clm.cycleDays === null ? null : Math.round(clm.cycleDays))} sub="Dalla prima bozza all'ultimo parere positivo" color={C.accent} icon={<Clock size={18} />} />
+            <StatCard label="Versioni per contratto" value={clm.avgVersions ?? "—"} sub="Media di versioni caricate" color={C.purple} icon={<Scale size={18} />} />
+          </Grid>
+          <div style={{ ...sans, display: "grid", gap: 6, fontSize: 13, color: C.text }}>
+            {clm.funcs.map(f => (
+              <div key={f.func} style={{ display: "flex", gap: 14, flexWrap: "wrap", borderBottom: `1px solid ${C.borderLight}`, paddingBottom: 6 }}>
+                <b style={{ minWidth: 110 }}>{FUNC_LABEL[f.func]}</b>
+                <span>{f.decided} pareri</span><span>tempo medio {f.avgDays === null ? "—" : `${f.avgDays} gg`}</span><span>nei tempi {pct(f.onTimePct)}</span>
+                <span style={{ color: f.overdue ? C.red : C.muted }}>{f.pending} in attesa{f.overdue ? ` (${f.overdue} in ritardo)` : ""}</span>
+              </div>))}
+          </div>
+        </Section>)}
 
       <Section title="RDA e ordini" text={`Dal rilascio della RDA in SAP alla creazione del PO. Tempo previsto per lavorare una RDA: ${r.slaDays} giorni.`}>
         <Grid min={180} gap={12} fill>

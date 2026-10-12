@@ -565,7 +565,7 @@ function TaskSheet({ id, currentUser, people, threshold, isManager, buyers, fail
                   </Fold>);
                 else if (st.key === "outcome") out.push(
                   <Fold key={id} id={id} title="Esito e contratto" status={stateOf("outcome", "contract")} summary={[detailOf("outcome"), detailOf("contract") && `contratto ${detailOf("contract")}`].filter(Boolean).join(" · ") || undefined} defaultOpen={stateOf("outcome", "contract") === "current"}>
-                    <OutcomeCard t={t} contracts={contracts} fail={fail} onOpenContract={onOpenContract} onSaved={saved} />
+                    <OutcomeCard t={t} contracts={contracts} fail={fail} onOpenContract={onOpenContract} onSaved={saved} currentUser={currentUser} />
                   </Fold>);
                 else if (st.key === "supplier") out.push(
                   <Fold key={id} id={id} title="Fornitore" status={st.state} badge={t.sourcing?.approval === "pending" ? { label: "Eccezione da approvare", color: C.purple, bg: C.purpleBg } : null}
