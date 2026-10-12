@@ -429,8 +429,13 @@ function ChosenSupplier({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown
     setBusy(false);
   };
   const missing = t.chosenSupplierId !== null && list && !list.some(x => x.id === t.chosenSupplierId);
+  // Se c'è un confronto, il fornitore dell'offerta scelta è il candidato naturale.
+  const norm = (x: string) => x.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  const winner = t.sourcing?.mode === "comparison" ? t.sourcing.quotes.find(q => q.chosen)?.supplier ?? "" : "";
+  const suggested = t.chosenSupplierId === null && winner && list ? list.find(x => norm(x.name) === norm(winner)) : undefined;
   return (
     <Card>
+      {suggested && t.status === "open" && <button onClick={() => choose(String(suggested.id))} disabled={busy} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5, marginBottom: 8 }}>Usa il fornitore dell'offerta scelta: {suggested.name}</button>}
       <Field label="Fornitore scelto" htmlFor="chosen-supplier">
         <select id="chosen-supplier" value={t.chosenSupplierId ?? ""} onChange={e => choose(e.target.value)} disabled={busy || t.status !== "open" || !list} style={iStyle}>
           <option value="">{list ? "Scegli un fornitore registrato e qualificato…" : "Carico i fornitori…"}</option>
@@ -556,9 +561,10 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
                 else if (st.key === "supplier") out.push(
                   <Fold key={id} id={id} title="Fornitore" status={st.state} badge={t.sourcing?.approval === "pending" ? { label: "Eccezione da approvare", color: C.purple, bg: C.purpleBg } : null}
                     summary={[t.chosenSupplierName, t.sourcing ? (t.sourcing.mode === "comparison" ? `${t.sourcing.quotes.length} offerte` : t.sourcing.mode === "strategic" ? "fornitura strategica" : t.sourcing.mode === "single_source" ? "single source" : "eccezione") : t.sourcingRequired ? "confronto da registrare" : ""].filter(Boolean).join(" · ") || "da scegliere"} defaultOpen={st.state === "current"}>
-                    {!renewal && <ChosenSupplier t={t} fail={fail} onSaved={(x, m) => { setT({ ...x }); onChanged(); notify(m); }} />}
+                    {/* Prima come si sceglie (confronto, strategica, single source, eccezione), poi chi è stato scelto. */}
                     {(t.sourcingRequired || t.sourcing) && t.status === "open" && <RfqCard t={t} fail={fail} onSaved={saved} notify={notify} />}
                     {(t.sourcingRequired || t.sourcing) && <SourcingCard t={t} isManager={isManager} fail={fail} onSaved={saved} />}
+                    {!renewal && <ChosenSupplier t={t} fail={fail} onSaved={(x, m) => { setT({ ...x }); onChanged(); notify(m); }} />}
                   </Fold>);
                 else if (st.key === "contract" && !renewal) out.push(
                   <Fold key={id} id={id} title="Contratto" status={st.state} summary={st.detail ?? "da indicare"} defaultOpen={st.state === "current"}>
