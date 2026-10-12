@@ -438,7 +438,7 @@ function ChosenSupplier({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown
           {(list ?? []).map(x => <option key={x.id} value={x.id}>{x.name}{x.sapCode ? ` · SAP ${x.sapCode}` : ""}{x.qualification === "expiring" ? " · documenti in scadenza" : ""}</option>)}
         </select>
       </Field>
-      <div style={{ ...sans, fontSize: 12, color: missing ? C.red : C.muted, marginTop: 6 }}>{missing ? "Il fornitore scelto non risulta più qualificato: sceglierne un altro o aggiornare i suoi documenti." : "Solo fornitori registrati e qualificati. Non c'è? Invitalo dal modulo Fornitori."}</div>
+      {missing && <div style={{ ...sans, fontSize: 12, color: C.red, marginTop: 6 }}>Il fornitore scelto non risulta più qualificato: sceglierne un altro o aggiornare i suoi documenti.</div>}
       {err && <Notice kind="error">{err}</Notice>}
     </Card>
   );
@@ -514,17 +514,16 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
                     summary={rec?.detail && !ioMissing ? `Internal order ${rec.detail}` : ioMissing ? "internal order mancante" : undefined} defaultOpen={(ioMissing || (!rda && !purchase)) && t.status === "open"}>
                     <Card>
                       <KV dense rows={[
+                        // Il numero RDA e la descrizione sono già nel titolo della scheda: qui solo dati nuovi, in due righe (budget; persone e tempi).
                         ...(rda ? [
-                          // Chi e cosa → budget → tempi: tre righe da quattro dati.
-                          ["Numero RDA", t.sourceKey ?? ""],
-                          ["Richiedente", t.meta.requestedBy ? people.get(t.meta.requestedBy.toUpperCase()) ?? t.meta.requestedBy : ""],
-                          ["Gruppo acquisti", t.meta.pgr ?? ""],
-                          ["Assegnato a", t.assigneeName || "Da assegnare"],
                           ["Importo", t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""],
                           ["Internal order", <IoField key="io" t={t} fail={fail} onSaved={saved} />],
                           ["Centro di costo", t.meta.costCenter ?? ""],
                           ...(rec && !ioMissing ? [["Budget residuo", <IoBudget key="bd" t={t} />]] : []),
-                          ["Rilasciata il", t.meta.releaseDate ? `${fmtDate(t.meta.releaseDate)}${age !== null ? ` (da ${age} gg)` : ""}` : ""],
+                          ["Gruppo acquisti", t.meta.pgr ?? ""],
+                          ["Richiedente", t.meta.requestedBy ? people.get(t.meta.requestedBy.toUpperCase()) ?? t.meta.requestedBy : ""],
+                          ["Assegnato a", t.assigneeName || "Da assegnare"],
+                          ["Rilasciata il", t.meta.releaseDate ? <span title={age !== null ? `da ${age} giorni` : undefined}>{fmtDate(t.meta.releaseDate)}</span> : ""],
                           ["Consegna richiesta", <DeliveryField key="dl" t={t} fail={fail} onSaved={saved} />],
                           ["Scadenza", t.due ? fmtDate(t.due) : ""],
                         ] as [string, ReactNode][] : []),
@@ -533,13 +532,14 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
                           ["Internal order", <IoField key="io" t={t} fail={fail} onSaved={saved} />],
                           ...(rec && !ioMissing ? [["Budget residuo", <IoBudget key="bd" t={t} />]] : []),
                           ["Fornitore previsto", t.meta.supplier || "—"],
-                          ["Assegnato a", t.assigneeName || "Da assegnare"], ["Creato da", t.createdBy], ["Priorità", PRIO[t.priority]],
+                          ["Priorità", PRIO[t.priority]],
+                          ["Assegnato a", t.assigneeName || "Da assegnare"], ["Creato da", t.createdBy],
                           ["Scadenza", t.due ? fmtDate(t.due) : ""],
                         ] as [string, ReactNode][] : []),
                         ...(!rda && !purchase ? [[renewal ? "Da gestire entro" : "Scadenza", t.due ? fmtDate(t.due) : ""], ["Assegnato a", t.assigneeName || "Da assegnare"], ["Priorità", PRIO[t.priority]], ["Creato da", t.createdBy]] as [string, string][] : []),
                       ]} />
-                      {rda && t.lines.length > 0 && <div style={{ marginTop: 10 }}>
-                        <div style={{ ...sans, fontSize: 11.5, color: C.subtle, fontWeight: 600 }}>Descrizione</div>
+                      {rda && t.lines.length > 1 && <div style={{ marginTop: 8 }}>
+                        <div style={{ ...sans, fontSize: 11, color: C.subtle, fontWeight: 600 }}>Righe della RDA</div>
                         <div style={{ ...sans, fontSize: 13, color: C.text, marginTop: 1, display: "grid", gap: 1 }}>{t.lines.map((l, k) => <div key={k}>{l.shortText || "—"}</div>)}</div>
                       </div>}
                       {!rda && t.detail && <div style={{ ...sans, fontSize: 13, color: C.muted, marginTop: 12, lineHeight: 1.55, whiteSpace: "pre-wrap" }}>{t.detail}</div>}
@@ -558,7 +558,7 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
                     summary={[t.chosenSupplierName, t.sourcing ? (t.sourcing.mode === "comparison" ? `${t.sourcing.quotes.length} offerte` : t.sourcing.mode === "strategic" ? "fornitura strategica" : t.sourcing.mode === "single_source" ? "single source" : "eccezione") : t.sourcingRequired ? "confronto da registrare" : ""].filter(Boolean).join(" · ") || "da scegliere"} defaultOpen={st.state === "current"}>
                     {!renewal && <ChosenSupplier t={t} fail={fail} onSaved={(x, m) => { setT({ ...x }); onChanged(); notify(m); }} />}
                     {(t.sourcingRequired || t.sourcing) && t.status === "open" && <RfqCard t={t} fail={fail} onSaved={saved} notify={notify} />}
-                    {(t.sourcingRequired || t.sourcing) && <SourcingCard t={t} threshold={threshold} isManager={isManager} fail={fail} onSaved={saved} />}
+                    {(t.sourcingRequired || t.sourcing) && <SourcingCard t={t} isManager={isManager} fail={fail} onSaved={saved} />}
                   </Fold>);
                 else if (st.key === "contract" && !renewal) out.push(
                   <Fold key={id} id={id} title="Contratto" status={st.state} summary={st.detail ?? "da indicare"} defaultOpen={st.state === "current"}>
@@ -594,7 +594,7 @@ function TaskSheet({ id, people, threshold, isManager, buyers, fail, notify, onC
 const EMPTY_QUOTES: SourcingQuote[] = [{ supplier: "", amount: 0, chosen: true }, { supplier: "", amount: 0, chosen: false }];
 
 /** Come è stato scelto il fornitore di una RDA sopra soglia: confronto offerte, strategica, single source o eccezione. */
-function SourcingCard({ t, threshold, isManager, fail, onSaved }: { t: TaskDetail; threshold: number; isManager: boolean; fail: (e: unknown) => string; onSaved: (t: TaskDetail, msg: string) => void }) {
+function SourcingCard({ t, isManager, fail, onSaved }: { t: TaskDetail; isManager: boolean; fail: (e: unknown) => string; onSaved: (t: TaskDetail, msg: string) => void }) {
   const s = t.sourcing;
   const [editing, setEditing] = useState(!s);
   const [mode, setMode] = useState<SourcingMode>(s?.mode ?? "comparison");
@@ -628,7 +628,6 @@ function SourcingCard({ t, threshold, isManager, fail, onSaved }: { t: TaskDetai
   return (
     <Card>
       <CardTitle icon={<Scale size={16} />} action={s && !editing ? <button onClick={() => setEditing(true)} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5 }}>Modifica</button> : undefined}>Scelta del fornitore</CardTitle>
-      {t.sourcingRequired && t.sourcingStatus === "missing" && !s && <Notice kind="warn">RDA sopra {fmt(threshold)}: serve il confronto con almeno un altro fornitore, salvo fornitura strategica, single source o eccezione approvata dal Manager.{t.status === "done" ? " La RDA è già diventata un ordine: registra comunque com'è stato scelto il fornitore." : ""}</Notice>}
       {s && !editing && (
         <div style={{ display: "grid", gap: 10 }}>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>

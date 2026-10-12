@@ -39,9 +39,8 @@ export function RfqCard({ t, fail, notify, onSaved }: { t: TaskDetail; fail: (e:
 
   return (
     <Card>
-      <CardTitle icon={<Send size={16} />} action={!creating && !hasOpen ? <button onClick={() => setCreating(true)} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5 }}>Richiedi offerte</button> : undefined}>Richiesta di offerta</CardTitle>
+      <CardTitle icon={<Send size={16} />} action={!creating && !hasOpen ? <button onClick={() => setCreating(true)} title="Invita due o più fornitori registrati a presentare un'offerta dalla loro area personale: le risposte diventano il confronto della pratica" style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5 }}>Richiedi offerte</button> : undefined}>Richiesta di offerta</CardTitle>
       {err && <Notice kind="error">{err}</Notice>}
-      {rfqs && rfqs.length === 0 && !creating && <div style={{ ...sans, fontSize: 13, color: C.subtle }}>Invita due o più fornitori registrati a presentare un'offerta dalla loro area personale: le risposte diventano il confronto della pratica.</div>}
       {creating && (
         <div style={{ display: "grid", gap: 12 }}>
           <Field label="Oggetto" htmlFor="rfq-title"><input id="rfq-title" value={title} onChange={e => setTitle(e.target.value)} style={iStyle} /></Field>

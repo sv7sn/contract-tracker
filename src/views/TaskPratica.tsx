@@ -271,10 +271,10 @@ export function IoField({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown
   const has = !!t.meta.internalOrder;
   return (
     <div style={{ border: `1.5px solid ${has ? C.border : C.red}`, background: has ? "transparent" : C.redBg, borderRadius: 8, padding: "6px 8px" }}>
-      {!has && <div style={{ fontSize: 11.5, fontWeight: 650, color: C.red, marginBottom: 4 }}>Manca, è necessario: compilalo o aspetta SAP.</div>}
+      {!has && <div style={{ fontSize: 11, fontWeight: 650, color: C.red, marginBottom: 3 }}>Manca: compilalo o aspetta SAP</div>}
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
         <input value={io} onChange={e => setIo(e.target.value)} disabled={!open} placeholder="Internal order" aria-label="Internal order" style={{ ...iStyle, padding: "5px 7px", fontSize: 12.5, flex: "1 1 96px", minWidth: 0 }} />
-        {open && <button onClick={save} disabled={busy || io.trim() === (t.meta.internalOrder ?? "")} style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }}>{busy ? <Loader2 className="spin" size={13} /> : "Salva"}</button>}
+        {open && <button onClick={save} disabled={busy || io.trim() === (t.meta.internalOrder ?? "")} aria-label="Salva" title="Salva" style={{ ...btnGhost, padding: "4px 8px", fontSize: 12 }}>{busy ? <Loader2 className="spin" size={13} /> : <Check size={14} />}</button>}
       </div>
       {err && <div style={{ fontSize: 12, color: C.red, marginTop: 4 }}>{err}</div>}
     </div>
@@ -292,28 +292,36 @@ export function IoBudget({ t }: { t: TaskDetail }) {
   }, [code]);
   if (!code || mp === undefined) return <span>—</span>;
   if (!mp || mp.current === null) return <span style={{ color: C.muted }}>non nel Master Plan</span>;
-  return <span title={mp.description}><b className="tabular" style={{ color: (mp.residual ?? 0) < 0 ? C.red : C.green }}>{mp.residual !== null ? fmt(mp.residual) : "—"}</b> <span style={{ color: C.subtle, fontSize: 11.5 }}>su {fmt(mp.current)}</span></span>;
+  return <span title={`${mp.description ? mp.description + " · " : ""}budget ${fmt(mp.current)}`}><b className="tabular" style={{ color: (mp.residual ?? 0) < 0 ? C.red : C.green }}>{mp.residual !== null ? fmt(mp.residual) : "—"}</b></span>;
 }
 
 /** Consegna richiesta: da SAP se c'è, altrimenti si può indicare a mano (come l'internal order). */
 export function DeliveryField({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown) => string; onSaved: Saved }) {
   const sap = t.meta.delivDate ?? "";
-  const [d, setD] = useState(t.meta.delivDateManual ?? "");
+  const manual = t.meta.delivDateManual ?? "";
+  const [d, setD] = useState(manual);
+  const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   if (sap) return <span className="tabular">{fmtDate(sap)}</span>;
   const save = async () => {
     setBusy(true); setErr(null);
-    try { onSaved(await portalApi.setTaskLinks(t.id, { delivDate: d }), "Consegna salvata"); } catch (e) { setErr(fail(e)); }
+    try { onSaved(await portalApi.setTaskLinks(t.id, { delivDate: d }), "Consegna salvata"); setEditing(false); } catch (e) { setErr(fail(e)); }
     setBusy(false);
   };
+  const open = t.status === "open";
+  if (!editing) return (
+    <span>
+      {manual ? <span className="tabular">{fmtDate(manual)}</span> : <span style={{ color: C.subtle }}>non in SAP</span>}
+      {open && <button onClick={() => setEditing(true)} style={{ background: "none", border: "none", padding: "0 0 0 6px", cursor: "pointer", color: C.blue, fontSize: 12 }}>{manual ? "modifica" : "inserisci"}</button>}
+    </span>
+  );
   return (
     <div>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        <input type="date" value={d} onChange={e => setD(e.target.value)} disabled={t.status !== "open"} aria-label="Consegna richiesta" style={{ ...iStyle, padding: "5px 7px", fontSize: 12.5, flex: "1 1 96px", minWidth: 0 }} />
-        {t.status === "open" && <button onClick={save} disabled={busy || d === (t.meta.delivDateManual ?? "")} style={{ ...btnGhost, padding: "5px 10px", fontSize: 12 }}>{busy ? <Loader2 className="spin" size={13} /> : "Salva"}</button>}
+      <div style={{ display: "flex", gap: 4 }}>
+        <input type="date" value={d} onChange={e => setD(e.target.value)} aria-label="Consegna richiesta" style={{ ...iStyle, padding: "4px 5px", fontSize: 12, minWidth: 0, flex: "1 1 auto" }} />
+        <button onClick={save} disabled={busy} aria-label="Salva" title="Salva" style={{ ...btnGhost, padding: "4px 7px" }}>{busy ? <Loader2 className="spin" size={13} /> : <Check size={14} />}</button>
       </div>
-      <div style={{ fontSize: 11.5, color: C.subtle, marginTop: 3 }}>Non in SAP: inseriscila.</div>
       {err && <div style={{ fontSize: 12, color: C.red, marginTop: 4 }}>{err}</div>}
     </div>
   );
