@@ -40,8 +40,12 @@ export function docxParagraphs(buf: Buffer): string[] {
   return out;
 }
 
+/** Le versioni del fornitore e quelle interne condividono la numerazione. */
+export async function nextVersion(db: Queryable, taskId: number): Promise<number> {
+  return ((await db.query("select max(version) as v from contract_drafts where task_id = $1", [taskId])).rows[0].v ?? 0) + 1;
+}
 async function latestDraft(db: Queryable, taskId: number): Promise<Row | undefined> {
-  return (await db.query("select * from contract_drafts where task_id = $1 order by version desc limit 1", [taskId])).rows[0];
+  return (await db.query("select * from contract_drafts where task_id = $1 and origin = 'internal' order by version desc limit 1", [taskId])).rows[0];
 }
 
 /** Chi può vedere la bozza: buyer/Manager del task, oppure la funzione invitata (il Richiedente solo se è la persona invitata). */
@@ -83,14 +87,14 @@ async function openForbidden(db: Queryable, d: Row) {
 }
 
 const mapReview = (r: Row): ClmReview => ({ id: r.id, func: r.func, required: r.required, due: day(r.due), status: r.status, note: r.note, decidedBy: r.decided_by, decidedAt: r.decided_at ? iso(r.decided_at) : null, invitedAt: iso(r.invited_at) });
-const mapDraft = (r: Row): ClmDraft => ({ id: r.id, version: r.version, fileName: r.file_name, size: r.size, note: r.note, uploadedBy: r.uploaded_by, uploadedAt: iso(r.uploaded_at) });
+const mapDraft = (r: Row): ClmDraft => ({ id: r.id, version: r.version, fileName: r.file_name, size: r.size, note: r.note, uploadedBy: r.uploaded_by, uploadedAt: iso(r.uploaded_at), origin: r.origin, sharedAt: r.shared_at ? iso(r.shared_at) : null });
 
 export async function draftBundle(user: User, taskId: number, draftId?: number): Promise<ClmBundle> {
   const { owner, func } = await access(user, taskId);
   const db = getPool();
   const t = await getTask(user.role === "manager" || user.role === "buyer" ? user : ({ ...user, role: "manager" } as User), taskId);
-  const drafts = (await db.query("select id, task_id, version, file_name, size, note, uploaded_by, uploaded_at, layout, (file_path is null) as generated from contract_drafts where task_id = $1 order by version desc", [taskId])).rows;
-  const latest = drafts[0];
+  const drafts = (await db.query("select id, task_id, version, file_name, size, note, uploaded_by, uploaded_at, layout, origin, shared_at, (file_path is null) as generated from contract_drafts where task_id = $1 order by version desc", [taskId])).rows;
+  const latest = drafts.find(d => d.origin === "internal");
   const cur = draftId ? drafts.find(d => d.id === draftId) : latest;
   if (draftId && !cur) throw new HttpError(404, "Versione non trovata");
   const reviews = cur ? (await db.query("select * from draft_reviews where draft_id = $1 order by id", [cur.id])).rows : [];
@@ -100,7 +104,7 @@ export async function draftBundle(user: User, taskId: number, draftId?: number):
   return {
     drafts: drafts.map(mapDraft), draftId: cur?.id ?? null, latestId: latest?.id ?? null, paras,
     reviews: reviews.map(mapReview),
-    comments: comments.map((c): ClmComment => ({ id: c.id, draftId: c.draft_id, authorName: c.author_name, func: c.func, para: c.para, start: c.start_pos, end: c.end_pos, quote: c.quote, body: c.body, status: c.status, parentId: c.parent_id, createdAt: iso(c.created_at), mine: c.author_id === user.id })),
+    comments: comments.map((c): ClmComment => ({ id: c.id, draftId: c.draft_id, authorName: c.author_name, func: c.func, para: c.para, start: c.start_pos, end: c.end_pos, quote: c.quote, body: c.body, status: c.status, parentId: c.parent_id, createdAt: iso(c.created_at), mine: c.author_id === user.id, external: c.external })),
     brief: { taskId, title: t.title, supplier: t.chosenSupplierName || String(t.meta.supplier ?? ""), value: Number(t.meta.value) || null, currency: String(t.meta.currency ?? "EUR"), due: t.due, priority: t.priority },
     owner, myFunc: func, canDecide: !!mine && cur?.id === latest?.id, gate: await reviewGate(db, taskId),
     layout: cur?.layout ?? {}, generated: !!cur?.generated,
@@ -148,7 +152,7 @@ export async function uploadDraft(user: User, taskId: number, input: Row, origin
     try { const b = await openDocument(path); if (b) paras = docxParagraphs(Buffer.from(await new Response(b.stream).arrayBuffer())); } catch { paras = []; }
   }
   const prev = await latestDraft(db, taskId);
-  const version = (prev?.version ?? 0) + 1;
+  const version = await nextVersion(db, taskId);
   const id = (await db.query("insert into contract_drafts (task_id, version, file_name, file_path, size, paras, note, uploaded_by) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id",
     [taskId, version, name, path, Math.max(0, Number(input?.size) || 0), JSON.stringify(paras), String(input?.note ?? "").trim().slice(0, 500), user.name])).rows[0].id as number;
   if (prev) {
@@ -203,9 +207,14 @@ export async function addComment(user: User, taskId: number, input: Row): Promis
   const para = Number.isInteger(input?.para) && input.para >= 0 && input.para < paraCount ? input.para as number : null;
   const clampPos = (v: unknown) => (para !== null && Number.isInteger(v) && (v as number) >= 0 && (v as number) <= String(d.paras[para]).length ? v as number : null);
   const parentId = input?.parentId ? Number(input.parentId) : null;
+  const external = input?.external === true;
+  if (external) {
+    if (!owner) throw new HttpError(403, "Solo il buyer scrive al fornitore");
+    if (!(await db.query("select 1 from contract_drafts where id = $1 and shared_at is not null", [d.id])).rows.length) bad("Condividi prima la bozza con il fornitore");
+  }
   if (parentId && !(await db.query("select 1 from draft_comments where id = $1 and draft_id = $2", [parentId, d.id])).rows.length) bad("Commento non trovato");
-  await db.query("insert into draft_comments (task_id, draft_id, author_id, author_name, func, para, start_pos, end_pos, quote, body, parent_id) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)",
-    [taskId, d.id, user.id, user.name, owner ? "buyer" : func, para, clampPos(input?.start), clampPos(input?.end), String(input?.quote ?? "").slice(0, 300), body, parentId]);
+  await db.query("insert into draft_comments (task_id, draft_id, author_id, author_name, func, para, start_pos, end_pos, quote, body, parent_id, external) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)",
+    [taskId, d.id, user.id, user.name, owner ? "buyer" : func, para, clampPos(input?.start), clampPos(input?.end), String(input?.quote ?? "").slice(0, 300), body, parentId, external]);
   await logDraft(db, user, taskId, d.id, "Commento", body.slice(0, 120));
   return draftBundle(user, taskId, d.id);
 }
@@ -255,7 +264,7 @@ export async function myReviews(user: User): Promise<MyReview[]> {
   const t0 = today();
   const rows = (await getPool().query(`select r.id, r.task_id, r.func, r.due, r.status, r.invited_at, d.version, t.title, t.due as task_due, t.priority, t.chosen_supplier_name, t.meta->>'supplier' as meta_supplier
     from draft_reviews r join contract_drafts d on d.id = r.draft_id join tasks t on t.id = r.task_id
-    where r.func = $1 and ($1 <> 'requester' or r.user_id = $2) and t.status = 'open' and d.version = (select max(version) from contract_drafts where task_id = r.task_id)
+    where r.func = $1 and ($1 <> 'requester' or r.user_id = $2) and t.status = 'open' and d.version = (select max(version) from contract_drafts where task_id = r.task_id and origin = 'internal')
     order by (r.status = 'pending') desc, r.due nulls last, case t.priority when 'high' then 0 when 'normal' then 1 else 2 end, r.id`, [func, user.id])).rows;
   return rows.map(r => ({ reviewId: r.id, taskId: r.task_id, func: r.func, title: r.title, supplier: r.chosen_supplier_name || r.meta_supplier || "", due: day(r.due), taskDue: day(r.task_due), priority: r.priority, version: r.version,
     invitedAt: iso(r.invited_at), overdueDays: r.status === "pending" && r.due && day(r.due)! < t0 ? daysBetween(t0, day(r.due)!) : 0, status: r.status }));
@@ -265,7 +274,7 @@ export async function myReviews(user: User): Promise<MyReview[]> {
 export async function pendingReviewsOf(db: Queryable, taskIds: number[] | null): Promise<{ taskId: number; title: string; func: FuncKey; due: string | null; waitDays: number; overdue: number; assigneeId: number | null }[]> {
   const t0 = today();
   const rows = (await db.query(`select r.task_id, r.func, r.due, r.invited_at, t.title, t.assignee_id from draft_reviews r join contract_drafts d on d.id = r.draft_id join tasks t on t.id = r.task_id
-    where r.status = 'pending' and t.status = 'open' and d.version = (select max(version) from contract_drafts where task_id = r.task_id) and ($1::int[] is null or r.task_id = any($1))`, [taskIds])).rows;
+    where r.status = 'pending' and t.status = 'open' and d.version = (select max(version) from contract_drafts where task_id = r.task_id and origin = 'internal') and ($1::int[] is null or r.task_id = any($1))`, [taskIds])).rows;
   return rows.map(r => ({ taskId: r.task_id, title: r.title, func: r.func, due: day(r.due), assigneeId: r.assignee_id,
     waitDays: Math.max(0, daysBetween(t0, iso(r.invited_at).slice(0, 10))), overdue: r.due && day(r.due)! < t0 ? daysBetween(t0, day(r.due)!) : 0 }));
 }
@@ -275,7 +284,7 @@ export async function runReviewReminders(origin: string): Promise<{ reminders: n
   const db = getPool(), t0 = today();
   const rows = (await db.query(`select r.id, r.task_id, r.func, r.user_id, r.due, t.title, t.assignee_id from draft_reviews r join contract_drafts d on d.id = r.draft_id join tasks t on t.id = r.task_id
     where r.status = 'pending' and t.status = 'open' and r.due is not null and r.due <= $1 and (r.last_reminded is null or r.last_reminded <= $2)
-      and d.version = (select max(version) from contract_drafts where task_id = r.task_id)`, [t0, addDays(t0, -2)])).rows;
+      and d.version = (select max(version) from contract_drafts where task_id = r.task_id and origin = 'internal')`, [t0, addDays(t0, -2)])).rows;
   let reminders = 0, escalations = 0;
   const managers = (await db.query("select email, name from users where active and role = 'manager'")).rows;
   for (const r of rows) {
@@ -337,7 +346,7 @@ export async function draftFromTemplate(user: User, taskId: number, input: Row, 
   const live = await liveClauses(db);
   const out = renderTemplate(tpl!, answers, langs.length ? langs : ["it"], (code, l) => live.find(c => c.code === code)?.text[l] || null);
   const prev = await latestDraft(db, taskId);
-  const version = (prev?.version ?? 0) + 1;
+  const version = await nextVersion(db, taskId);
   const id = (await db.query("insert into contract_drafts (task_id, version, file_name, file_path, size, paras, layout, source, note, uploaded_by) values ($1,$2,$3,null,0,$4,$5,$6,$7,$8) returning id",
     [taskId, version, `${tpl!.code}-${(t.chosenSupplierName || "bozza").replace(/[^\p{L}\p{N}]+/gu, "_").slice(0, 40)}-v${version}.docx`, JSON.stringify(out.paras), JSON.stringify({ cols: out.cols, langs: out.langs, heads: out.heads }),
       JSON.stringify({ template: tpl!.code, answers }), `Generata dal modello "${tpl!.name.it}"`, user.name])).rows[0].id as number;
@@ -392,11 +401,11 @@ export async function acceptDeviation(user: User, taskId: number, input: Row): P
 export async function clmKpis(user: User): Promise<ClmKpis> {
   if (user.role !== "manager" && user.role !== "viewer") throw new HttpError(403, "Operazione non consentita");
   const db = getPool(), t0 = today();
-  const a = (await db.query(`select count(distinct task_id)::int as drafts, avg(mv)::float as avg_versions from (select task_id, max(version) as mv from contract_drafts group by task_id) x`)).rows[0];
-  const latest = `d.version = (select max(version) from contract_drafts where task_id = r.task_id)`;
+  const a = (await db.query(`select count(distinct task_id)::int as drafts, avg(mv)::float as avg_versions from (select task_id, max(version) as mv from contract_drafts where origin = 'internal' group by task_id) x`)).rows[0];
+  const latest = `d.version = (select max(version) from contract_drafts where task_id = r.task_id and origin = 'internal')`;
   const inReview = (await db.query(`select count(distinct r.task_id)::int as n from draft_reviews r join contract_drafts d on d.id = r.draft_id join tasks t on t.id = r.task_id where r.status = 'pending' and t.status = 'open' and ${latest}`)).rows[0].n;
   const cyc = (await db.query(`select avg(extract(epoch from (done - first)) / 86400)::float as days from (
-      select r.task_id, max(r.decided_at) as done, (select min(uploaded_at) from contract_drafts where task_id = r.task_id) as first
+      select r.task_id, max(r.decided_at) as done, (select min(uploaded_at) from contract_drafts where task_id = r.task_id and origin = 'internal') as first
       from draft_reviews r join contract_drafts d on d.id = r.draft_id where ${latest} group by r.task_id
       having bool_and(r.status in ('approved','approved_comments'))) y`)).rows[0].days;
   const funcs = [];

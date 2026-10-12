@@ -3,7 +3,7 @@ import type { Queryable } from "./_db.js";
 // Email del portale. Ogni messaggio viene salvato nella tabella `notifications`; l'invio reale avviene se sono
 // configurati RESEND_API_KEY e MAIL_FROM (servizio Resend), altrimenti lo stato resta "logged" (non inviato).
 
-export type Template = "invitation" | "new_registration" | "supplier_modified" | "revision_requested" | "rejection" | "buyer_approved" | "vendor_created" | "sap_code" | "doc_reminder" | "doc_unresponsive" | "bank_change_alert" | "rfq_invite" | "rfq_quote" | "bo_notice" | "bo_reminder" | "bo_message" | "review_invite" | "review_reminder" | "review_decided";
+export type Template = "invitation" | "new_registration" | "supplier_modified" | "revision_requested" | "rejection" | "buyer_approved" | "vendor_created" | "sap_code" | "doc_reminder" | "doc_unresponsive" | "bank_change_alert" | "rfq_invite" | "rfq_quote" | "bo_notice" | "bo_reminder" | "bo_message" | "review_invite" | "review_reminder" | "review_decided" | "negotiation_shared" | "negotiation_reply";
 export type Lang = "IT" | "EN";
 
 interface Vars { items?: string; name?: string; link?: string; reason?: string; sapCode?: string; expires?: string; companies?: string; deadline?: string; detail?: string }
@@ -80,6 +80,14 @@ const T: Record<Template, Record<Lang, (v: Vars) => { subject: string; body: str
   review_reminder: {
     IT: v => ({ subject: `Sollecito revisione: ${v.reason}`, body: `Gentile ${v.name},\n\n${v.detail}\n\nTask: "${v.reason}".\nApri la bozza: ${v.link}` }),
     EN: v => ({ subject: `Review reminder: ${v.reason}`, body: `Dear ${v.name},\n\n${v.detail}\n\nTask: "${v.reason}".\nOpen the draft: ${v.link}` }),
+  },
+  negotiation_shared: {
+    IT: v => ({ subject: `Bozza di contratto da esaminare: ${v.reason}`, body: `Gentile ${v.name},\n\n${v.detail}\n\nAccedi al portale fornitori per leggere il testo, scrivere i tuoi commenti o caricare una tua proposta di modifica: ${v.link}` }),
+    EN: v => ({ subject: `Draft contract for your review: ${v.reason}`, body: `Dear ${v.name},\n\n${v.detail}\n\nSign in to the supplier portal to read the text, add your comments or upload your proposed changes: ${v.link}` }),
+  },
+  negotiation_reply: {
+    IT: v => ({ subject: `Il fornitore ha risposto sulla bozza: ${v.reason}`, body: `Gentile ${v.name},\n\n${v.detail}\n\nApri il task: ${v.link}` }),
+    EN: v => ({ subject: `The supplier replied on the draft: ${v.reason}`, body: `Dear ${v.name},\n\n${v.detail}\n\nOpen the task: ${v.link}` }),
   },
   review_decided: {
     IT: v => ({ subject: `Parere sulla bozza: ${v.reason}`, body: `Gentile ${v.name},\n\n${v.detail}\n\nApri il task: ${v.link}` }),

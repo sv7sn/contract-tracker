@@ -78,6 +78,7 @@ export function DraftPanel({ taskId, currentUser }: { taskId: number; currentUse
   const [note, setNote] = useState("");
   const [tab, setTab] = useState<"text" | "diff" | "clauses" | "audit">("text");
   const [wizard, setWizard] = useState(false);
+  const [ext, setExt] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const textRef = useRef<HTMLDivElement>(null);
   const load = useCallback((draftId?: number) => { portalApi.clm.bundle(taskId, draftId).then(x => { setB(x); setErr(null); }).catch(e => setErr(errText(e))); }, [taskId]);
@@ -107,7 +108,7 @@ export function DraftPanel({ taskId, currentUser }: { taskId: number; currentUse
   };
   const send = async () => {
     if (!text.trim() || !b.draftId) return;
-    const ok = await run("comment", () => portalApi.clm.comment(taskId, { draftId: b.draftId as number, body: text, ...(sel ? sel : {}) }));
+    const ok = await run("comment", () => portalApi.clm.comment(taskId, { draftId: b.draftId as number, body: text, external: ext && !!cur?.sharedAt, ...(sel ? sel : {}) }));
     if (ok) { setText(""); setSel(null); window.getSelection()?.removeAllRanges(); }
   };
   const top = b.comments.filter(c => !c.parentId);
@@ -125,7 +126,8 @@ export function DraftPanel({ taskId, currentUser }: { taskId: number; currentUse
 
       {/* Versioni e caricamento */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        {b.drafts.map(d => <button key={d.id} onClick={() => load(d.id)} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12.5, ...(d.id === b.draftId ? { borderColor: C.accent, color: C.accent, fontWeight: 650 } : {}) }}>v{d.version}</button>)}
+        {b.drafts.map(d => <button key={d.id} onClick={() => load(d.id)} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12.5, ...(d.id === b.draftId ? { borderColor: C.accent, color: C.accent, fontWeight: 650 } : {}) }}>v{d.version}{d.origin === "supplier" ? " (fornitore)" : d.sharedAt ? " · condivisa" : ""}</button>)}
+        {b.owner && cur && cur.origin === "internal" && isLatest && <button onClick={() => run("share", () => portalApi.clm.share(taskId, cur.id, !cur.sharedAt))} disabled={busy === "share"} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12.5, ...(cur.sharedAt ? { borderColor: C.blue, color: C.blue } : {}) }}>{busy === "share" ? "…" : cur.sharedAt ? "Ritira dal fornitore" : "Condividi con il fornitore"}</button>}
         {cur && <a href={draftFileUrl(cur.id)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, color: C.blue, display: "inline-flex", gap: 5, alignItems: "center", textDecoration: "none" }}><Download size={14} />{cur.fileName}</a>}
         {b.owner && <>
           <input value={note} onChange={e => setNote(e.target.value)} placeholder="Nota sulla nuova versione (facoltativa)" style={{ ...iStyle, flex: 1, minWidth: 160, padding: "6px 10px", fontSize: 12.5 }} />
@@ -202,6 +204,7 @@ export function DraftPanel({ taskId, currentUser }: { taskId: number; currentUse
               {sel ? <div style={{ fontSize: 12.5, color: C.muted, display: "flex", gap: 6, justifyContent: "space-between" }}><span>Su: «{sel.quote.length > 90 ? sel.quote.slice(0, 90) + "…" : sel.quote}»</span><button onClick={() => setSel(null)} aria-label="Togli selezione" style={{ background: "none", border: "none", cursor: "pointer", color: C.subtle }}><X size={14} /></button></div>
                 : <div style={{ fontSize: 12.5, color: C.subtle }}>Commento generale (seleziona una frase nel testo per ancorarlo).</div>}
               <textarea value={text} onChange={e => setText(e.target.value)} rows={3} placeholder="Scrivi il commento…" style={{ ...iStyle, resize: "vertical" }} />
+              {b.owner && cur?.sharedAt && <label style={{ fontSize: 12.5, color: C.text, display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={ext} onChange={e => setExt(e.target.checked)} />Visibile al fornitore</label>}
               <button onClick={send} disabled={!text.trim() || busy === "comment"} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 13, justifySelf: "end", display: "inline-flex", gap: 6, alignItems: "center", opacity: text.trim() ? 1 : .5 }}>{busy === "comment" ? <Loader2 className="spin" size={14} /> : <Send size={14} />}Commenta</button>
             </div>
           </div>
@@ -215,7 +218,7 @@ function CommentCard({ c, thread, owner, busy, reply, setReply, onResolve, onRep
   const resolved = c.status === "resolved";
   const line = (x: ClmComment, first = false): ReactNode => (
     <div key={x.id} style={{ fontSize: 13, color: C.text, paddingTop: first ? 0 : 6 }}>
-      <span style={{ fontWeight: 650 }}>{x.authorName}</span> <span style={{ color: C.subtle, fontSize: 11.5 }}>{x.func === "buyer" ? "Buyer" : FUNC_LABEL[x.func as FuncKey] ?? x.func} · {new Date(x.createdAt).toLocaleDateString("it-IT")}</span>
+      <span style={{ fontWeight: 650 }}>{x.authorName}</span> <span style={{ color: C.subtle, fontSize: 11.5 }}>{x.func === "buyer" ? "Buyer" : x.func === "supplier" ? "Fornitore" : FUNC_LABEL[x.func as FuncKey] ?? x.func}{x.external && x.func !== "supplier" ? " (visibile al fornitore)" : ""} · {new Date(x.createdAt).toLocaleDateString("it-IT")}</span>
       <div style={{ whiteSpace: "pre-wrap", marginTop: 2 }}>{x.body}</div>
     </div>);
   return (

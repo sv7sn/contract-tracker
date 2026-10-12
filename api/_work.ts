@@ -51,6 +51,25 @@ export async function myWork(user: User): Promise<WorkItem[]> {
     }
   });
 
+  // Obblighi dei contratti in scadenza o scaduti, e spesa SAP che si avvicina al valore del contratto.
+  await safe(async () => {
+    const scope = manager ? "true" : "(c.owner_id = any($1) or lower(c.owner) = any($2))", args = manager ? [] : [ids, names];
+    const obl = (await db.query(`select o.id, o.title, o.due::text as due, c.id as cid, c.supplier from contract_obligations o join contracts c on c.id = o.contract_id
+      where o.status = 'open' and c.status = 'active' and o.due <= current_date + 7 and ${scope} order by o.due`, args)).rows;
+    for (const o of obl) {
+      const d = daysBetween(t0, o.due);
+      items.push({ kind: "obligation_due", urgency: d > 0 ? 3 : d >= -3 ? 2 : 1, title: `${o.supplier} — ${o.title}`.slice(0, 120), detail: d > 0 ? `Obbligo scaduto da ${d} ${plural(d, "giorno", "giorni")}` : d === 0 ? "Obbligo da completare oggi" : `Obbligo in scadenza tra ${-d} ${plural(-d, "giorno", "giorni")}`, days: d > 0 ? d : null, target: { view: "list", contractId: o.cid } });
+    }
+    const cap = (await db.query(`select c.id, c.supplier, c.value::float as value, spent.total::float as spent from contracts c join suppliers s on s.id = c.supplier_id
+      join lateral (select coalesce(sum(l.value), 0) as total from po_lines l where l.supplier_code = s.sap_code and s.sap_code <> '' and coalesce(nullif(l.currency, ''), 'EUR') = 'EUR'
+        and (c.start_date !~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' or l.doc_date >= c.start_date::date)) spent on true
+      where c.status = 'active' and not c.ceased and c.value > 0 and ${scope} and spent.total >= c.value * 0.8`, args)).rows;
+    for (const c of cap) {
+      const p = Math.round((c.spent / c.value) * 100);
+      items.push({ kind: "contract_cap", urgency: p >= 100 ? 2 : 1, title: c.supplier, detail: `Spesa SAP dall'inizio del contratto: ${p}% del valore (${Math.round(c.spent).toLocaleString("it-IT")} su ${Math.round(c.value).toLocaleString("it-IT")} €)`, days: null, target: { view: "list", contractId: c.id } });
+    }
+  });
+
   // Avvisi ai Business Owner: da inviare (data prevista passata) o senza risposta.
   await safe(async () => {
     const rows = (await db.query(`select c.id, c.supplier, c.object, n.scheduled_date as notify_date, r.status as resp_status,

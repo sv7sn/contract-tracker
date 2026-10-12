@@ -7,6 +7,7 @@ import { COUNTRIES, countryName, CURRENCIES, DOC_EXTENSIONS, MAX_DOC_BYTES, miss
 import { Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
 import { ArrowLeft, ArrowRight, CheckCircle2, Clock, FileCheck2, Loader2, Paperclip, Pencil, Save, Send, Trash2, Building2, Wallet, History } from "../components/icons.tsx";
 import { AiResult, DocLink, KV, Notice, StatusBadge, ValidityChip } from "../components/vendorUi.tsx";
+import { SupplierNegotiations } from "../components/SupplierNegotiations.tsx";
 import { SupplierRfqs } from "../components/SupplierRfqs.tsx";
 import { fmtSize, supplierTimeline } from "../lib/vendors.ts";
 import { docValidity } from "../supplierRules.ts";
@@ -413,6 +414,7 @@ export function SupplierPortal({ onSessionExpired, notify }: Props) {
     <div style={{ maxWidth: 920, margin: "0 auto", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14 }}>
       {tracker}
       {s.status === "registered" && <SupplierRfqs fail={fail} notify={notify} />}
+      {s.status === "registered" && <SupplierNegotiations fail={fail} />}
       {banner}
       {expiryNotice}
       {amending && s.bankChanged && !s.bankLetterAfterChange && !wizard && <Notice kind="warn"><b>Hai cambiato le coordinate bancarie:</b> carica una nuova lettera della banca nei documenti di qualifica, altrimenti la modifica non può essere approvata.</Notice>}

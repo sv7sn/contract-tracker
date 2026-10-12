@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type ClmKpis, type ReviewRule, type ClauseView, type ClmAuditEntry, type ClmBundle, type ClmDiff, type ClmFindings, type ClmTemplateInfo, type FuncKey, type MyReview, type ReviewStatus, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type EligibleSupplier, type RdaSuggestion, type Task, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type NegotiationBundle, type NegotiationSummary, type Obligation, type ClmKpis, type ReviewRule, type ClauseView, type ClmAuditEntry, type ClmBundle, type ClmDiff, type ClmFindings, type ClmTemplateInfo, type FuncKey, type MyReview, type ReviewStatus, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type EligibleSupplier, type RdaSuggestion, type Task, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -150,7 +150,7 @@ export const portalApi = {
     bundle: (taskId: number, draftId?: number) => request<ClmBundle>(portal("drafts", `&id=${taskId}${draftId ? `&draft=${draftId}` : ""}`)),
     upload: (taskId: number, d: { fileName: string; filePath: string; size: number; note?: string }) => post<ClmBundle>(portal("draft-upload", `&id=${taskId}`), d),
     invite: (taskId: number, funcs: { func: FuncKey; userId?: number; due?: string }[], message: string) => post<ClmBundle>(portal("draft-invite", `&id=${taskId}`), { funcs, message }),
-    comment: (taskId: number, c: { draftId: number; body: string; para?: number | null; start?: number | null; end?: number | null; quote?: string; parentId?: number | null }) => post<ClmBundle>(portal("draft-comment", `&id=${taskId}`), c),
+    comment: (taskId: number, c: { draftId: number; body: string; para?: number | null; start?: number | null; end?: number | null; quote?: string; parentId?: number | null; external?: boolean }) => post<ClmBundle>(portal("draft-comment", `&id=${taskId}`), c),
     resolve: (commentId: number, resolved: boolean) => post<ClmBundle>(portal("draft-comment-resolve", `&id=${commentId}`), { resolved }),
     decide: (taskId: number, decision: ReviewStatus, note: string) => post<ClmBundle>(portal("draft-decide", `&id=${taskId}`), { decision, note }),
     templates: (taskId: number) => request<{ templates: ClmTemplateInfo[] }>(portal("draft-templates", `&id=${taskId}`)).then(r => r.templates),
@@ -162,12 +162,21 @@ export const portalApi = {
     clauses: () => request<{ clauses: ClauseView[] }>(portal("clauses")).then(r => r.clauses),
     saveClause: (c: Record<string, unknown>) => post<{ clauses: ClauseView[] }>(portal("clause-save"), c).then(r => r.clauses),
     decideClause: (versionId: number, approve: boolean, note: string) => post<{ clauses: ClauseView[] }>(portal("clause-decide", `&id=${versionId}`), { approve, note }).then(r => r.clauses),
+    share: (taskId: number, draftId: number, share: boolean, message = "") => post<ClmBundle>(portal("draft-share", `&id=${taskId}`), { draftId, share, message }),
     rules: () => request<{ rules: ReviewRule[] }>(portal("review-rules")).then(r => r.rules),
     saveRule: (rule: Record<string, unknown>) => post<{ rules: ReviewRule[] }>(portal("review-rule-save"), rule).then(r => r.rules),
     deleteRule: (id: number) => post<{ rules: ReviewRule[] }>(portal("review-rule-delete", `&id=${id}`), {}).then(r => r.rules),
     kpis: () => request<ClmKpis>(portal("clm-kpis")),
     mine: () => request<{ reviews: MyReview[] }>(portal("my-reviews")).then(r => r.reviews),
   },
+  negotiations: () => request<{ negotiations: NegotiationSummary[] }>(portal("supplier-negotiations")).then(r => r.negotiations),
+  negotiation: (taskId: number, draftId?: number) => request<NegotiationBundle>(portal("supplier-negotiation", `&id=${taskId}${draftId ? `&draft=${draftId}` : ""}`)),
+  negotiationComment: (taskId: number, c: { draftId: number; body: string; para?: number | null; start?: number | null; end?: number | null; quote?: string }) => post<NegotiationBundle>(portal("supplier-negotiation-comment", `&id=${taskId}`), c),
+  negotiationUpload: (taskId: number, d: { fileName: string; filePath: string; size: number }) => post<NegotiationBundle>(portal("supplier-negotiation-upload", `&id=${taskId}`), d),
+  obligations: (contractId: number) => request<{ obligations: Obligation[] }>(portal("obligations", `&id=${contractId}`)).then(r => r.obligations),
+  saveObligation: (contractId: number, o: Record<string, unknown>) => post<{ obligations: Obligation[] }>(portal("obligation-save", `&id=${contractId}`), o).then(r => r.obligations),
+  completeObligation: (id: number) => post<{ obligations: Obligation[] }>(portal("obligation-done", `&id=${id}`), {}).then(r => r.obligations),
+  deleteObligation: (id: number) => post<{ obligations: Obligation[] }>(portal("obligation-delete", `&id=${id}`), {}).then(r => r.obligations),
   deleteTask: (id: number) => request<{ ok: true }>(portal("task", `&id=${id}`), { method: "DELETE" }),
   config: () => request<{ config: PortalConfig }>(portal("config")).then(r => r.config),
   saveConfig: (entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders" | "rda" | "pgr" | "privacy", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
@@ -177,6 +186,7 @@ export const demoSapFileUrl = (kind: "pr" | "po") => `/api/portal?op=budget-demo
 export const budgetTemplateUrl = "/api/portal?op=budget-template";
 export const rfqFileUrl = (id: number, kind: "spec" | "quote", supplierId?: number) => `/api/portal?op=rfq-file&id=${id}&kind=${kind}${supplierId ? `&supplier=${supplierId}` : ""}`;
 export const supplierRfqSpecUrl = (id: number) => `/api/portal?op=supplier-rfq-spec&id=${id}`;
+export const supplierNegotiationFileUrl = (draftId: number) => `/api/portal?op=supplier-negotiation-file&id=${draftId}`;
 export const draftAuditUrl = (taskId: number) => `/api/portal?op=draft-audit-export&id=${taskId}`;
 export const draftFileUrl = (draftId: number) => `/api/portal?op=draft-file&id=${draftId}`;
 export const taskDocUrl = (docId: number) => `/api/portal?op=task-doc-download&id=${docId}`;
