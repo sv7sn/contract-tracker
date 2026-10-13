@@ -1,0 +1,28 @@
+import assert from "node:assert/strict";
+const B = process.env.API_BUILD + "/api/";
+process.env.DATABASE_URL = process.env.TEST_DB_URL;
+process.env.ADMIN_EMAIL = "admin@test.it"; process.env.ADMIN_PASSWORD = "Admin-pass-123!"; process.env.SESSION_SECRET = "x".repeat(40);
+const portal = await import(B + "portal.js"), login = await import(B + "login.js"), users = await import(B + "users.js"), state = await import(B + "state.js"), commit = await import(B + "commit.js"), db = await import(B + "_db.js");
+await db.ensureSchema(); const pool = db.getPool();
+let passed = 0; const ok = n => { passed++; console.log("  ✓", n); };
+const call = async (mod, cookie, method, qs, body) => { const r = new Request("https://a/x" + qs, { method, headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); const res = await mod[method](r); let data; try { data = await res.clone().json(); } catch { data = null; } return { status: res.status, data, cookie: res.headers.get("set-cookie")?.split(";")[0] }; };
+const lg = async (e, p) => (await call(login, null, "POST", "", { email: e, password: p })).cookie;
+const admin = await lg("admin@test.it", "Admin-pass-123!");
+const mk = async (email, name, role) => (await call(users, admin, "POST", "", { email, name, role, password: "Pass-12345-xx!" })).data.user.id;
+const b1 = await mk("b1@t.it", "Buyer Uno", "buyer"); const bo1 = await mk("bo1@t.it", "Mario Rossi", "bo"); await mk("bo2@t.it", "Anna Verdi", "bo"); await mk("viewer@t.it", "Carla", "viewer");
+const c1 = await lg("b1@t.it", "Pass-12345-xx!"), cbo1 = await lg("bo1@t.it", "Pass-12345-xx!"), cbo2 = await lg("bo2@t.it", "Pass-12345-xx!");
+const base = { supplier: "ACME", object: "Test", category: "IT", country: "Italia", value: 100, currency: "EUR", start: "2026-01-01", end: "2027-12-31", owner: "Buyer Uno", boEmail: "", renewal: "Non definito", type: "Servizi", notes: "", ceased: false, fileName: null, filePath: null, noticeDays: null, noticeDate: "" };
+
+let r = await call(portal, c1, "GET", "?op=bo-users"); assert.equal(r.status, 200); assert.deepEqual(r.data.users.map(u => u.name), ["Anna Verdi", "Mario Rossi"]); ok("i Business Owner selezionabili: solo gli utenti con quel ruolo, visibili anche al buyer");
+await call(users, admin, "POST", "", { id: bo1, sapUser: "dantadi001" }); r = await call(portal, c1, "GET", "?op=bo-users"); assert.equal(r.data.users.find(u => u.name === "Mario Rossi").sapUser, "DANTADI001"); ok("l'elenco dei Business Owner include il codice utente SAP (serve a mostrare il richiedente per nome nei task)");
+r = await call(commit, c1, "POST", "", { contract: { ...base, boUserId: bo1 } }); assert.equal(r.status, 200, JSON.stringify(r.data)); const id = r.data.contractId;
+let s = (await call(state, c1, "GET", "")).data.contracts.find(c => c.id === id); assert.equal(s.boUserId, bo1); assert.equal(s.boEmail, "bo1@t.it"); assert.equal(s.boName, "Mario Rossi"); ok("scelto per utente: email e nome seguono l'utente");
+assert.equal((await call(state, cbo1, "GET", "")).data.contracts.length, 1); assert.equal((await call(state, cbo2, "GET", "")).data.contracts.length, 0); ok("lo vede solo il Business Owner scelto");
+assert.equal((await call(commit, c1, "POST", "", { contract: { ...base, supplier: "Altro", boUserId: b1 } })).status, 400); ok("non si può scegliere un utente che non è Business Owner");
+r = await call(commit, c1, "POST", "", { contract: { ...base, id, boUserId: (await pool.query("select id from users where email = 'bo2@t.it'")).rows[0].id } }); assert.equal(r.status, 200);
+assert.equal((await call(state, cbo1, "GET", "")).data.contracts.length, 0); assert.equal((await call(state, cbo2, "GET", "")).data.contracts.length, 1); ok("cambiando Business Owner cambia chi vede il contratto");
+r = await call(commit, c1, "POST", "", { contract: { ...base, id, boUserId: null, boEmail: "" } }); s = (await call(state, c1, "GET", "")).data.contracts.find(c => c.id === id); assert.equal(s.boUserId, null); assert.equal(s.boEmail, ""); assert.equal((await call(state, cbo2, "GET", "")).data.contracts.length, 0); ok("togliere il Business Owner svuota anche l'email");
+r = await call(commit, c1, "POST", "", { contract: { ...base, supplier: "Vecchio", boEmail: "bo1@t.it" } }); s = (await call(state, c1, "GET", "")).data.contracts.find(c => c.id === r.data.contractId); assert.equal(s.boUserId, bo1); ok("contratto con sola email di un utente esistente: si collega da solo");
+r = await call(commit, c1, "POST", "", { contract: { ...base, supplier: "Legacy", boEmail: "futuro@t.it" } }); const lid = r.data.contractId; s = (await call(state, c1, "GET", "")).data.contracts.find(c => c.id === lid); assert.equal(s.boUserId, null); assert.equal(s.boEmail, "futuro@t.it"); ok("email di nessun utente: resta com'è, senza accesso");
+await mk("futuro@t.it", "Luca Nuovo", "bo"); const cf = await lg("futuro@t.it", "Pass-12345-xx!"); assert.equal((await call(state, cf, "GET", "")).data.contracts.length, 1); s = (await call(state, c1, "GET", "")).data.contracts.find(c => c.id === lid); assert.equal(s.boName, "Luca Nuovo"); ok("creato dopo il contratto: l'utente Business Owner si collega alla sua email");
+console.log(`\n${passed} controlli superati`); process.exit(0);

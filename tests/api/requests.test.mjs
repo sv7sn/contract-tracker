@@ -1,0 +1,51 @@
+import assert from "node:assert/strict";
+const B = process.env.API_BUILD + "/api/";
+process.env.DATABASE_URL = process.env.TEST_DB_URL;
+process.env.ADMIN_EMAIL = "admin@test.it"; process.env.ADMIN_PASSWORD = "Admin-pass-123!"; process.env.SESSION_SECRET = "x".repeat(40);
+const portal = await import(B + "portal.js"), login = await import(B + "login.js"), users = await import(B + "users.js"), db = await import(B + "_db.js"), crypto = await import(B + "_crypto.js"), plan = await import(B + "_plan-rules.js"), bo = await import(B + "_bo.js");
+await db.ensureSchema(); const pool = db.getPool();
+let passed = 0; const ok = n => { passed++; console.log("  ✓", n); };
+const call = async (cookie, method, qs, body, mod = portal) => { const r = new Request("https://a/x" + qs, { method, headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); const res = await mod[method](r); let data; try { data = await res.clone().json(); } catch { data = null; } return { status: res.status, data }; };
+const lg = async (email, password) => (await login.POST(new Request("https://a/x", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password }) }))).headers.get("set-cookie").split(";")[0];
+const admin = await lg("admin@test.it", "Admin-pass-123!");
+const day = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+
+console.log("Codice utente SAP");
+let r = await call(admin, "POST", "", { email: "bo@t.it", name: "Mario Rossi", role: "bo", title: "Capo funzione ICT", password: "Pass-12345-xx!", sapUser: " dantadi001 " }, users); assert.equal(r.status, 200, JSON.stringify(r.data)); assert.equal(r.data.user.sapUser, "DANTADI001");
+const boId = r.data.user.id;
+await call(admin, "POST", "", { email: "b1@t.it", name: "Buyer Uno", role: "buyer", password: "Pass-12345-xx!" }, users); await call(admin, "POST", "", { email: "bo2@t.it", name: "Anna Verdi", role: "bo", password: "Pass-12345-xx!", sapUser: "OTHER001" }, users);
+r = await call(admin, "POST", "", { id: boId, sapUser: "dantadi002" }, users); assert.equal(r.data.user.sapUser, "DANTADI002"); await call(admin, "POST", "", { id: boId, sapUser: "DANTADI001" }, users); ok("il Manager imposta il codice utente SAP del Business Owner (maiuscolo, senza spazi)");
+const cbo = await lg("bo@t.it", "Pass-12345-xx!"), cbo2 = await lg("bo2@t.it", "Pass-12345-xx!"), c1 = await lg("b1@t.it", "Pass-12345-xx!");
+assert.equal((await call(c1, "GET", "?op=my-requests")).status, 403); assert.equal((await call(admin, "GET", "?op=my-requests")).status, 403); ok("solo il Business Owner ha la sua area");
+
+console.log("Le mie RDA");
+const buyerId = (await pool.query("select id from users where email = 'b1@t.it'")).rows[0].id;
+const rda = async (pr, who, status, extra = {}) => (await pool.query("insert into tasks (source, source_key, title, assignee_id, status, done_reason, meta, sourcing, created_by, done_at) values ('rda',$1,$2,$3,$4,$5,$6,$7,'SAP', case when $4 = 'done' then now() end) returning id", [pr, `RDA ${pr} · Voce ${pr}`, extra.assignee ?? null, status, extra.reason ?? "", JSON.stringify({ requestedBy: who, value: 5000, currency: "EUR", releaseDate: day(-5), ...(extra.meta ?? {}) }), extra.sourcing ? JSON.stringify(extra.sourcing) : null])).rows[0].id;
+const t1 = await rda("1001", "DANTADI001", "open"); await rda("1002", "dantadi001", "open", { assignee: buyerId }); const t3 = await rda("1003", "DANTADI001", "open", { assignee: buyerId, sourcing: { mode: "comparison", quotes: [] } }); const t4 = await rda("1004", "DANTADI001", "open", { assignee: buyerId });
+await rda("1005", "DANTADI001", "done", { reason: "po_created", assignee: buyerId }); await pool.query("insert into sap_pos (po, pr, supplier_name) values ('4500001','1005','ACME')"); await rda("1006", "OTHER001", "open", { assignee: buyerId }); await rda("1007", "DANTADI001", "done", { reason: "merged" });
+await pool.query("insert into rfqs (task_id, title, deadline, status) values ($1,'x', current_date + 3, 'open')", [t4]);
+r = await call(cbo, "GET", "?op=my-requests"); assert.equal(r.status, 200); const m = Object.fromEntries(r.data.requests.rdas.map(x => [x.pr, x]));
+assert.deepEqual(Object.keys(m).sort(), ["1001", "1002", "1003", "1004", "1005"]); assert.equal(m["1001"].stage, "received"); assert.equal(m["1002"].stage, "working"); assert.equal(m["1002"].buyerName, "Buyer Uno"); assert.equal(m["1003"].stage, "chosen"); assert.equal(m["1004"].stage, "rfq"); assert.equal(m["1005"].stage, "ordered"); assert(/4500001/.test(m["1005"].stageLabel)); ok("solo le sue RDA (codice utente senza distinguere maiuscole), con lo stato: ricevuta, in lavorazione, offerte, fornitore scelto, ordinata; le unite non compaiono");
+assert.deepEqual((await call(cbo2, "GET", "?op=my-requests")).data.requests.rdas.map(x => x.pr), ["1006"]); await pool.query("update users set sap_user = '' where email = 'bo2@t.it'"); assert.deepEqual((await call(cbo2, "GET", "?op=my-requests")).data.requests.rdas, []); ok("senza codice utente SAP nessuna RDA; ognuno vede solo le sue");
+
+console.log("Budget e contratti");
+const yr = new Date().getFullYear();
+const vid = (await pool.query("insert into mp_versions (year, version, label) values ($1, 1, 'MP') returning id", [yr])).rows[0].id; await pool.query("insert into mp_lines (version_id, io, description, amount) values ($1, 'IO-1', 'Linea 1', 20000)", [vid]);
+await pool.query("update tasks set meta = meta || $2::jsonb where id = $1", [t1, JSON.stringify({ io: { "IO-1": 5000 }, releaseDate: `${yr}-03-01` })]);
+r = await call(cbo, "GET", "?op=my-requests"); const withIo = r.data.requests.rdas.find(x => x.pr === "1001"); assert.equal(withIo.io, "IO-1"); assert.equal(withIo.budget.current, 20000); assert.equal(withIo.budget.committed, 5000); assert.equal(withIo.budget.residual, 15000); ok("budget residuo dell'internal order della RDA");
+const mkC = async (supplier, boEmail, end, owner = "Buyer Uno") => { const id = (await pool.query("insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes) values ($1,'Servizio','x','IT',1000,'EUR','2025-01-01',$2,$3,$4,'Non definito','Servizi','') returning id", [supplier, end, owner, boEmail])).rows[0].id; await db.replacePlan(pool, id, plan.makePlan(id, end)); return id; };
+const ca = await mkC("Alfa Srl", "bo@t.it", day(40)), cb = await mkC("Beta Srl", "bo@t.it", day(300)), cx = await mkC("Altro Srl", "bo2@t.it", day(40));
+await pool.query("update plan_steps set status = 'pending_bo' where contract_id = $1 and step_id = 'bo_response'", [ca]);
+await pool.query("insert into tasks (source, source_key, title, assignee_id, status, contract_id, meta, created_by) values ('contract','c1','Rinnovo Alfa',$1,'open',$2,'{}','x')", [buyerId, ca]);
+r = await call(cbo, "GET", "?op=my-requests"); const cs = r.data.requests.contracts; assert.equal(cs.length, 2); assert.equal(cs[0].contractId, ca); assert.equal(cs[0].state, "to_answer"); assert.equal(cs[0].task.status, "open"); assert.equal(cs[0].task.buyerName, "Buyer Uno"); assert(cs.every(c => c.contractId !== cx)); ok("i suoi contratti: prima quelli da rispondere, con il task del buyer; non quelli degli altri");
+
+console.log("Messaggi");
+assert.equal((await call(cbo2, "GET", `?op=bo-messages&id=${ca}`)).status, 404); assert.equal((await call(cbo, "POST", `?op=bo-message-send&id=${ca}`, { body: "x" })).status, 400);
+r = await call(cbo, "POST", `?op=bo-message-send&id=${ca}`, { body: "Possiamo rivedere il prezzo prima di decidere?" }); assert.equal(r.status, 200, JSON.stringify(r.data)); assert.equal(r.data.messages.length, 1); assert.equal(r.data.messages[0].fromMe, true);
+const mail = (await pool.query("select * from notifications where template = 'bo_message'")).rows[0]; assert.equal(mail.to_email, "b1@t.it"); assert(/rivedere il prezzo/.test(mail.body)); ok("il Business Owner scrive al buyer: messaggio salvato e email al buyer del contratto");
+let w = (await call(c1, "GET", "?op=my-work")).data.items.find(i => i.kind === "bo_message"); assert(w && w.target.contractId === ca && w.urgency === 2); ok("Home del buyer: \"Il Business Owner ha scritto\"");
+r = await call(c1, "GET", `?op=bo-messages&id=${ca}`); assert.equal(r.data.messages[0].fromMe, false); assert(!(await call(c1, "GET", "?op=my-work")).data.items.some(i => i.kind === "bo_message")); ok("il buyer lo apre: sparisce dalla Home");
+r = await call(c1, "POST", `?op=bo-message-send&id=${ca}`, { body: "Sì, ne parliamo con il fornitore entro venerdì" }); assert.equal(r.data.messages.length, 2); assert.equal((await pool.query("select to_email from notifications where template = 'bo_message' order by id desc")).rows[0].to_email, "bo@t.it"); ok("il buyer risponde: email al Business Owner");
+assert.equal((await call(cbo, "GET", "?op=my-requests")).data.requests.contracts[0].unreadMessages, 1); await call(cbo, "GET", `?op=bo-messages&id=${ca}`); assert.equal((await call(cbo, "GET", "?op=my-requests")).data.requests.contracts[0].unreadMessages, 0); ok("messaggi non letti per il Business Owner, azzerati all'apertura");
+const other = await lg("b1@t.it", "Pass-12345-xx!"); await pool.query("update contracts set owner = 'Altro Buyer' where id = $1", [cb]); assert.equal((await call(other, "POST", `?op=bo-message-send&id=${cb}`, { body: "ciao a tutti" })).status, 404); ok("un buyer non scrive sui contratti degli altri");
+console.log(`\n${passed} controlli superati`); process.exit(0);
