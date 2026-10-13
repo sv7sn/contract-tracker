@@ -331,10 +331,10 @@ export default function App() {
   // ─── Navigazione per ruolo ─────────────────────────────────
   const modules = modulesFor(currentUser, mode === "api");
   const hubAvailable = mode === "api" && currentUser.role !== "bo" && !REVIEWER_ROLES.includes(currentUser.role);
-  const curModule = moduleOfView(view);
+  const curModule = moduleOfView(view, currentUser.role);
   const activeModule = modules.find(m => m.key === curModule);
   const navItems = activeModule?.pages ?? [];
-  const inContracts = curModule === "contracts";
+  const inContracts = curModule === "contracts" && view !== "clauses";
   const titles: Record<View, string> = { clauses: "Libreria clausole", reviews: "Revisioni", dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", vendors: "Fornitori", expiries: "Scadenze documenti", tasks: "Task", kpi: "Indicatori di processo", budget: "Master Plan", spend: "Spesa", requests: "Le mie RDA e i miei contratti", hub: "Home", config: "Configurazione", supplier: "Area fornitore", detail: selected?.supplier ?? "" };
   const eyebrow = curModule === "hub" ? "Procurement Lab" : activeModule?.label ?? ROLE_LABELS[currentUser.role];
   const activeNav = view === "detail" ? "list" : view;
