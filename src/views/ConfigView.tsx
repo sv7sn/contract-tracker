@@ -8,6 +8,7 @@ import { AlertTriangle, Bell, Building2, History, Lock, RotateCcw, ShieldCheck, 
 import { Notice, Portal } from "../components/vendorUi.tsx";
 import { CategoriesCard } from "./CategoriesCard.tsx";
 import { ReviewRulesCard } from "./ReviewRulesCard.tsx";
+import { SecurityCard } from "./SecurityCard.tsx";
 import { ResetCard } from "./ResetCard.tsx";
 import { TestAccessCard } from "./TestAccessCard.tsx";
 import { BoSettingsCard } from "./BoSettingsCard.tsx";
@@ -188,6 +189,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
       <CategoriesCard fail={fail} notify={notify} />
       <SanctionsCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
       <PrivacyCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
+      <SecurityCard fail={fail} />
       <TestAccessCard fail={fail} notify={notify} />
       <ResetCard fail={fail} notify={notify} />
       <AuditCard cfg={cfg} fail={fail} />

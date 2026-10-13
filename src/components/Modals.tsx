@@ -218,7 +218,7 @@ export function AccountModal({ user, canChangePassword, onLogout, onClose }: { u
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (next !== again) return setMsg({ ok: false, text: "Le due password nuove non coincidono" });
-    if (next.length < 8) return setMsg({ ok: false, text: "La nuova password deve avere almeno 8 caratteri" });
+    if (next.length < 12) return setMsg({ ok: false, text: "La nuova password deve avere almeno 12 caratteri" });
     setBusy(true); setMsg(null);
     try { await api.changePassword(current, next); setMsg({ ok: true, text: "Password aggiornata" }); setCurrent(""); setNext(""); setAgain(""); }
     catch (err) { setMsg({ ok: false, text: err instanceof ApiError ? err.message : "Operazione non riuscita" }); }
@@ -241,12 +241,13 @@ export function AccountModal({ user, canChangePassword, onLogout, onClose }: { u
             <div style={{ ...sans, fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Cambia password</div>
             <input type="text" autoComplete="username" value={user.email} readOnly hidden />
             <Field label="Password attuale" htmlFor="pw-cur"><input id="pw-cur" type="password" autoComplete="current-password" required value={current} onChange={e => setCurrent(e.target.value)} style={iStyle} /></Field>
-            <Field label="Nuova password (min. 8 caratteri)" htmlFor="pw-new"><input id="pw-new" type="password" autoComplete="new-password" required value={next} onChange={e => setNext(e.target.value)} style={iStyle} /></Field>
+            <Field label="Nuova password (min. 12 caratteri)" htmlFor="pw-new"><input id="pw-new" type="password" autoComplete="new-password" required value={next} onChange={e => setNext(e.target.value)} style={iStyle} /></Field>
             <Field label="Ripeti nuova password" htmlFor="pw-again"><input id="pw-again" type="password" autoComplete="new-password" required value={again} onChange={e => setAgain(e.target.value)} style={iStyle} /></Field>
             {msg && <div role="alert" style={{ ...sans, fontSize: 12, marginBottom: 10, color: msg.ok ? C.green : C.red }}>{msg.text}</div>}
             <button type="submit" disabled={busy} style={{ ...btnPrimary, width: "100%", background: C.navy, opacity: busy ? 0.7 : 1 }}>Aggiorna password</button>
           </form>
         )}
+        {canChangePassword && <button type="button" onClick={async () => { try { await api.revokeSessions(); setMsg({ ok: true, text: "Le altre sessioni sono state chiuse" }); } catch { setMsg({ ok: false, text: "Operazione non riuscita" }); } }} style={{ ...btnGhost, width: "100%", marginBottom: 8 }}>Esci da tutti gli altri dispositivi</button>}
         <button onClick={onLogout} style={{ ...btnGhost, width: "100%", color: C.red, borderColor: C.red }}>Esci</button>
       </div>
     </div>
@@ -273,7 +274,7 @@ export function NewUserModal({ onSave, onClose }: { onSave: (input: NewUserInput
         </Field>
         {f.role === "bo" && <Field label="Codice utente SAP (richiedente)" htmlFor="u-sap"><input id="u-sap" value={f.sapUser ?? ""} onChange={e => setF({ ...f, sapUser: e.target.value })} placeholder="Es. DANTADI001" style={iStyle} /></Field>}
         <Field label="Funzione" htmlFor="u-title"><input id="u-title" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} placeholder="Es. Buyer ICT" style={iStyle} /></Field>
-        <Field label="Password iniziale (min. 8 caratteri)" req htmlFor="u-pw"><input id="u-pw" type="text" autoComplete="off" required minLength={8} value={f.password} onChange={e => setF({ ...f, password: e.target.value })} style={iStyle} /></Field>
+        <Field label="Password iniziale (min. 12 caratteri)" req htmlFor="u-pw"><input id="u-pw" type="text" autoComplete="off" required minLength={8} value={f.password} onChange={e => setF({ ...f, password: e.target.value })} style={iStyle} /></Field>
         <p style={{ ...sans, fontSize: 11, color: C.muted, margin: "-6px 0 14px" }}>Comunicala all'utente in modo sicuro: potrà cambiarla dal suo account.</p>
         {error && <div role="alert" style={{ ...sans, background: C.redBg, color: C.red, borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 14 }}>{error}</div>}
         <div style={{ display: "flex", gap: 10 }}>
@@ -293,7 +294,7 @@ export function ResetPasswordModal({ user, onSave, onClose }: { user: User; onSa
       <form className="dialog" onSubmit={submit}>
         <h3 style={{ ...font, margin: "0 0 6px", fontSize: 17, color: C.navy }}><span style={{ display: "inline-flex", alignItems: "center", gap: 9 }}><KeyRound size={19} />Reimposta password</span></h3>
         <p style={{ ...sans, fontSize: 13, color: C.muted, margin: "0 0 16px" }}>{user.name} · {user.email}</p>
-        <Field label="Nuova password (min. 8 caratteri)" req htmlFor="r-pw"><input id="r-pw" type="text" autoComplete="off" required minLength={8} value={pw} onChange={e => setPw(e.target.value)} style={iStyle} /></Field>
+        <Field label="Nuova password (min. 12 caratteri)" req htmlFor="r-pw"><input id="r-pw" type="text" autoComplete="off" required minLength={8} value={pw} onChange={e => setPw(e.target.value)} style={iStyle} /></Field>
         {error && <div role="alert" style={{ ...sans, background: C.redBg, color: C.red, borderRadius: 8, padding: "10px 12px", fontSize: 13, marginBottom: 14 }}>{error}</div>}
         <div style={{ display: "flex", gap: 10 }}>
           <button type="button" onClick={onClose} style={{ ...btnGhost, flex: 1 }}>Annulla</button>

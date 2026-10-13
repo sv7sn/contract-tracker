@@ -75,9 +75,9 @@ I file non sono nel database: PDF, Word e allegati stanno in Vercel Blob e il da
 ## 5. Sicurezza e accesso
 
 **Autenticazione**
-- Email e password. Hash `scrypt` con sale casuale; confronto a tempo costante anche per utenti inesistenti.
+- Email e password (almeno 12 caratteri, regole su banalità e email). Hash `scrypt` con sale casuale; confronto a tempo costante anche per utenti inesistenti.
 - Sessione: token firmato HMAC-SHA256 in cookie `HttpOnly`, `SameSite=Lax`, `Secure` su HTTPS; validità 7 giorni.
-- Blocco dopo 5 tentativi falliti in 15 minuti per email.
+- Blocco dopo 5 tentativi falliti in 15 minuti per email e 30 per indirizzo. Sessioni revocabili (versione di sessione nel token).
 - L'utente viene riletto dal database a ogni richiesta: disattivazioni e cambi di ruolo valgono subito.
 - I fornitori entrano da un invito personale con scadenza (default 14 giorni) e creano la password.
 
@@ -113,27 +113,33 @@ Hosting attuale: Vercel (funzioni in regione `iad1`, Stati Uniti est) e Neon (Po
 
 ## 8. Test e qualità
 
-- `npm run lint`, `tsc` e la build passano senza errori.
-- **32 suite di integrazione, 653 controlli**, che chiamano le funzioni reali contro un Postgres vero (`npm run test:api`, vedi `tests/run.sh`). Coprono permessi per ruolo, flussi dei task, fornitori, budget e spesa, CLM, riservatezza.
+- `npm run lint`, `tsc` e la build passano senza errori; la stessa verifica gira in CI (`.github/workflows/ci.yml`).
+- **33 suite di integrazione, oltre 670 controlli**, che chiamano le funzioni reali contro un Postgres vero (`npm run test:api`, vedi `tests/run.sh`). Coprono permessi per ruolo, flussi dei task, fornitori, budget e spesa, CLM, riservatezza.
 - Upload su Blob, email e controlli esterni sono simulati nei test. Cinque suite (budget, purchase, sourcing, spend, tasks) usano export SAP reali che **non** sono nel repository per riservatezza: partono solo se si fornisce la cartella `SAP_SAMPLES`.
 - `npm audit` sulle dipendenze di produzione: 0 vulnerabilità note.
 - Non ci sono test automatici dell'interfaccia; le schermate sono state verificate a mano su computer e telefono, per ruolo.
 
 ## 9. Cosa non c'è (limiti dichiarati)
 
+Il dettaglio dei controlli è in `SECURITY.md`; operatività e ripristino in `OPERATIONS.md`; dati personali in `DATA-PROTECTION.md`; elenco delle dipendenze in `SBOM.cdx.json`.
+
 | Tema | Stato |
 |---|---|
 | **SSO** | Assente: solo email e password. Previsto OpenID Connect con Entra ID (vedi roadmap) |
-| **Test di penetrazione / revisione di sicurezza** | Non eseguiti |
-| **Separazione dei ruoli sulle approvazioni** (four-eyes) | Non prevista: chi propone può approvare |
-| **Intestazioni di sicurezza** (CSP, ecc.) | Non configurate in modo esplicito |
+| **Autenticazione a due fattori** | Assente (arriverebbe con l'SSO) |
+| **Test di penetrazione / revisione di sicurezza indipendente** | Non eseguiti |
+| **Separazione dei ruoli** | Quattro occhi su clausole ed eccezioni al confronto; non su altre approvazioni (vedi `SECURITY.md` §3) |
 | **Firma elettronica** | Non realizzata (prevista come fase successiva) |
 | **Integrazione SAP in tempo reale** | Assente: oggi basata su file |
-| **Backup e ripristino** | Quelli del fornitore del database; nessuna procedura nostra documentata |
+| **Backup e ripristino** | Quelli di Neon (finestra da confermare e da provare); i file in Blob non hanno copia versionata. Procedura in `OPERATIONS.md` |
+| **Regione dei dati** | Funzioni in USA est; regione del database da confermare |
 | **Volumi** | Provato con dati di simulazione; non con volumi reali |
 | **Uso in produzione** | Non ancora con utenti reali su larga scala |
 | **Testi legali** (clausole e modelli) | Esempi da validare dal Legal |
-| **Collegamento al pool database** | Una sola connessione per funzione (`max: 1`): adatto a carichi modesti |
+| **Test automatici dell'interfaccia** | Assenti; schermate verificate a mano |
+| **Collegamento al database** | Una sola connessione per funzione (`max: 1`): adatto a carichi modesti |
+
+Chiusi di recente: intestazioni di sicurezza (CSP e altre), revoca delle sessioni, politica password, limitazione dei tentativi per email e per indirizzo, registro degli eventi di sicurezza, controllo `Origin`, quattro occhi su clausole ed eccezioni, controllo di configurazione per il Manager, controllo di salute, CI e SBOM.
 
 ## 10. Come avviare e provare
 
@@ -148,7 +154,7 @@ npm run test:api           # richiede Postgres locale e psql (vedi tests/run.sh)
 
 1. Interruttore per **attivare moduli uno alla volta**.
 2. **SSO** (OpenID Connect) con obbligo per il personale interno; password solo per i fornitori.
-3. Revisione di sicurezza dell'IT e correzione di quanto emerge (intestazioni, separazione dei ruoli).
+3. Revisione di sicurezza dell'IT e correzione di quanto emerge.
 4. Aggancio al budget del CIO (import dal suo sistema e restituzione degli impegni futuri).
 5. Pilota con pochi utenti su un modulo; poi Task e Fornitori; poi CLM.
 6. Firma elettronica; poi eventuali funzioni AI (previa approvazione di IT Security e Legal).
