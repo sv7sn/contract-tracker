@@ -414,3 +414,5 @@ export interface NegotiationSummary { taskId: number; title: string; latestVersi
 export interface NegotiationComment { id: number; fromSupplier: boolean; author: string; para: number | null; start: number | null; end: number | null; quote: string; body: string; parentId: number | null; createdAt: string; status: "open" | "resolved" }
 export interface NegotiationBundle { title: string; drafts: { id: number; version: number; origin: "internal" | "supplier"; sharedAt: string; fileName: string }[]; draftId: number; paras: string[]; layout: ClmLayout; comments: NegotiationComment[] }
 export interface Obligation { id: number; contractId: number; kind: "deliverable" | "indexation" | "review" | "payment" | "other"; title: string; due: string; owner: string; note: string; status: "open" | "done"; repeatMonths: number | null; doneAt: string | null; doneBy: string }
+export interface SecurityEvent { id: number; at: string; event: string; user: string; email: string; ip: string; detail: string }
+export interface ReadinessCheck { key: string; label: string; status: "ok" | "warn" | "info" | "error"; detail: string }

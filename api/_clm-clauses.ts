@@ -59,7 +59,7 @@ export async function saveClause(user: User, input: Row): Promise<ClauseView[]> 
     c = (await db.query("insert into clause_library (code, title, category, created_by) values ($1,$2,$3,$4) returning *", [code, title, String(input?.category ?? "Generale").trim().slice(0, 40) || "Generale", user.name])).rows[0];
   } else if (input?.title) await db.query("update clause_library set title = $2, category = coalesce(nullif($3,''), category) where id = $1", [c.id, String(input.title).trim().slice(0, 120), String(input?.category ?? "").trim().slice(0, 40)]);
   const next = ((await db.query("select max(version) as v from clause_versions where clause_id = $1", [c.id])).rows[0].v ?? 0) + 1;
-  await db.query("insert into clause_versions (clause_id, version, text, fallback, forbidden, guidance, status, created_by) values ($1,$2,$3,$4,$5,$6,'proposed',$7)", [c.id, next, JSON.stringify(text), JSON.stringify(fallback), forbidden, guidance, user.name]);
+  await db.query("insert into clause_versions (clause_id, version, text, fallback, forbidden, guidance, status, created_by, created_by_id) values ($1,$2,$3,$4,$5,$6,'proposed',$7,$8)", [c.id, next, JSON.stringify(text), JSON.stringify(fallback), forbidden, guidance, user.name, user.id]);
   return listClauses(user);
 }
 
@@ -69,6 +69,9 @@ export async function decideClauseVersion(user: User, versionId: number, approve
   const v = (await db.query("select * from clause_versions where id = $1", [versionId])).rows[0];
   if (!v) throw new HttpError(404, "Versione non trovata");
   if (v.status !== "proposed") bad("Questa versione è già stata decisa");
+  // Quattro occhi: chi propone non approva, a meno che sia l'unico che potrebbe farlo (altrimenti la libreria resterebbe ferma).
+  if (v.created_by_id === user.id && (await db.query("select 1 from users where active and role in ('legal','manager') and id <> $1 limit 1", [user.id])).rows.length)
+    throw new HttpError(403, "Hai proposto tu questa versione: la deve approvare un'altra persona (Legal o Manager)");
   await db.query("update clause_versions set status = $2, approved_by = $3, approved_at = now(), note = $4 where id = $1", [versionId, approve ? "approved" : "rejected", user.name, String(note ?? "").trim().slice(0, 500)]);
   return listClauses(user);
 }

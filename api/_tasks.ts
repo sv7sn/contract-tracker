@@ -364,6 +364,9 @@ export async function decideSourcingException(user: User, id: number, input: Row
   if (user.role !== "manager") throw new HttpError(403, "Solo il Manager approva le eccezioni");
   const cur = await getTask(user, id);
   if (cur.sourcing?.mode !== "exception" || cur.sourcing.approval !== "pending") bad("Non c'è nessuna eccezione da approvare");
+  // Quattro occhi: chi ha registrato l'eccezione non la approva, se c'è un altro Manager che può farlo.
+  if (cur.sourcing?.recordedBy === user.name && (await getPool().query("select 1 from users where active and role = 'manager' and id <> $1 limit 1", [user.id])).rows.length)
+    throw new HttpError(403, "Hai registrato tu questa eccezione: la deve approvare un altro Manager");
   const approve = input?.approve === true;
   const note = str(input?.note, 1000);
   if (!approve && note.length < 5) bad("Indica il motivo del rifiuto");

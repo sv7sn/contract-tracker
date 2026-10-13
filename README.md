@@ -74,7 +74,7 @@ e account di prova (password `demo1234`, indicata nella schermata di accesso).
 1. **Database**: nel progetto Vercel aggiungi un database Postgres (Neon dal Marketplace) e collegalo al progetto: imposta `DATABASE_URL`.
 2. **Primo amministratore**: aggiungi in *Settings → Environment Variables*:
    - `ADMIN_EMAIL` – email del primo manager
-   - `ADMIN_PASSWORD` – password iniziale (minimo 8 caratteri)
+   - `ADMIN_PASSWORD` – password iniziale (minimo 12 caratteri)
    - `ADMIN_NAME` – opzionale, nome mostrato (default "Amministratore")
 3. Rifai il deploy. Al primo avvio vengono create le tabelle e, **solo se non esiste nessun utente**, l'amministratore.
    Poi entra e crea gli altri utenti da **Utenti → Nuovo utente**. Le variabili `ADMIN_*` non vengono più usate dopo il primo avvio:

@@ -3,7 +3,7 @@ import { deleteDocuments, handleUploadPresigned, issueSignedToken, openDocument 
 import { createSessionToken, sessionCookie } from "./_crypto.js";
 import { checkStoredDocument } from "./_docai.js";
 import { monitorData, remindSupplier, runReminders } from "./_docs.js";
-import { ensureSchema, getPool } from "./_db.js";
+import { bumpSessionVersion, ensureSchema, getPool, logSecurity } from "./_db.js";
 import { runExternalChecks } from "./_governance.js";
 import { listConfigAudit, logConfigChange } from "./_audit.js";
 import { anonymizeSupplier, exportSupplier, runRetention } from "./_privacy.js";
@@ -16,6 +16,7 @@ import { resetData, resetPreview } from "./_reset.js";
 import { clmKpis, acceptDeviation, addComment, decideReview, diffDrafts, draftAudit, draftAuditCsv, draftBundle, draftFile, draftFindings, draftFromTemplate, inviteReviewers, myReviews, resolveComment, runReviewReminders, templateInfo, uploadDraft } from "./_clm.js";
 import { myNegotiations, negotiationBundle, shareDraft, supplierComment, supplierDraftFile, supplierUpload } from "./_clm-supplier.js";
 import { completeObligation, deleteObligation, listObligations, saveObligation } from "./_obligations.js";
+import { listSecurityEvents, readiness, securityCsv } from "./_security.js";
 import { deleteRule, listRules, saveRule } from "./_clm-policy.js";
 import { canReadClauses, decideClauseVersion, listClauses, saveClause } from "./_clm-clauses.js";
 import { myWork } from "./_work.js";
@@ -68,12 +69,17 @@ async function handle(request: Request): Promise<Response> {
     const method = request.method;
     await ensureSchema();
 
+    // ── Controllo di salute per il monitoraggio (nessun dato, nessuna autenticazione) ──
+    if (op === "health" && method === "GET") {
+      try { await getPool().query("select 1"); return json({ ok: true }); } catch { return json({ ok: false }, { status: 503 }); }
+    }
+
     // ── Pubbliche (invito) ──
     if (op === "invite-info" && method === "GET") return json(await inviteInfo(url.searchParams.get("token") ?? ""));
     if (op === "activate" && method === "POST") {
       const body = (await readJson(request)) as { token?: unknown; password?: unknown };
       const user = await activateInvite(typeof body.token === "string" ? body.token : "", typeof body.password === "string" ? body.password : "");
-      return json({ user }, { headers: { "Set-Cookie": sessionCookie(request, createSessionToken(user.id)) } });
+      return json({ user }, { headers: { "Set-Cookie": sessionCookie(request, createSessionToken(user.id, 0)) } });
     }
 
     // ── Cron giornaliero dei reminder (Vercel Cron invia "Authorization: Bearer <CRON_SECRET>") ──
@@ -241,6 +247,21 @@ async function handle(request: Request): Promise<Response> {
       if (op === "clauses" && method === "GET") return json({ clauses: await listClauses(u) });
       if (op === "clause-save" && method === "POST") return json({ clauses: await saveClause(u, (await readJson(request)) as Record<string, unknown>) });
       if (op === "clause-decide" && method === "POST") { const b = (await readJson(request)) as { approve?: unknown; note?: unknown }; return json({ clauses: await decideClauseVersion(u, idOf(url), b.approve === true, String(b.note ?? "")) }); }
+    }
+
+    // ── Sicurezza (Manager) ──
+    if (["security-events", "security-events-export", "readiness"].includes(op) && method === "GET") {
+      const u = await requireRole(request, ["manager"]);
+      if (op === "security-events") return json({ events: await listSecurityEvents(u) });
+      if (op === "readiness") return json({ checks: await readiness(u) });
+      return new Response(await securityCsv(u), { headers: { ...noStore, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="eventi-sicurezza.csv"' } });
+    }
+    // ── "Esci da tutti i dispositivi": chiude tutte le sessioni dell'utente, tranne questa ──
+    if (op === "sessions-revoke" && method === "POST") {
+      const u = await requireUser(request);
+      const version = await bumpSessionVersion(u.id);
+      await logSecurity("sessions_revoked", { userId: u.id, email: u.email, detail: "chiuse le altre sessioni" });
+      return json({ ok: true }, { headers: { "Set-Cookie": sessionCookie(request, createSessionToken(u.id, version)) } });
     }
 
     // ── Analisi in sola lettura: anche Controlling e CFO ──

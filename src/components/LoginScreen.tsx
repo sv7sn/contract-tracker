@@ -63,7 +63,7 @@ export function LoginScreen({ mode, setupRequired, onLogin, onResetDemo }: Props
           {setupRequired && (
             <div style={{ ...sans, display: "flex", gap: 10, background: C.yellowBg, border: "1px solid #f3dca0", color: C.yellow, borderRadius: 12, padding: 13, fontSize: 12.5, lineHeight: 1.55, marginBottom: 18 }}>
               <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
-              <div><b>Nessun utente configurato.</b> Imposta su Vercel le variabili <code>ADMIN_EMAIL</code> e <code>ADMIN_PASSWORD</code> (minimo 8 caratteri) e rifai il deploy: al primo avvio verrà creato l'amministratore.</div>
+              <div><b>Nessun utente configurato.</b> Imposta su Vercel le variabili <code>ADMIN_EMAIL</code> e <code>ADMIN_PASSWORD</code> (minimo 12 caratteri) e rifai il deploy: al primo avvio verrà creato l'amministratore.</div>
             </div>
           )}
 

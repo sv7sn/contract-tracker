@@ -9,9 +9,9 @@ import { canManageUsers } from "./_permissions.js";
 export async function requireUser(request: Request): Promise<User> {
   await ensureSchema();
   const token = readSessionCookie(request);
-  const id = token ? verifySessionToken(token) : null;
-  const row = id === null ? undefined : await findUserById(id);
-  if (!row || !row.active) throw new HttpError(401, "Non autenticato", { setupRequired: (await countUsers()) === 0 });
+  const session = token ? verifySessionToken(token) : null;
+  const row = session === null ? undefined : await findUserById(session.id);
+  if (!row || !row.active || row.sessionVersion !== session?.version) throw new HttpError(401, "Non autenticato", { setupRequired: (await countUsers()) === 0 });
   const user = publicUser(row);
   // I buyer in sostituzione di un collega assente agiscono anche per lui (vedi _cover.ts).
   if (user.role === "buyer") user.acting = await loadActing(getPool(), user);

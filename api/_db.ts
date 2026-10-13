@@ -1,7 +1,7 @@
 import pg from "pg";
 import type { AppState, AuditEntry, CommitPayload, Contract, NewUserInput, PlanStep, Role, StepStatus, UpdateUserInput, User } from "../src/types.ts";
 import { HttpError } from "./_http.js";
-import { hashPassword, MIN_PASSWORD } from "./_crypto.js";
+import { hashPassword, MIN_PASSWORD, passwordProblem } from "./_crypto.js";
 import { DEFAULT_DOC_RULES, DEFAULT_DOC_TYPES } from "./_supplier-rules.js";
 import { canCreateContract, canDeleteContract, canEditContract, canRespondBO, canViewContract } from "./_permissions.js";
 import { FILE_PATH_RE } from "./_blob.js";
@@ -191,6 +191,7 @@ create table if not exists draft_comments (
   parent_id integer references draft_comments(id) on delete cascade, created_at timestamptz not null default now()
 );
 create index if not exists draft_comments_draft_idx on draft_comments (draft_id);
+alter table users add column if not exists session_version integer not null default 0;
 alter table contract_drafts alter column file_path drop not null;
 alter table contract_drafts add column if not exists layout jsonb not null default '{}'::jsonb;
 alter table contract_drafts add column if not exists source jsonb;
@@ -340,6 +341,12 @@ create table if not exists config_audit (
 update suppliers set approved_data = data, approved_at = updated_at where status = 'registered' and approved_data is null;
 create table if not exists login_attempts (email text not null, at timestamptz not null default now());
 create index if not exists login_attempts_idx on login_attempts (email, at);
+alter table login_attempts add column if not exists ip text;
+create table if not exists security_events (
+  id serial primary key, at timestamptz not null default now(), user_id integer, email text not null default '', event text not null, ip text, detail text not null default ''
+);
+create index if not exists security_events_at_idx on security_events (at desc);
+alter table clause_versions add column if not exists created_by_id integer;
 `;
 
 /** Ruoli assegnabili dalla pagina Utenti: i fornitori si creano solo tramite invito. */
@@ -449,13 +456,13 @@ const toUser = (r: Record<string, unknown>): User => ({ id: r.id as number, emai
 export async function countUsers(): Promise<number> {
   return (await getPool().query("select count(*)::int as n from users")).rows[0].n;
 }
-export async function findUserByEmail(email: string): Promise<(User & { passwordHash: string }) | undefined> {
+export async function findUserByEmail(email: string): Promise<(User & { passwordHash: string; sessionVersion: number }) | undefined> {
   const r = (await getPool().query("select * from users where lower(email) = lower($1)", [email.trim()])).rows[0];
-  return r ? { ...toUser(r), passwordHash: r.password_hash } : undefined;
+  return r ? { ...toUser(r), passwordHash: r.password_hash, sessionVersion: r.session_version } : undefined;
 }
-export async function findUserById(id: number): Promise<(User & { passwordHash: string }) | undefined> {
+export async function findUserById(id: number): Promise<(User & { passwordHash: string; sessionVersion: number }) | undefined> {
   const r = (await getPool().query("select * from users where id = $1", [id])).rows[0];
-  return r ? { ...toUser(r), passwordHash: r.password_hash } : undefined;
+  return r ? { ...toUser(r), passwordHash: r.password_hash, sessionVersion: r.session_version } : undefined;
 }
 export async function listUsers(): Promise<User[]> {
   return (await getPool().query("select * from users where role <> 'supplier' order by role, name")).rows.map(toUser);
@@ -463,18 +470,35 @@ export async function listUsers(): Promise<User[]> {
 
 const FAILED_LIMIT = 5;
 const WINDOW = "15 minutes";
-export async function tooManyAttempts(email: string): Promise<boolean> {
+const IP_LIMIT = 30;
+/** Troppi tentativi falliti per questa email (5 in 15 minuti) o da questo indirizzo (30 in 15 minuti, qualunque email). */
+export async function tooManyAttempts(email: string, ip: string | null = null): Promise<boolean> {
   const db = getPool();
   await db.query("delete from login_attempts where at < now() - interval '1 day'");
   const { rows } = await db.query(`select count(*)::int as n from login_attempts where lower(email) = lower($1) and at > now() - interval '${WINDOW}'`, [email]);
-  return rows[0].n >= FAILED_LIMIT;
+  if (rows[0].n >= FAILED_LIMIT) return true;
+  if (!ip) return false;
+  const byIp = await db.query(`select count(*)::int as n from login_attempts where ip = $1 and at > now() - interval '${WINDOW}'`, [ip]);
+  return byIp.rows[0].n >= IP_LIMIT;
 }
-export const recordFailedAttempt = (email: string) => getPool().query("insert into login_attempts (email) values ($1)", [email.toLowerCase()]);
+export const recordFailedAttempt = (email: string, ip: string | null = null) => getPool().query("insert into login_attempts (email, ip) values ($1, $2)", [email.toLowerCase(), ip]);
+
+/** Registro degli eventi di sicurezza (accessi, password, sessioni): lo legge il Manager in Configurazione. */
+export async function logSecurity(event: string, o: { userId?: number | null; email?: string; ip?: string | null; detail?: string } = {}): Promise<void> {
+  try { await getPool().query("insert into security_events (user_id, email, event, ip, detail) values ($1,$2,$3,$4,$5)", [o.userId ?? null, (o.email ?? "").toLowerCase(), event, o.ip ?? null, (o.detail ?? "").slice(0, 300)]); }
+  catch (err) { console.error("security_events", err); }
+}
+export async function bumpSessionVersion(userId: number): Promise<number> {
+  return (await getPool().query("update users set session_version = session_version + 1 where id = $1 returning session_version", [userId])).rows[0]?.session_version ?? 0;
+}
 export const clearAttempts = (email: string) => getPool().query("delete from login_attempts where lower(email) = lower($1)", [email]);
 
-export async function setPassword(userId: number, password: string) {
-  if (password.length < MIN_PASSWORD) throw new HttpError(400, `La password deve avere almeno ${MIN_PASSWORD} caratteri`);
-  await getPool().query("update users set password_hash = $1 where id = $2", [await hashPassword(password), userId]);
+/** Imposta la nuova password e invalida tutte le sessioni aperte; restituisce la nuova versione di sessione. */
+export async function setPassword(userId: number, password: string): Promise<number> {
+  const email = (await getPool().query("select email from users where id = $1", [userId])).rows[0]?.email ?? "";
+  const problem = passwordProblem(password, email);
+  if (problem) throw new HttpError(400, problem);
+  return (await getPool().query("update users set password_hash = $1, session_version = session_version + 1 where id = $2 returning session_version", [await hashPassword(password), userId])).rows[0].session_version;
 }
 
 /** Codice utente SAP del richiedente (es. DANTADI001): serve a riconoscere le RDA che ha aperto. */
@@ -487,7 +511,7 @@ export async function createUser(input: unknown): Promise<User> {
   const name = str(r.name, 80).trim();
   if (name.length < 2) bad("Nome obbligatorio");
   if (!ROLES.includes(r.role as Role)) bad("Ruolo non valido");
-  if (typeof r.password !== "string" || r.password.length < MIN_PASSWORD) bad(`La password deve avere almeno ${MIN_PASSWORD} caratteri`);
+  { const problem = typeof r.password !== "string" ? `La password deve avere almeno ${MIN_PASSWORD} caratteri` : passwordProblem(r.password, String(r.email ?? "")); if (problem) bad(problem); }
   try {
     const { rows } = await getPool().query("insert into users (email, name, role, title, password_hash, sap_user) values ($1,$2,$3,$4,$5,$6) returning *",
       [(r.email as string).trim().toLowerCase(), name, r.role, str(r.title, 100), await hashPassword(r.password as string), cleanSapUser(r.sapUser)]);
@@ -542,7 +566,8 @@ export async function updateUser(actor: User, input: unknown): Promise<User> {
   }
   const { rows } = await getPool().query("update users set role = $1, title = $2, active = $3, sap_user = $4 where id = $5 returning *",
     [role, r.title === undefined ? target.title : str(r.title, 100), active, r.sapUser === undefined ? target.sapUser ?? "" : cleanSapUser(r.sapUser), target.id]);
-  if (r.password !== undefined) await setPassword(target.id, r.password);
+  if (r.password !== undefined) { await setPassword(target.id, r.password); await logSecurity("password_reset_by_admin", { userId: target.id, email: target.email, detail: `da ${actor.name}` }); }
+  else if (role !== target.role || !active) await bumpSessionVersion(target.id);
   return toUser(rows[0]);
 }
 

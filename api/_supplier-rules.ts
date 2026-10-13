@@ -124,9 +124,9 @@ export function validFiscal(country: string | undefined, raw?: string): boolean 
 export const validEmail = (v?: string) => !!v && v.length <= 200 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 export const validPhone = (v?: string) => !!v && /^\+?[0-9][0-9 ()./-]{5,19}$/.test(v.trim());
 
-export const PASSWORD_HELP = "Almeno 10 caratteri, con maiuscole, minuscole, numeri e un simbolo.";
+export const PASSWORD_HELP = "Almeno 12 caratteri, con maiuscole, minuscole, numeri e un simbolo.";
 export function validatePassword(p: string): string | null {
-  if (p.length < 10) return "La password deve avere almeno 10 caratteri";
+  if (p.length < 12) return "La password deve avere almeno 12 caratteri";
   if (p.length > 200) return "Password troppo lunga";
   if (!/[a-z]/.test(p) || !/[A-Z]/.test(p) || !/\d/.test(p) || !/[^A-Za-z0-9]/.test(p)) return "Servono maiuscole, minuscole, numeri e un simbolo";
   return null;

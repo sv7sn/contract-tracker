@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type NegotiationBundle, type NegotiationSummary, type Obligation, type ClmKpis, type ReviewRule, type ClauseView, type ClmAuditEntry, type ClmBundle, type ClmDiff, type ClmFindings, type ClmTemplateInfo, type FuncKey, type MyReview, type ReviewStatus, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type EligibleSupplier, type RdaSuggestion, type Task, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type NegotiationBundle, type NegotiationSummary, type Obligation, type ReadinessCheck, type SecurityEvent, type ClmKpis, type ReviewRule, type ClauseView, type ClmAuditEntry, type ClmBundle, type ClmDiff, type ClmFindings, type ClmTemplateInfo, type FuncKey, type MyReview, type ReviewStatus, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type EligibleSupplier, type RdaSuggestion, type Task, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -22,6 +22,7 @@ export const api = {
   login: (email: string, password: string) => post<{ user: User }>("/api/login", { email, password }),
   logout: () => post<{ ok: true }>("/api/logout", {}),
   changePassword: (current: string, next: string) => post<{ ok: true }>("/api/password", { current, next }),
+  revokeSessions: () => post<{ ok: true }>("/api/portal?op=sessions-revoke", {}),
   loadState: () => request<AppState>("/api/state"),
   commit: (payload: CommitPayload) => post<CommitResult>("/api/commit", payload),
   listUsers: () => request<{ users: User[] }>("/api/users").then(r => r.users),
@@ -146,6 +147,10 @@ export const portalApi = {
   setTaskLinks: (id: number, input: { poNumbers?: string[]; rdaNumbers?: string[]; noPoReason?: string; internalOrder?: string; delivDate?: string; contractStatus?: string; contractNote?: string }) => post<{ task: TaskDetail }>(portal("task-links", `&id=${id}`), input).then(r => r.task),
   addTaskDoc: (id: number, doc: { kind: string; fileName: string; filePath: string; size: number }) => post<{ task: TaskDetail }>(portal("task-doc", `&id=${id}`), doc).then(r => r.task),
   removeTaskDoc: (id: number, docId: number) => request<{ task: TaskDetail }>(portal("task-doc", `&id=${id}&doc=${docId}`), { method: "DELETE" }).then(r => r.task),
+  security: {
+    readiness: () => request<{ checks: ReadinessCheck[] }>(portal("readiness")).then(r => r.checks),
+    events: () => request<{ events: SecurityEvent[] }>(portal("security-events")).then(r => r.events),
+  },
   clm: {
     bundle: (taskId: number, draftId?: number) => request<ClmBundle>(portal("drafts", `&id=${taskId}${draftId ? `&draft=${draftId}` : ""}`)),
     upload: (taskId: number, d: { fileName: string; filePath: string; size: number; note?: string }) => post<ClmBundle>(portal("draft-upload", `&id=${taskId}`), d),

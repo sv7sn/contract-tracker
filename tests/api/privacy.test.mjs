@@ -53,7 +53,7 @@ e = await audit(); assert.equal(e[0].area, "rda"); assert.match(e[0].detail, /So
 await P(admin, "POST", "config-save", { entity: "payment_term", action: "save", item: { code: "Z99", label: "99 giorni" } });
 await P(admin, "POST", "config-save", { entity: "payment_term", action: "delete", item: { code: "Z99" } });
 e = await audit(); assert.equal(e[0].action, "delete"); assert.equal(e[0].detail, "Eliminato"); ok("eliminazione tracciata");
-const nu = await U(admin, "POST", { email: "nuovo@test.it", name: "Nuovo Buyer", role: "buyer", title: "b", password: "Password-123!" }); assert.equal(nu.status, 200);
+const nu = await U(admin, "POST", { email: "nuovo@test.it", name: "Nuovo Buyer", role: "buyer", title: "b", password: "Nuova-pass-9876!" }); assert.equal(nu.status, 200);
 await U(admin, "POST", { id: nu.data.user.id, role: "manager" });
 e = await audit(); assert.equal(e[0].area, "user"); assert.match(e[0].detail, /Ruolo: buyer → manager/); assert.equal(e[1].action, "create"); ok("utenti: creazione e cambio ruolo tracciati");
 assert.equal((await P(buyer, "GET", "config-audit")).status, 403); ok("il registro lo vede solo chi configura");
