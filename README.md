@@ -15,9 +15,13 @@ ma sono le API a rifiutare comunque le richieste non autorizzate.
 
 | Ruolo | Cosa vede | Cosa può fare |
 |---|---|---|
-| **Manager** | tutti i contratti, vista Team, utenti | crea/modifica/elimina contratti, assegna gli owner, gestisce piani e utenti |
-| **Buyer** | solo i contratti di cui è *contract owner* | crea contratti (assegnati a lui), modifica contratti e piani propri |
-| **Business Owner** | solo i contratti con la sua email come BO | registra la propria decisione di rinnovo (nient'altro) |
+| **Manager** | tutto, vista Team, utenti, configurazione, indicatori, registro di sicurezza | amministra utenti e parametri, assegna le pratiche, approva eccezioni e clausole, gestisce le regole di revisione |
+| **Buyer** | le proprie pratiche, contratti e fornitori (anche quelli dei colleghi che sostituisce) | lavora task e RDA, sceglie i fornitori, crea bozze e le condivide col fornitore |
+| **Finance** | fornitori da verificare, budget e spesa | verifica e approva i fornitori |
+| **Business Owner** (richiedente) | le proprie RDA e i propri contratti | risponde sui rinnovi, dà il parere sulle bozze se invitato |
+| **Controlling / CFO** | contratti, budget, spesa e indicatori, in sola lettura | nessuna modifica; non vede le bozze di contratto |
+| **Legal, Compliance, IT Security** | le bozze a cui sono invitati, la libreria di clausole | commentano, danno il parere, (Legal) approvano clausole e deviazioni |
+| **Fornitore** | la propria scheda, le richieste di offerta e le bozze condivise con lui | compila i dati, risponde alle offerte, commenta le bozze |
 
 Gli utenti si gestiscono da **Utenti** (solo manager): crea, modifica ruolo e funzione, reimposta la password, disattiva/riattiva, elimina.
 Per non lasciare contratti senza responsabile, un utente **non si può eliminare** (né rendere Business Owner) finché è contract owner

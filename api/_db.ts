@@ -346,6 +346,14 @@ create table if not exists security_events (
   id serial primary key, at timestamptz not null default now(), user_id integer, email text not null default '', event text not null, ip text, detail text not null default ''
 );
 create index if not exists security_events_at_idx on security_events (at desc);
+create index if not exists contracts_status_idx on contracts (status);
+create index if not exists contracts_owner_idx on contracts (owner_id);
+create index if not exists contracts_supplier_idx on contracts (supplier_id);
+create index if not exists tasks_source_idx on tasks (source, status);
+create index if not exists tasks_source_key_idx on tasks (source_key);
+create index if not exists task_documents_task_idx on task_documents (task_id);
+create index if not exists draft_reviews_task_idx on draft_reviews (task_id, func);
+create index if not exists notifications_created_idx on notifications (created_at desc);
 alter table clause_versions add column if not exists created_by_id integer;
 `;
 
@@ -356,23 +364,30 @@ let ready: Promise<unknown> | undefined;
 /** Crea le tabelle e, se non esiste ancora nessun utente, il primo amministratore da ADMIN_EMAIL / ADMIN_PASSWORD. */
 export function ensureSchema() {
   ready ??= (async () => {
-    const db = getPool();
-    await db.query(SCHEMA);
-    await db.query(`insert into settings (key, value) values ('sap', $1) on conflict do nothing`, [JSON.stringify({ tradingPartner: "999999", sortKey: "002", cashManagementGroup: "0_VEND_001", releaseGroup: "MFL1", reconciliationAccounts: {} })]);
-    await db.query(`insert into industry_codes (code, name) values ('CT00', 'Partner / Clienti') on conflict do nothing`);
-    await db.query(`insert into payment_terms (code, label) values ('0030','30 giorni data fattura'),('0060','60 giorni data fattura'),('0090','90 giorni data fattura') on conflict do nothing`);
-    await db.query(`insert into settings (key, value) values ('rda', $1) on conflict do nothing`, [JSON.stringify({ slaDays: 7 })]);
-    await db.query(`insert into settings (key, value) values ('reminders', $1) on conflict do nothing`, [JSON.stringify({ enabled: true, days: [60, 30, 15], repeatDays: 7, escalateAfter: 2 })]);
-    if (!(await db.query("select 1 from doc_types limit 1")).rows.length) {
-      for (const [i, t] of DEFAULT_DOC_TYPES.entries()) await db.query("insert into doc_types (key, label, help, expires, multiple, position) values ($1,$2,$3,$4,$5,$6) on conflict do nothing", [t.key, t.label, t.help, t.expires, t.multiple, i]);
-      for (const r of DEFAULT_DOC_RULES) await db.query("insert into doc_rules (doc_type, scope, value, level) values ($1,$2,$3,$4) on conflict do nothing", [r.docType, r.scope, r.value, r.level]);
-    }
-    const { rows } = await db.query("select count(*)::int as n from users");
-    const email = process.env.ADMIN_EMAIL?.trim(), password = process.env.ADMIN_PASSWORD;
-    if (rows[0].n === 0 && email && password) {
-      if (password.length < MIN_PASSWORD) { console.error(`ADMIN_PASSWORD troppo corta (minimo ${MIN_PASSWORD} caratteri)`); return; }
-      await db.query("insert into users (email, name, role, title, password_hash) values ($1,$2,'manager',$3,$4) on conflict do nothing",
-        [email.toLowerCase(), process.env.ADMIN_NAME?.trim() || "Amministratore", "Amministratore", await hashPassword(password)]);
+    // Più istanze possono avviarsi insieme: un blocco consultivo evita che creino lo schema nello stesso momento.
+    const db = await getPool().connect();
+    try {
+      await db.query("select pg_advisory_lock(727001)");
+      await db.query(SCHEMA);
+      await db.query(`insert into settings (key, value) values ('sap', $1) on conflict do nothing`, [JSON.stringify({ tradingPartner: "999999", sortKey: "002", cashManagementGroup: "0_VEND_001", releaseGroup: "MFL1", reconciliationAccounts: {} })]);
+      await db.query(`insert into industry_codes (code, name) values ('CT00', 'Partner / Clienti') on conflict do nothing`);
+      await db.query(`insert into payment_terms (code, label) values ('0030','30 giorni data fattura'),('0060','60 giorni data fattura'),('0090','90 giorni data fattura') on conflict do nothing`);
+      await db.query(`insert into settings (key, value) values ('rda', $1) on conflict do nothing`, [JSON.stringify({ slaDays: 7 })]);
+      await db.query(`insert into settings (key, value) values ('reminders', $1) on conflict do nothing`, [JSON.stringify({ enabled: true, days: [60, 30, 15], repeatDays: 7, escalateAfter: 2 })]);
+      if (!(await db.query("select 1 from doc_types limit 1")).rows.length) {
+        for (const [i, t] of DEFAULT_DOC_TYPES.entries()) await db.query("insert into doc_types (key, label, help, expires, multiple, position) values ($1,$2,$3,$4,$5,$6) on conflict do nothing", [t.key, t.label, t.help, t.expires, t.multiple, i]);
+        for (const r of DEFAULT_DOC_RULES) await db.query("insert into doc_rules (doc_type, scope, value, level) values ($1,$2,$3,$4) on conflict do nothing", [r.docType, r.scope, r.value, r.level]);
+      }
+      const { rows } = await db.query("select count(*)::int as n from users");
+      const email = process.env.ADMIN_EMAIL?.trim(), password = process.env.ADMIN_PASSWORD;
+      if (rows[0].n === 0 && email && password) {
+        if (password.length < MIN_PASSWORD) { console.error(`ADMIN_PASSWORD troppo corta (minimo ${MIN_PASSWORD} caratteri)`); return; }
+        await db.query("insert into users (email, name, role, title, password_hash) values ($1,$2,'manager',$3,$4) on conflict do nothing",
+          [email.toLowerCase(), process.env.ADMIN_NAME?.trim() || "Amministratore", "Amministratore", await hashPassword(password)]);
+      }
+    } finally {
+      await db.query("select pg_advisory_unlock(727001)").catch(() => undefined);
+      db.release();
     }
   })().catch(err => { ready = undefined; throw err; });
   return ready;

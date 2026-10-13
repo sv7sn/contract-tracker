@@ -35,6 +35,7 @@ export async function readiness(user: User): Promise<ReadinessCheck[]> {
   add("ingest", "Ricezione automatica file SAP", env("RDA_INGEST_SECRET") ? "ok" : "info", env("RDA_INGEST_SECRET") ? "Attiva" : "Non attiva: i file si caricano a mano");
   add("admin_env", "Credenziali iniziali (ADMIN_PASSWORD)", env("ADMIN_PASSWORD") ? "warn" : "ok", env("ADMIN_PASSWORD") ? "Ancora presente nell'ambiente: dopo il primo avvio va tolta" : "Rimossa");
   add("managers", "Manager attivi", managers >= 2 ? "ok" : "warn", managers >= 2 ? `${managers} Manager attivi` : "Un solo Manager: se perde l'accesso nessuno può amministrare");
+  add("demo", "Strumenti di prova", process.env.DISABLE_DEMO_TOOLS === "1" ? "ok" : "warn", process.env.DISABLE_DEMO_TOOLS === "1" ? "Disattivati" : "Attivi (accessi di prova, simulazione, fornitori di prova): prima dell'uso reale impostare DISABLE_DEMO_TOOLS=1");
   add("ai", "Controllo AI dei documenti fornitore", "info", aiConfigured() ? `Attivo (${aiProvider()}): i documenti dei fornitori vengono inviati al servizio esterno` : "Disattivato");
   add("vies", "Controllo partite IVA (VIES)", (process.env.VIES_MODE ?? "live") === "off" ? "warn" : "ok", (process.env.VIES_MODE ?? "live") === "off" ? "Disattivato" : "Attivo");
   return out;

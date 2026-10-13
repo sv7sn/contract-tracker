@@ -28,7 +28,7 @@ import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_bud
 import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudget } from "./_budget.js";
 import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
 import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, registerTaskContract, setIoBuyer, setTaskLinks, setTaskSupplier, tasksArchive, suggestRdas, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
-import { errorResponse, HttpError, readJson } from "./_http.js";
+import { clientIp, errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
 import {
   documentOwner, activateInvite, addMyDocument, deleteInvite, deleteMyDocument, documentForDownload, getMySupplier, getVendor, inviteInfo,
@@ -61,6 +61,9 @@ const idOf = (url: URL) => {
   if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, "Identificativo non valido");
   return id;
 };
+
+/** Strumenti di prova (accessi di prova, simulazione, fornitori di prova): in produzione reale si spengono con DISABLE_DEMO_TOOLS=1. */
+const demoOnly = () => { if (process.env.DISABLE_DEMO_TOOLS === "1") throw new HttpError(403, "Gli strumenti di prova sono disattivati in questo ambiente"); };
 
 async function handle(request: Request): Promise<Response> {
   try {
@@ -356,7 +359,7 @@ async function handle(request: Request): Promise<Response> {
     if (op === "cover-add" && method === "POST") return json(await addCover(user, (await readJson(request)) as Record<string, unknown>));
     if (op === "cover" && method === "DELETE") return json(await deleteCover(user, idOf(url)));
     if (op === "reset-preview" && method === "GET") return json({ counts: await resetPreview(user) });
-    if (op === "reset-run" && method === "POST") { const b = (await readJson(request)) as { areas?: unknown; confirm?: unknown }; return json({ deleted: await resetData(user, b.areas, b.confirm) }); }
+    if (op === "reset-run" && method === "POST") { const b = (await readJson(request)) as { areas?: unknown; confirm?: unknown }; const deleted = await resetData(user, b.areas, b.confirm); await logSecurity("data_reset", { userId: user.id, email: user.email, ip: clientIp(request), detail: JSON.stringify(deleted) }); return json({ deleted }); }
     if (op === "bo-info" && method === "GET") return json({ info: await boInfo(user, idOf(url)) });
     if (op === "bo-notice-send" && method === "POST") return json({ info: await sendBoNotice(user, idOf(url), (await readJson(request)) as Record<string, unknown>, originOf(request)) });
     if (op === "bo-lead" && method === "POST") return json({ info: await setBoLead(user, idOf(url), ((await readJson(request)) as { days?: unknown }).days) });
@@ -371,17 +374,17 @@ async function handle(request: Request): Promise<Response> {
       return json(await importBudget(user, Number(url.searchParams.get("year")), url.searchParams.get("label") ?? "", name, new Uint8Array(await request.arrayBuffer())), { status: 201 });
     }
     if (op === "budget-version" && method === "DELETE") { await deleteBudgetVersion(user, idOf(url)); return json({ ok: true }); }
-    if (op === "budget-demo" && method === "POST") return json(await loadBudgetDemo(user), { status: 201 });
-    if (op === "budget-demo" && method === "DELETE") return json(await deleteBudgetDemo(user));
+    if (op === "budget-demo" && method === "POST") { demoOnly(); return json(await loadBudgetDemo(user), { status: 201 }); }
+    if (op === "budget-demo" && method === "DELETE") { demoOnly(); return json(await deleteBudgetDemo(user)); }
     if (op === "budget-demo-file" && method === "GET") {
       const po = url.searchParams.get("kind") === "po";
       return new Response(Buffer.from(po ? demoPoFile() : demoPrFile()), { headers: { ...noStore, "Content-Type": "application/vnd.ms-excel", "Content-Disposition": `attachment; filename="${po ? "PO_LAST_7D_PROVA.XLS" : "OPEN_PR_PROVA.XLS"}"` } });
     }
     if (op === "budget-template" && method === "GET") return new Response(BUDGET_TEMPLATE, { headers: { ...noStore, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="modello-master-plan.csv"' } });
-    if (op === "test-accesses" && method === "POST") return json({ accesses: await createTestAccesses(user) });
-    if (op === "test-accesses-remove" && method === "POST") return json({ removed: await removeTestAccesses(user) });
+    if (op === "test-accesses" && method === "POST") { demoOnly(); return json({ accesses: await createTestAccesses(user) }); }
+    if (op === "test-accesses-remove" && method === "POST") { demoOnly(); return json({ removed: await removeTestAccesses(user) }); }
     if (op === "vendor-test-access" && method === "POST") return json(await resetTestSupplierAccess(user, idOf(url)));
-    if (op === "vendor-demo" && method === "POST") return json(await createDemoSupplier(user), { status: 201 });
+    if (op === "vendor-demo" && method === "POST") { demoOnly(); return json(await createDemoSupplier(user), { status: 201 }); }
     if (op === "vendors" && method === "GET") return json({ vendors: await listVendors(user) });
     if (op === "vendor-checks" && method === "POST") {
       const id = idOf(url); await getVendor(user, id);

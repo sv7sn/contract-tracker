@@ -73,4 +73,12 @@ process.env.SESSION_SECRET = "x".repeat(40); process.env.ADMIN_PASSWORD = "Admin
 res = await P(admin, "GET", "readiness"); assert.equal(res.status, 200); const rk = Object.fromEntries(res.data.checks.map(c => [c.key, c]));
 assert.equal(rk.db.status, "ok"); assert.equal(rk.session.status, "ok"); assert.equal(rk.admin_env.status, "warn"); assert.equal(rk.cron.status, "warn"); assert(!JSON.stringify(res.data).includes("Admin-pass-123!") && !JSON.stringify(res.data).includes("x".repeat(40))); ok("controllo configurazione: segnala cosa manca e non rivela mai i valori");
 res = await call(portal, null, "GET", "?op=health"); assert.equal(res.status, 200); assert.deepEqual(res.data, { ok: true }); ok("controllo di salute pubblico, senza dati");
+
+// ─── Strumenti di prova e operazioni distruttive
+process.env.DISABLE_DEMO_TOOLS = "1";
+assert.equal((await P(admin, "POST", "test-accesses", {})).status, 403); assert.equal((await P(admin, "POST", "budget-demo", {})).status, 403); assert.equal((await P(admin, "POST", "vendor-demo", {})).status, 403); ok("DISABLE_DEMO_TOOLS=1: accessi di prova, simulazione e fornitori di prova disattivati");
+assert.equal((await P(admin, "GET", "readiness")).data.checks.find(c => c.key === "demo").status, "ok");
+delete process.env.DISABLE_DEMO_TOOLS; assert.equal((await P(admin, "GET", "readiness")).data.checks.find(c => c.key === "demo").status, "warn"); ok("il controllo di configurazione segnala gli strumenti di prova ancora attivi");
+assert.equal((await P(admin, "POST", "reset-run", { areas: ["tasks"], confirm: "ELIMINA" })).status, 200);
+assert((await P(admin, "GET", "security-events")).data.events.some(e => e.event === "data_reset")); ok("lo svuotamento dei dati è nel registro di sicurezza");
 console.log(`\n${passed} controlli superati`); await pool.end();
