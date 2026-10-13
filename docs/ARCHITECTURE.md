@@ -29,7 +29,7 @@ Fuori ambito (non realizzato): firma elettronica, SSO, funzioni AI sui contratti
         │                         │                    │
         ▼                         ▼                    ▼
  PostgreSQL (Neon)          Vercel Blob (privato)   Servizi esterni (solo in uscita)
- 46 tabelle, schema         documenti: contratti,   Resend (email), VIES, GLEIF, liste sanzioni
+ 48 tabelle, schema         documenti: contratti,   Resend (email), VIES, GLEIF, liste sanzioni
  creato dal codice          allegati, offerte       (UE, ONU, USA, UK, OpenSanctions),
                                                     openapi.com (dati societari),
                                                     Anthropic API (solo se attivata, vedi §7)
@@ -58,7 +58,7 @@ api/        funzioni e logica; ~7.400 righe. I file con prefisso _ sono moduli, 
 tests/      suite automatiche (vedi §8)
 ```
 
-## 4. Modello dei dati (46 tabelle)
+## 4. Modello dei dati (48 tabelle)
 
 | Area | Tabelle principali |
 |---|---|
