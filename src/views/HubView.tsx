@@ -4,9 +4,7 @@ import { portalApi } from "../api.ts";
 import { C, font, radius, sans } from "../theme.ts";
 import { daysToDeadline } from "../lib/format.ts";
 import type { ModuleDef } from "../lib/modules.tsx";
-import { Card, Grid } from "../components/ui.tsx";
-import { ArrowRight } from "../components/icons.tsx";
-import { WorkList } from "./WorkList.tsx";
+import { Card } from "../components/ui.tsx";
 import { CoverCard } from "./CoverCard.tsx";
 
 interface Props { user: User; modules: ModuleDef[]; contracts: Contract[]; plans: Record<number, PlanStep[]>; onOpen: (view: View, focus?: { taskId?: number; vendorId?: number; contractId?: number }) => void }
@@ -68,30 +66,25 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
     <div>
       <div style={{ marginBottom: 18 }}>
         <div style={{ ...font, fontSize: 24, fontWeight: 700, color: C.text }}>{hour < 13 ? "Buongiorno" : hour < 18 ? "Buon pomeriggio" : "Buonasera"}, {first}</div>
-        <div style={{ ...sans, fontSize: 13.5, color: C.muted, marginTop: 2 }}>{user.role === "manager" || user.role === "buyer" ? "Ecco cosa richiede la tua attenzione. Sotto trovi i moduli." : "Scegli un modulo per iniziare."}</div>
+        <div style={{ ...sans, fontSize: 13.5, color: C.muted, marginTop: 2 }}>Scegli un modulo per iniziare.</div>
       </div>
       {user.acting && user.acting.covering.length > 0 && <Card style={{ marginBottom: 14, background: C.blueBg, borderColor: "#c9dcf5", ...sans, fontSize: 13.5, color: C.blue }}>Stai sostituendo {user.acting.covering.map(c => `${c.name} (fino al ${new Date(c.until).toLocaleDateString("it-IT")})`).join(", ")}: vedi e gestisci anche le sue pratiche.</Card>}
-      {(user.role === "manager" || user.role === "buyer") && <WorkList onOpen={onOpen} />}
+      <div className="hub-tiles" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(168px, 1fr))", gap: 10, marginBottom: 18 }}>
+        {modules.map(m => {
+          const ms = metrics[m.key] ?? [];
+          const alert = ms.find(x => x.tone === "bad" || x.tone === "warn" ) ?? ms[0];
+          return (
+            <button key={m.key} onClick={() => onOpen(m.pages[0].key)} title={m.description} className="lift"
+              style={{ ...sans, display: "flex", alignItems: "center", gap: 10, padding: "12px 14px", background: "#fff", border: `1px solid ${C.border}`, borderRadius: radius.lg, cursor: "pointer", textAlign: "left", minHeight: 58, minWidth: 0 }}>
+              <span style={{ width: 36, height: 36, borderRadius: 11, background: C.accentLight, color: C.accent, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{m.icon(19)}</span>
+              <span style={{ minWidth: 0, flex: 1 }}>
+                <span style={{ ...font, display: "block", fontSize: 15, fontWeight: 700, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{m.label}</span>
+                {alert && <span style={{ display: "block", fontSize: 12, color: alert.tone ? TONE[alert.tone] : C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}><b className="tabular">{alert.value}</b> {alert.label.toLowerCase()}</span>}
+              </span>
+            </button>);
+        })}
+      </div>
       {(user.role === "manager" || user.role === "buyer") && <CoverCard user={user} />}
-      <Grid min={300} gap={14} fill>
-        {modules.map(m => (
-          <Card key={m.key} className="lift" onClick={() => onOpen(m.pages[0].key)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") onOpen(m.pages[0].key); }} style={{ cursor: "pointer", padding: 20, borderRadius: radius.lg, display: "flex", flexDirection: "column", gap: 12 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <span style={{ width: 44, height: 44, borderRadius: 13, background: C.accentLight, color: C.accent, display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{m.icon(22)}</span>
-              <div style={{ minWidth: 0 }}><div style={{ ...font, fontSize: 17, fontWeight: 700, color: C.text }}>{m.label}</div><div style={{ ...sans, fontSize: 12.5, color: C.muted, lineHeight: 1.45 }}>{m.description}</div></div>
-            </div>
-            <div style={{ display: "grid", gap: 6, flex: 1 }}>
-              {(metrics[m.key] ?? []).map(x => (
-                <div key={x.label} style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
-                  <span className="tabular" style={{ ...font, fontSize: 22, fontWeight: 700, minWidth: 34, color: x.tone ? TONE[x.tone] : C.text }}>{x.value}</span>
-                  <span style={{ ...sans, fontSize: 13, color: C.muted }}>{x.label}</span>
-                </div>
-              ))}
-            </div>
-            <div style={{ ...sans, display: "flex", alignItems: "center", gap: 6, fontSize: 13, fontWeight: 650, color: C.accent }}>Apri<ArrowRight size={15} /></div>
-          </Card>
-        ))}
-      </Grid>
     </div>
   );
 }
