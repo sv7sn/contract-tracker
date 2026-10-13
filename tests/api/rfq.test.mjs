@@ -1,0 +1,74 @@
+import assert from "node:assert/strict";
+const B = process.env.API_BUILD + "/api/";
+process.env.DATABASE_URL = process.env.TEST_DB_URL;
+process.env.ADMIN_EMAIL = "admin@test.it"; process.env.ADMIN_PASSWORD = "Admin-pass-123!"; process.env.SESSION_SECRET = "x".repeat(40);
+const blob = await import(process.env.API_BUILD + "/node_modules/@vercel/blob/index.js");
+const portal = await import(B + "portal.js"), login = await import(B + "login.js"), db = await import(B + "_db.js"), demo = await import(B + "_demo.js");
+await db.ensureSchema(); const pool = db.getPool();
+let passed = 0; const ok = n => { passed++; console.log("  ✓", n); };
+const call = async (mod, cookie, method, qs, body) => { const r = new Request("https://app.test/api/x" + qs, { method, headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); const res = await mod[method](r); let data; try { data = await res.clone().json(); } catch { data = null; } return { status: res.status, data, cookie: res.headers.get("set-cookie")?.split(";")[0] }; };
+const P = (c, m, op, body, extra = "") => call(portal, c, m, `?op=${op}${extra}`, body);
+const admin = (await call(login, null, "POST", "", { email: "admin@test.it", password: "Admin-pass-123!" })).cookie;
+const day = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+await pool.query("insert into buying_companies (code, name, sap_company_code, purch_org) values ('C1','Soc','1000','1000')"); await pool.query("insert into industry_codes (code, name) values ('I1','Ind')");
+const mgr = { id: 1, role: "manager", name: "Admin" };
+const sups = []; for (const n of ["Alfa Srl", "Beta Srl", "Gamma Srl"]) sups.push(await demo.createDemoSupplier(mgr, { name: n }));
+const login2 = async s => (await call(login, null, "POST", "", { email: s.email, password: s.password })).cookie;
+const [ca, cb, cg] = [await login2(sups[0]), await login2(sups[1]), await login2(sups[2])];
+const task = (await P(admin, "POST", "task-create", { title: "Arredi sala riunioni", kind: "purchase", value: 25000, supplier: "Alfa Srl" })).data.task;
+
+console.log("Richiesta");
+const uid = () => globalThis.crypto.randomUUID(); const SPEC = `contracts/${uid()}/capitolato.pdf`; blob.store.set(SPEC, Buffer.from("%PDF spec"));
+const mk = (over = {}) => P(admin, "POST", "rfq-create", { taskId: task.id, title: "Arredi sala riunioni", description: "10 tavoli e 40 sedie", deadline: day(5), supplierIds: [sups[0].id, sups[1].id, sups[2].id], specName: "capitolato.pdf", specPath: SPEC, ...over });
+assert.equal((await mk({ supplierIds: [sups[0].id] })).status, 400); assert.equal((await mk({ deadline: day(-1) })).status, 400); assert.equal((await mk({ deadline: day(400) })).status, 400);
+await pool.query("update suppliers set lifecycle = 'blocked' where id = $1", [sups[2].id]); assert.equal((await mk()).status, 400); await pool.query("update suppliers set lifecycle = 'active' where id = $1", [sups[2].id]); ok("servono 2-10 fornitori registrati e attivi, scadenza valida");
+let r = await mk(); assert.equal(r.status, 201, JSON.stringify(r.data)); let rfq = r.data.rfqs[0]; assert.equal(rfq.invites.length, 3); assert.equal(rfq.status, "open"); assert.equal(rfq.invites[0].amount, null);
+assert.equal((await pool.query("select count(*)::int n from notifications where template = 'rfq_invite'")).rows[0].n, 3); ok("richiesta creata e tre inviti inviati");
+assert.equal((await mk()).status, 400); ok("una sola richiesta aperta per pratica");
+
+console.log("Fornitori");
+let m = await P(ca, "GET", "supplier-rfqs"); assert.equal(m.data.rfqs.length, 1); assert.equal(m.data.rfqs[0].description, "10 tavoli e 40 sedie"); assert.equal(m.data.rfqs[0].myQuote.amount, null); assert(!JSON.stringify(m.data).includes("Beta")); ok("il fornitore vede la richiesta e nessun altro invitato");
+assert.equal((await P(ca, "POST", "supplier-rfq-quote", { amount: -5 }, `&id=${rfq.id}`)).status, 400); assert.equal((await P(ca, "POST", "supplier-rfq-quote", {}, `&id=${rfq.id}`)).status, 400);
+assert.equal((await P(ca, "POST", "supplier-rfq-quote", { amount: 24000, notes: "consegna 30 gg" }, `&id=${rfq.id}`)).status, 200);
+assert.equal((await P(ca, "POST", "supplier-rfq-quote", { amount: 23500, notes: "consegna 30 gg" }, `&id=${rfq.id}`)).data.rfqs[0].myQuote.amount, 23500); ok("offerta inviata e modificabile fino alla scadenza");
+await P(cb, "POST", "supplier-rfq-quote", { amount: 26000 }, `&id=${rfq.id}`); assert.equal((await P(cg, "POST", "supplier-rfq-quote", { declined: true }, `&id=${rfq.id}`)).status, 200);
+assert.equal((await P(admin, "GET", "supplier-rfqs")).status, 403); assert.equal((await P(ca, "GET", "rfqs", undefined, `&taskId=${task.id}`)).status, 403); assert.equal((await P(ca, "POST", "rfq-close", {}, `&id=${rfq.id}`)).status, 403); ok("fornitori e staff separati");
+assert((await pool.query("select count(*)::int n from notifications where template = 'rfq_quote'")).rows[0].n >= 3);
+rfq = (await P(admin, "GET", "rfqs", undefined, `&taskId=${task.id}`)).data.rfqs[0];
+assert.equal(rfq.invites.find(i => i.supplierName === "Alfa Srl").amount, 23500); assert(rfq.invites.find(i => i.supplierName === "Gamma Srl").declined); ok("il buyer vede offerte e rinunce");
+
+console.log("Allegati");
+assert.equal((await mk({ specPath: "altro/percorso.pdf" })).status, 400); // una sola richiesta aperta o percorso non valido: comunque rifiutata
+assert.equal(rfq.specFile, "capitolato.pdf"); assert.equal((await P(ca, "GET", "supplier-rfqs")).data.rfqs[0].specFile, "capitolato.pdf");
+const dl = async (c, qs) => (await portal.GET(new Request("https://a/x" + qs, { headers: { cookie: c } })));
+assert.equal((await dl(ca, `?op=supplier-rfq-spec&id=${rfq.id}`)).status, 200); assert.equal((await dl(admin, `?op=rfq-file&id=${rfq.id}&kind=spec`)).status, 200); ok("capitolato scaricabile da staff e fornitori invitati");
+const outsider = await demo.createDemoSupplier(mgr, { name: "Delta Srl" }); const co = await login2(outsider);
+assert.equal((await dl(co, `?op=supplier-rfq-spec&id=${rfq.id}`)).status, 404); ok("un fornitore non invitato non scarica il capitolato");
+assert.equal((await P(ca, "POST", "supplier-rfq-quote", { amount: 23500, filePath: "contracts/x/y.pdf", fileName: "y.pdf" }, `&id=${rfq.id}`)).status, 400);
+const Q1 = `suppliers/${uid()}/offerta-alfa.pdf`; blob.store.set(Q1, Buffer.from("%PDF q1"));
+let q = await P(ca, "POST", "supplier-rfq-quote", { amount: 23500, notes: "consegna 30 gg", filePath: Q1, fileName: "offerta-alfa.pdf" }, `&id=${rfq.id}`); assert.equal(q.status, 200); assert.equal(q.data.rfqs[0].myQuote.fileName, "offerta-alfa.pdf");
+assert.equal((await P(ca, "POST", "supplier-rfq-quote", { amount: 23400 }, `&id=${rfq.id}`)).data.rfqs[0].myQuote.fileName, "offerta-alfa.pdf"); ok("offerta con allegato; una modifica senza nuovo file lo conserva");
+const buyerView = (await P(admin, "GET", "rfqs", undefined, `&taskId=${task.id}`)).data.rfqs[0]; assert.equal(buyerView.invites.find(i => i.supplierName === "Alfa Srl").fileName, "offerta-alfa.pdf");
+assert.equal((await dl(admin, `?op=rfq-file&id=${rfq.id}&kind=quote&supplier=${sups[0].id}`)).status, 200); assert.equal((await dl(admin, `?op=rfq-file&id=${rfq.id}&kind=quote&supplier=${sups[1].id}`)).status, 404); assert.equal((await dl(cb, `?op=rfq-file&id=${rfq.id}&kind=quote&supplier=${sups[0].id}`)).status, 403); ok("il buyer scarica l'offerta; i fornitori no");
+const Q2 = `suppliers/${uid()}/offerta-alfa-v2.pdf`; blob.store.set(Q2, Buffer.from("%PDF q2"));
+await P(ca, "POST", "supplier-rfq-quote", { amount: 23400, filePath: Q2, fileName: "offerta-alfa-v2.pdf" }, `&id=${rfq.id}`); assert(blob.deleted.includes(Q1) || !blob.store.has(Q1)); ok("nuovo allegato: il precedente viene eliminato");
+assert.equal((await P(ca, "POST", "supplier-rfq-quote", { amount: 23400, removeFile: true }, `&id=${rfq.id}`)).data.rfqs[0].myQuote.fileName, ""); assert(!blob.store.has(Q2)); ok("allegato rimovibile");
+await P(ca, "POST", "supplier-rfq-quote", { amount: 23500, notes: "consegna 30 gg" }, `&id=${rfq.id}`);
+console.log("Confronto");
+assert.equal((await P(admin, "POST", "rfq-use", { supplierId: sups[2].id }, `&id=${rfq.id}`)).status, 400); ok("non si può scegliere chi ha rinunciato");
+assert.equal((await P(admin, "POST", "rfq-use", { supplierId: sups[1].id }, `&id=${rfq.id}`)).status, 400); ok("scelta non più bassa: serve il motivo");
+r = await P(admin, "POST", "rfq-use", { supplierId: sups[1].id, justification: "Garanzia estesa e assistenza in sede" }, `&id=${rfq.id}`); assert.equal(r.status, 200, JSON.stringify(r.data));
+const so = r.data.task.sourcing; assert.equal(so.mode, "comparison"); assert.equal(so.quotes.length, 2); assert.equal(so.quotes.find(q => q.chosen).supplier, "Beta Srl"); assert.equal(r.data.task.sourcingStatus, "ok"); ok("le offerte ricevute diventano il confronto della pratica");
+assert.equal((await P(admin, "GET", "rfqs", undefined, `&taskId=${task.id}`)).data.rfqs[0].status, "closed");
+assert.equal((await P(ca, "POST", "supplier-rfq-quote", { amount: 100 }, `&id=${rfq.id}`)).status, 400); ok("richiesta chiusa: nessuna nuova offerta");
+// Scadenza
+const t2 = (await P(admin, "POST", "task-create", { title: "Ricambi", kind: "purchase", value: 15000, supplier: "Alfa Srl" })).data.task;
+const r2 = (await P(admin, "POST", "rfq-create", { taskId: t2.id, title: "Ricambi", description: "", deadline: day(2), supplierIds: [sups[0].id, sups[1].id] })).data.rfqs[0];
+await pool.query("update rfqs set deadline = current_date - 1 where id = $1", [r2.id]);
+assert.equal((await P(ca, "GET", "supplier-rfqs")).data.rfqs.find(x => x.id === r2.id).status, "closed"); assert.equal((await P(ca, "POST", "supplier-rfq-quote", { amount: 100 }, `&id=${r2.id}`)).status, 400); ok("scadenza passata: la richiesta si chiude da sola");
+assert.equal((await P(admin, "POST", "rfq-use", { supplierId: sups[0].id }, `&id=${r2.id}`)).status, 400); ok("senza almeno due offerte non si fa il confronto");
+assert.equal((await P(admin, "POST", "task-create", { title: "Telefonata" })).status, 201); const act = (await P(admin, "POST", "task-create", { title: "Telefonata 2" })).data.task;
+assert.equal((await P(admin, "POST", "rfq-create", { taskId: act.id, title: "x y z", deadline: day(3), supplierIds: [sups[0].id, sups[1].id] })).status, 400); ok("le attività semplici non hanno richieste di offerta");
+await pool.query("delete from tasks where id = $1", [t2.id]); assert.equal((await pool.query("select count(*)::int n from rfqs where task_id = $1", [t2.id])).rows[0].n, 0); ok("eliminando la pratica spariscono le richieste");
+console.log(`
+${passed} controlli superati`); process.exit(0);
