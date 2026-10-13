@@ -18,7 +18,7 @@ Controlli presenti nel codice, minacce considerate e limiti noti. Per l'architet
 | **Registri** | `audit_log` (contratti), `config_audit` (configurazione), `supplier_events`, `draft_audit` (bozze, esportabile), `notifications` (email), **`security_events`** (accessi riusciti e falliti, blocchi, cambi password, sessioni chiuse; visibile al Manager, esportabile) |
 | **Segreti** | Solo in variabili d'ambiente; nessun segreto nel repository. Il Manager vede in Configurazione un controllo che segnala quali mancano, senza mostrarne i valori |
 | **Dipendenze** | Sei dipendenze di produzione; `npm audit` senza vulnerabilità note; elenco in `SBOM.cdx.json` (CycloneDX); controllo automatico nella CI |
-| **Verifica continua** | CI su ogni modifica: lint, build, 650+ controlli di integrazione, audit delle dipendenze |
+| **Verifica continua** | CI su ogni modifica: lint, build, oltre 650 controlli di integrazione (32 suite), audit delle dipendenze |
 
 ## 2. Minacce considerate
 
