@@ -16,6 +16,9 @@ Controlli presenti nel codice, minacce considerate e limiti noti. Per l'architet
 | **Dati** | Query parametrizzate; dove un frammento SQL è costruito (ruoli e id), contiene solo interi dal database o testo codificato in esadecimale. Nessun `eval` né HTML iniettato; React esegue l'escape |
 | **File** | Archivio privato; scarico solo tramite funzione che controlla i permessi; upload con URL firmato per un solo percorso, con limite di tipo e dimensione |
 | **Registri** | `audit_log` (contratti), `config_audit` (configurazione), `supplier_events`, `draft_audit` (bozze, esportabile), `notifications` (email), **`security_events`** (accessi riusciti e falliti, blocchi, cambi password, sessioni chiuse; visibile al Manager, esportabile) |
+| **Operazioni distruttive** | Svuotamento dei dati ed eliminazione di tutti i contratti: solo Manager, con parola di conferma, registrate nel registro di sicurezza |
+| **Strumenti di prova** | Accessi di prova, simulazione del budget e fornitori di prova si spengono con `DISABLE_DEMO_TOOLS=1`; il controllo di configurazione segnala se sono ancora attivi |
+| **Avvio concorrente** | La creazione dello schema è protetta da un blocco del database: più istanze che partono insieme non si ostacolano (provato con sei avvii contemporanei) |
 | **Segreti** | Solo in variabili d'ambiente; nessun segreto nel repository. Il Manager vede in Configurazione un controllo che segnala quali mancano, senza mostrarne i valori |
 | **Dipendenze** | Sei dipendenze di produzione; `npm audit` senza vulnerabilità note; elenco in `SBOM.cdx.json` (CycloneDX); controllo automatico nella CI |
 | **Verifica continua** | CI su ogni modifica: lint, build, oltre 650 controlli di integrazione (32 suite), audit delle dipendenze |

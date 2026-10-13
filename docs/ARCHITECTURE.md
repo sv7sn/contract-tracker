@@ -114,7 +114,7 @@ Hosting attuale: Vercel (funzioni in regione `iad1`, Stati Uniti est) e Neon (Po
 ## 8. Test e qualità
 
 - `npm run lint`, `tsc` e la build passano senza errori; la stessa verifica gira in CI (`.github/workflows/ci.yml`).
-- **32 suite di integrazione, 672 controlli**, che chiamano le funzioni reali contro un Postgres vero (`npm run test:api`, vedi `tests/run.sh`). Coprono permessi per ruolo, flussi dei task, fornitori, budget e spesa, CLM, riservatezza.
+- **32 suite di integrazione, 675 controlli**, che chiamano le funzioni reali contro un Postgres vero (`npm run test:api`, vedi `tests/run.sh`). Coprono permessi per ruolo, flussi dei task, fornitori, budget e spesa, CLM, riservatezza.
 - Upload su Blob, email e controlli esterni sono simulati nei test. Cinque suite (budget, purchase, sourcing, spend, tasks) usano export SAP reali che **non** sono nel repository per riservatezza: partono solo se si fornisce la cartella `SAP_SAMPLES`.
 - `npm audit` sulle dipendenze di produzione: 0 vulnerabilità note.
 - Non ci sono test automatici dell'interfaccia; le schermate sono state verificate a mano su computer e telefono, per ruolo.
@@ -139,7 +139,7 @@ Il dettaglio dei controlli è in `SECURITY.md`; operatività e ripristino in `OP
 | **Test automatici dell'interfaccia** | Assenti; schermate verificate a mano |
 | **Collegamento al database** | Una sola connessione per funzione (`max: 1`): adatto a carichi modesti |
 
-Chiusi di recente: intestazioni di sicurezza (CSP e altre), revoca delle sessioni, politica password, limitazione dei tentativi per email e per indirizzo, registro degli eventi di sicurezza, controllo `Origin`, quattro occhi su clausole ed eccezioni, controllo di configurazione per il Manager, controllo di salute, CI e SBOM.
+Chiusi di recente: blocco di avvio concorrente dello schema, indici sulle tabelle principali, strumenti di prova disattivabili, operazioni distruttive registrate, intestazioni di sicurezza (CSP e altre), revoca delle sessioni, politica password, limitazione dei tentativi per email e per indirizzo, registro degli eventi di sicurezza, controllo `Origin`, quattro occhi su clausole ed eccezioni, controllo di configurazione per il Manager, controllo di salute, CI e SBOM.
 
 ## 10. Come avviare e provare
 

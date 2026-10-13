@@ -11,6 +11,11 @@ Come si pubblica, si controlla, si ripristina e si ruota. Dove una procedura dip
 ## 2. Configurazione
 Variabili in `.env.example`. Il **Manager** vede in *Configurazione → Sicurezza e configurazione* cosa manca (chiave delle sessioni, controlli giornalieri, email, archivio file, codici SAP, credenziali iniziali ancora presenti, un solo Manager).
 
+### Prima dell'uso reale
+- Impostare `DISABLE_DEMO_TOOLS=1` (spegne gli strumenti di prova) e togliere `ADMIN_*` dall'ambiente.
+- Verificare in *Configurazione → Sicurezza e configurazione* che non resti nulla in giallo.
+- Svuotare i dati di simulazione dalla stessa pagina di Configurazione, se presenti.
+
 ## 3. Monitoraggio
 - `GET /api/portal?op=health` risponde `{"ok":true}` se il database è raggiungibile (503 altrimenti): adatto a un controllo di disponibilità esterno.
 - Log delle funzioni: pannello Vercel. Eventi di accesso: registro di sicurezza nell'applicazione.
