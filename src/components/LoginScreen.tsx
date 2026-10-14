@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { C, font, iStyle, radius, sans } from "../theme.ts";
 import { DEMO_PASSWORD, DEMO_USERS } from "../lib/demo.ts";
 import { BrandMark, Field } from "./ui.tsx";
@@ -22,8 +22,13 @@ export function LoginScreen({ mode, setupRequired, onLogin, onResetDemo }: Props
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [show, setShow] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => new URLSearchParams(window.location.search).get("sso") === "denied" ? "Accesso aziendale non riuscito: l'account non è abilitato in Procurement Lab o la sessione è scaduta. Riprova o contatta l'amministratore." : null);
   const [busy, setBusy] = useState(false);
+  const [sso, setSso] = useState<{ enabled: boolean; enforce: boolean } | null>(null);
+  useEffect(() => {
+    if (mode === "local") return;
+    fetch("/api/portal?op=sso-config").then(r => r.ok ? r.json() : null).then(c => c && setSso(c)).catch(() => {});
+  }, [mode]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +70,13 @@ export function LoginScreen({ mode, setupRequired, onLogin, onResetDemo }: Props
               <AlertTriangle size={18} style={{ flexShrink: 0, marginTop: 1 }} />
               <div><b>Nessun utente configurato.</b> Imposta su Vercel le variabili <code>ADMIN_EMAIL</code> e <code>ADMIN_PASSWORD</code> (minimo 12 caratteri) e rifai il deploy: al primo avvio verrà creato l'amministratore.</div>
             </div>
+          )}
+
+          {sso?.enabled && (
+            <>
+              <a href="/api/portal?op=sso-start" style={{ ...sans, width: "100%", height: 46, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: C.text, borderRadius: 11, color: "#fff", fontWeight: 650, fontSize: 15, textDecoration: "none", marginBottom: 16 }}><ShieldCheck size={18} />Accedi con l'account aziendale</a>
+              <div style={{ ...sans, fontSize: 12, color: C.subtle, textAlign: "center", marginBottom: 14 }}>{sso.enforce ? "Fornitori e accessi di emergenza:" : "oppure con email e password:"}</div>
+            </>
           )}
 
           <Field label="Email" htmlFor="login-email">

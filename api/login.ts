@@ -1,6 +1,7 @@
 import { loadActing } from "./_cover.js";
 import { clearAttempts, ensureSchema, findUserByEmail, getPool, logSecurity, publicUser, recordFailedAttempt, tooManyAttempts } from "./_db.js";
 import { createSessionToken, sessionCookie, verifyPassword } from "./_crypto.js";
+import { isBreakGlass, ssoEnforced } from "./_oidc.js";
 import { clientIp, errorResponse, HttpError, readJson } from "./_http.js";
 
 export async function POST(request: Request) {
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
       await logSecurity("login_failed", { userId: row?.id, email, ip, detail: row && !row.active ? "account disattivato" : "" });
       throw new HttpError(401, "Credenziali non valide");
     }
+    if (ssoEnforced() && row.role !== "supplier" && !isBreakGlass(email)) { await logSecurity("login_failed", { userId: row.id, email, ip, detail: "password rifiutata: è attivo l'accesso aziendale" }); throw new HttpError(403, "Il personale interno entra con l'account aziendale"); }
     await clearAttempts(email);
     await logSecurity("login_ok", { userId: row.id, email, ip });
     const user = publicUser(row);

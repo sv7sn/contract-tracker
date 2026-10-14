@@ -28,7 +28,16 @@ Variabili in `.env.example`. Il **Manager** vede in *Configurazione → Sicurezz
 | File | Vercel Blob | Non c'è una copia versionata. I file eliminati non si recuperano: valutare una copia periodica verso un altro archivio |
 | Codice | GitHub | Cronologia completa |
 
-**Obiettivi di ripristino** (RPO/RTO): non ancora definiti; vanno fissati con l'IT in base al piano Neon.
+### Copia e ripristino con gli script del repository
+```
+DATABASE_URL=postgres://… scripts/backup.sh [cartella]            # copia compressa + impronta SHA-256
+TARGET_URL=postgres://…/db_vuoto scripts/restore.sh file.dump      # ripristina in un database VUOTO (rifiuta se non lo è)
+TARGET_URL=postgres://… scripts/verify-restore.sh                  # conta le righe delle tabelle principali
+SOURCE_URL=… ADMIN_URL=… scripts/restore-drill.sh                  # prova completa: copia, ripristino, confronto di tutte le tabelle
+```
+**Prova eseguita** (database locale con i dati dei test): 49 tabelle, 120 righe, identiche dopo il ripristino. La prova va **ripetuta sul database reale** (da un ramo o da un database di prova su Neon) prima dell'uso: i volumi reali e la finestra di ripristino del piano Neon non sono stati provati.
+
+**Obiettivi di ripristino** (RPO/RTO): non ancora definiti; vanno fissati con l'IT in base al piano Neon. Nota: le copie contengono dati personali e vanno conservate con le stesse protezioni del database.
 
 ## 5. Rotazione dei segreti
 - **Chiave delle sessioni (`SESSION_SECRET`):** cambiarla chiude tutte le sessioni. Farlo se si sospetta una fuga.

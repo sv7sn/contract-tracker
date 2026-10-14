@@ -32,6 +32,7 @@ export async function listCategories(user: User): Promise<CategoriesView> {
 /** Quali buyer seguono una categoria: chi ne segue almeno una vede solo spesa e budget di quelle. */
 export async function setCategoryBuyers(user: User, categoryId: number, userIds: unknown): Promise<CategoriesView> {
   needManager(user);
+  if (!Number.isInteger(categoryId)) throw new HttpError(400, "Categoria non valida");
   const db = getPool();
   if (!(await db.query("select 1 from categories where id = $1", [categoryId])).rows.length) throw new HttpError(404, "Categoria non trovata");
   const ids = [...new Set((Array.isArray(userIds) ? userIds : []).map(Number))].filter(Number.isInteger);

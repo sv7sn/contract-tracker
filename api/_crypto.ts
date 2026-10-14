@@ -49,6 +49,19 @@ function secret(): Buffer {
 const sign = (body: string) => createHmac("sha256", secret()).update(body).digest("base64url");
 
 /** Il token porta la "versione di sessione" dell'utente: cambiarla (nuova password, cambio di ruolo, "esci da tutti i dispositivi") invalida tutte le sessioni già aperte. */
+/** Valore firmato e a scadenza (per lo stato temporaneo dell'accesso SSO): niente da salvare nel database. */
+export function sealValue(value: object, ttlSeconds: number, now = Date.now()): string {
+  const body = Buffer.from(JSON.stringify({ ...value, exp: now + ttlSeconds * 1000 })).toString("base64url");
+  return `${body}.${sign(`sealed:${body}`)}`;
+}
+export function openValue<T extends object>(token: string | null | undefined, now = Date.now()): (T & { exp: number }) | null {
+  const [body, sig] = (token ?? "").split(".");
+  if (!body || !sig) return null;
+  const expected = Buffer.from(sign(`sealed:${body}`)), given = Buffer.from(sig);
+  if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
+  try { const v = JSON.parse(Buffer.from(body, "base64url").toString()) as T & { exp: number }; return v.exp > now ? v : null; } catch { return null; }
+}
+
 export function createSessionToken(userId: number, version = 0, now = Date.now()): string {
   const body = `${userId}.${now + SESSION_DAYS * 864e5}.${version}`;
   return `${body}.${sign(body)}`;
