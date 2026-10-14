@@ -46,10 +46,14 @@ export async function uploadDocument(file: File): Promise<string> {
   const { uploadPresigned } = await import("@vercel/blob/client");
   const safeName = file.name.replace(/[^\p{L}\p{N}._ ()-]+/gu, "_").slice(-120);
   try {
-    const result = await uploadPresigned(`contracts/${crypto.randomUUID()}/${safeName}`, file, { access: "private", handleUploadUrl: "/api/upload" });
+    // Il tipo dichiarato dal browser per i file Word può mancare o essere generico: l'archivio accetta solo i tipi dell'elenco, quindi lo ricaviamo dall'estensione.
+    const ext = file.name.toLowerCase().split(".").pop() ?? "";
+    const mime = ({ pdf: "application/pdf", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" } as Record<string, string>)[ext];
+    const result = await uploadPresigned(`contracts/${crypto.randomUUID()}/${safeName}`, mime ? new File([file], safeName, { type: mime }) : file, { access: "private", handleUploadUrl: "/api/upload" });
     return result.pathname;
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
+    if (/content.?type|not allowed/i.test(message)) throw new Error("Tipo di file non accettato dall'archivio: usa PDF, DOC o DOCX");
     if (/private/i.test(message)) throw new Error("L'archivio Blob su Vercel deve essere creato in modalità PRIVATA");
     // Il dettaglio tecnico resta visibile per capire subito cosa manca nella configurazione.
     if (/token|store|credential|oidc|presigned|not.?found|suspended|configur/i.test(message)) throw new Error(`Archivio documenti non configurato su Vercel (${message.replace(/^Vercel Blob: /, "").slice(0, 180)})`);
