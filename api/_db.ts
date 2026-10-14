@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import pg from "pg";
 import type { AppState, AuditEntry, CommitPayload, Contract, NewUserInput, PlanStep, Role, StepStatus, UpdateUserInput, User } from "../src/types.ts";
 import { HttpError } from "./_http.js";
@@ -366,9 +367,22 @@ export function ensureSchema() {
   ready ??= (async () => {
     // Più istanze possono avviarsi insieme: un blocco consultivo evita che creino lo schema nello stesso momento.
     const db = await getPool().connect();
+    let locked = false;
     try {
-      await db.query("select pg_advisory_lock(727001)");
-      await db.query(SCHEMA);
+      // Lo schema si applica solo se è cambiato (impronta salvata nelle impostazioni): niente DDL né blocchi a ogni avvio.
+      // Il blocco consultivo non è mai atteso senza limite: dietro un pooler una connessione rimasta appesa lo terrebbe per sempre.
+      const hash = createHash("sha256").update(SCHEMA).digest("hex");
+      const current = await db.query("select value #>> '{}' as v from settings where key = 'schema_hash'").then(r => r.rows[0]?.v, () => undefined);
+      if (current !== hash) {
+        for (let i = 0; i < 40 && !locked; i++) {
+          locked = (await db.query("select pg_try_advisory_lock(727001) as ok")).rows[0].ok;
+          if (!locked) await new Promise(r => setTimeout(r, 500));
+        }
+        await db.query("set lock_timeout = '15s'");
+        await db.query(SCHEMA);
+        await db.query("set lock_timeout = 0");
+        await db.query("insert into settings (key, value) values ('schema_hash', $1) on conflict (key) do update set value = excluded.value", [JSON.stringify(hash)]);
+      }
       await db.query(`insert into settings (key, value) values ('sap', $1) on conflict do nothing`, [JSON.stringify({ tradingPartner: "999999", sortKey: "002", cashManagementGroup: "0_VEND_001", releaseGroup: "MFL1", reconciliationAccounts: {} })]);
       await db.query(`insert into industry_codes (code, name) values ('CT00', 'Partner / Clienti') on conflict do nothing`);
       await db.query(`insert into payment_terms (code, label) values ('0030','30 giorni data fattura'),('0060','60 giorni data fattura'),('0090','90 giorni data fattura') on conflict do nothing`);
@@ -386,7 +400,7 @@ export function ensureSchema() {
           [email.toLowerCase(), process.env.ADMIN_NAME?.trim() || "Amministratore", "Amministratore", await hashPassword(password)]);
       }
     } finally {
-      await db.query("select pg_advisory_unlock(727001)").catch(() => undefined);
+      if (locked) await db.query("select pg_advisory_unlock(727001)").catch(() => undefined);
       db.release();
     }
   })().catch(err => { ready = undefined; throw err; });
