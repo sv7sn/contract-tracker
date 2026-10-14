@@ -95,7 +95,8 @@ async function tellBuyer(db: Queryable, d: Row, supplier: string, what: string, 
 
 export async function supplierComment(user: User, taskId: number, input: Row, origin: string): Promise<NegotiationBundle> {
   const sid = await mySupplierId(user);
-  const d = await sharedDraft(sid, Number(input?.draftId));
+  if (!Number.isInteger(input?.draftId)) bad("Versione non valida");
+  const d = await sharedDraft(sid, input.draftId as number);
   if (d.task_id !== taskId) throw new HttpError(404, "Bozza non trovata");
   const body = String(input?.body ?? "").trim().slice(0, 2000);
   if (!body) bad("Scrivi il commento");

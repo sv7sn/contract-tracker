@@ -17,7 +17,7 @@ Applicazione web per l'ufficio acquisti (procurement indiretto) che segue una pr
 | **Indicatori** | Tempi e rispetto delle regole: RDA, scelta del fornitore, onboarding, qualifica, revisione dei contratti |
 | **Amministrazione** | Utenti e ruoli, parametri, regole di revisione, registro delle modifiche di configurazione |
 
-Fuori ambito (non realizzato): firma elettronica, SSO, funzioni AI sui contratti, integrazione SAP in tempo reale.
+Fuori ambito (non realizzato): firma elettronica, funzioni AI sui contratti, integrazione SAP in tempo reale.
 
 ## 2. Vista d'insieme
 
@@ -29,7 +29,7 @@ Fuori ambito (non realizzato): firma elettronica, SSO, funzioni AI sui contratti
         │                         │                    │
         ▼                         ▼                    ▼
  PostgreSQL (Neon)          Vercel Blob (privato)   Servizi esterni (solo in uscita)
- 48 tabelle, schema         documenti: contratti,   Resend (email), VIES, GLEIF, liste sanzioni
+ 49 tabelle, schema         documenti: contratti,   Resend (email), VIES, GLEIF, liste sanzioni
  creato dal codice          allegati, offerte       (UE, ONU, USA, UK, OpenSanctions),
                                                     openapi.com (dati societari),
                                                     Anthropic API (solo se attivata, vedi §7)
@@ -58,7 +58,7 @@ api/        funzioni e logica; ~7.400 righe. I file con prefisso _ sono moduli, 
 tests/      suite automatiche (vedi §8)
 ```
 
-## 4. Modello dei dati (48 tabelle)
+## 4. Modello dei dati (49 tabelle)
 
 | Area | Tabelle principali |
 |---|---|
@@ -114,7 +114,7 @@ Hosting attuale: Vercel (funzioni in regione `iad1`, Stati Uniti est) e Neon (Po
 ## 8. Test e qualità
 
 - `npm run lint`, `tsc` e la build passano senza errori; la stessa verifica gira in CI (`.github/workflows/ci.yml`).
-- **32 suite di integrazione, 675 controlli**, che chiamano le funzioni reali contro un Postgres vero (`npm run test:api`, vedi `tests/run.sh`). Coprono permessi per ruolo, flussi dei task, fornitori, budget e spesa, CLM, riservatezza.
+- **34 suite di integrazione, oltre 700 controlli**, che chiamano le funzioni reali contro un Postgres vero (`npm run test:api`, vedi `tests/run.sh`). Coprono permessi per ruolo, flussi dei task, fornitori, budget e spesa, CLM, riservatezza.
 - Upload su Blob, email e controlli esterni sono simulati nei test. Cinque suite (budget, purchase, sourcing, spend, tasks) usano export SAP reali che **non** sono nel repository per riservatezza: partono solo se si fornisce la cartella `SAP_SAMPLES`.
 - `npm audit` sulle dipendenze di produzione: 0 vulnerabilità note.
 - Non ci sono test automatici dell'interfaccia; le schermate sono state verificate a mano su computer e telefono, per ruolo.
@@ -125,13 +125,13 @@ Il dettaglio dei controlli è in `SECURITY.md`; operatività e ripristino in `OP
 
 | Tema | Stato |
 |---|---|
-| **SSO** | Assente: solo email e password. Previsto OpenID Connect con Entra ID (vedi roadmap) |
+| **SSO** | Realizzato (OpenID Connect, flusso authorization code con PKCE, firma RS256 verificata, ruoli dai gruppi del provider, account di emergenza), spento finché non si impostano le variabili `OIDC_*`. Provato con un provider simulato; **non ancora collegato al tenant aziendale** (servono i dati dell'IT) |
 | **Autenticazione a due fattori** | Assente (arriverebbe con l'SSO) |
-| **Test di penetrazione / revisione di sicurezza indipendente** | Non eseguiti |
+| **Test di penetrazione / revisione di sicurezza indipendente** | Non eseguiti. È stata fatta una verifica interna automatica e ripetibile (`SECURITY.md` §1 bis) |
 | **Separazione dei ruoli** | Quattro occhi su clausole ed eccezioni al confronto; non su altre approvazioni (vedi `SECURITY.md` §3) |
 | **Firma elettronica** | Non realizzata (prevista come fase successiva) |
 | **Integrazione SAP in tempo reale** | Assente: oggi basata su file |
-| **Backup e ripristino** | Quelli di Neon (finestra da confermare e da provare); i file in Blob non hanno copia versionata. Procedura in `OPERATIONS.md` |
+| **Backup e ripristino** | Script di copia e ripristino con prova riuscita su database locale; da ripetere su Neon. I file in Blob non hanno copia versionata. Procedura in `OPERATIONS.md` |
 | **Regione dei dati** | Funzioni in USA est; regione del database da confermare |
 | **Volumi** | Provato con dati di simulazione; non con volumi reali |
 | **Uso in produzione** | Non ancora con utenti reali su larga scala |
@@ -153,7 +153,7 @@ npm run test:api           # richiede Postgres locale e psql (vedi tests/run.sh)
 ## 11. Roadmap proposta
 
 1. Interruttore per **attivare moduli uno alla volta**.
-2. **SSO** (OpenID Connect) con obbligo per il personale interno; password solo per i fornitori.
+2. **Collegamento dell'SSO** al tenant aziendale (il codice c'è) e obbligo per il personale interno; password solo per i fornitori.
 3. Revisione di sicurezza dell'IT e correzione di quanto emerge.
 4. Aggancio al budget del CIO (import dal suo sistema e restituzione degli impegni futuri).
 5. Pilota con pochi utenti su un modulo; poi Task e Fornitori; poi CLM.

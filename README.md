@@ -9,7 +9,7 @@ Funziona da telefono e da computer (menu laterale e griglie a più colonne su sc
 
 ## Accesso e permessi
 
-L'accesso avviene con **email e password**. La sessione è un cookie `HttpOnly` firmato, valido 7 giorni.
+L'accesso avviene con **email e password**; per il personale interno è pronto anche l'**account aziendale (SSO, OpenID Connect)**, che si attiva impostando le variabili `OIDC_*` (vedi `.env.example`). La sessione è un cookie `HttpOnly` firmato, valido 7 giorni.
 I permessi sono **controllati dal server** (`api/_permissions.ts`, `api/_db.ts`): l'interfaccia nasconde i comandi non consentiti,
 ma sono le API a rifiutare comunque le richieste non autorizzate.
 

@@ -4,8 +4,16 @@ export class HttpError extends Error {
   constructor(status: number, message: string, data?: Record<string, unknown>) { super(message); this.status = status; this.data = data; }
 }
 
+/** Errori del database dovuti a dati non validi (testo al posto di un numero, valore troppo lungo, campo obbligatorio vuoto…): per chi chiama sono richieste sbagliate, non guasti del server. */
+const DB_INPUT_ERRORS: Record<string, [number, string]> = {
+  "22P02": [400, "Dati non validi"], "22003": [400, "Valore fuori intervallo"], "22007": [400, "Data non valida"], "22008": [400, "Data non valida"],
+  "22001": [400, "Testo troppo lungo"], "22021": [400, "Il testo contiene caratteri non ammessi"], "22P05": [400, "Il testo contiene caratteri non ammessi"], "23502": [400, "Manca un dato obbligatorio"], "23503": [409, "Il dato collegato non esiste o è ancora in uso"],
+  "23505": [409, "Esiste già un elemento uguale"], "23514": [400, "Valore non ammesso"],
+};
 export function errorResponse(err: unknown) {
   if (err instanceof HttpError) return Response.json({ error: err.message, ...err.data }, { status: err.status });
+  const mapped = DB_INPUT_ERRORS[(err as { code?: string })?.code ?? ""];
+  if (mapped) { console.error(err); return Response.json({ error: mapped[1] }, { status: mapped[0] }); }
   console.error(err);
   return Response.json({ error: "Errore del server" }, { status: 500 });
 }

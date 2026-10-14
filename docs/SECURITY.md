@@ -21,7 +21,22 @@ Controlli presenti nel codice, minacce considerate e limiti noti. Per l'architet
 | **Avvio concorrente** | La creazione dello schema è protetta da un blocco del database: più istanze che partono insieme non si ostacolano (provato con sei avvii contemporanei) |
 | **Segreti** | Solo in variabili d'ambiente; nessun segreto nel repository. Il Manager vede in Configurazione un controllo che segnala quali mancano, senza mostrarne i valori |
 | **Dipendenze** | Sei dipendenze di produzione; `npm audit` senza vulnerabilità note; elenco in `SBOM.cdx.json` (CycloneDX); controllo automatico nella CI |
-| **Verifica continua** | CI su ogni modifica: lint, build, oltre 650 controlli di integrazione (32 suite), audit delle dipendenze |
+| **Verifica continua** | CI su ogni modifica: lint, build, oltre 700 controlli di integrazione (34 suite), audit delle dipendenze |
+
+## 1 bis. Verifica di sicurezza interna (automatica)
+
+La suite `tests/api/authz.test.mjs` è una verifica ripetibile, eseguita in CI a ogni modifica. **Non è un test di penetrazione indipendente** e non lo sostituisce.
+
+| Cosa controlla | Esito atteso |
+|---|---|
+| Tutte le operazioni del router (oltre 130, lette dal codice) con ogni ruolo e metodo | Senza accesso rispondono solo invito, attivazione, salute e i passaggi dell'accesso aziendale; il fornitore non raggiunge nulla dello staff; Controlling/CFO, Business Owner, Compliance e IT Security non scrivono; Legal e Finance solo dove previsto |
+| Chiamate con dati vuoti, identificativi non validi (`abc`, `-1`, enormi) e testi ostili (SQL, script, percorsi, byte nulli, 5000 caratteri) | Mai un errore del server (500) |
+| Un testo con SQL dentro | Salvato così com'è, le tabelle restano |
+| Accesso a dati di altri (pratiche, bozze riservate, documenti e trattative di un altro fornitore) | Sempre rifiutato |
+
+La prima esecuzione ha trovato quattro risposte 500 per dati non validi (nessuna falla di accesso), corrette: errori del database dovuti a input sbagliato ora diventano risposte 400/409.
+
+**Non coperto:** analisi dinamica dell'interfaccia, prove su rete e infrastruttura (Vercel, Neon), social engineering, resistenza al sovraccarico, revisione manuale del codice da parte di terzi. Per questi serve un test indipendente.
 
 ## 2. Minacce considerate
 
@@ -52,8 +67,8 @@ Se la persona è l'unica a poter decidere (un solo Manager o un solo Legal), la 
 
 ## 4. Limiti noti
 
-- **SSO assente** (solo email e password).
-- **Nessun test di penetrazione** né revisione di sicurezza indipendente.
+- **SSO non ancora collegato** al provider aziendale: il codice è pronto e provato con un provider simulato, ma finché l'IT non fornisce tenant, client id e segreto si entra con email e password.
+- **Nessun test di penetrazione indipendente** né revisione di sicurezza di terzi (vedi §1 bis per la verifica interna).
 - **Nessuna autenticazione a due fattori.**
 - **Nessun controllo del contenuto dei file** oltre a tipo dichiarato e dimensione.
 - **Politica di conservazione dei registri** non definita (restano finché non si eliminano).

@@ -28,6 +28,7 @@ import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_bud
 import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudget } from "./_budget.js";
 import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
 import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, registerTaskContract, setIoBuyer, setTaskLinks, setTaskSupplier, tasksArchive, suggestRdas, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
+import { ssoCallback, ssoPublicConfig, ssoStart } from "./_oidc.js";
 import { clientIp, errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
 import {
@@ -76,6 +77,11 @@ async function handle(request: Request): Promise<Response> {
     if (op === "health" && method === "GET") {
       try { await getPool().query("select 1"); return json({ ok: true }); } catch { return json({ ok: false }, { status: 503 }); }
     }
+
+    // ── Accesso aziendale (SSO): pubbliche, sono i passaggi che portano alla sessione ──
+    if (op === "sso-config" && method === "GET") return json(ssoPublicConfig());
+    if (op === "sso-start" && method === "GET") return await ssoStart(request);
+    if (op === "sso-callback" && method === "GET") return await ssoCallback(request);
 
     // ── Pubbliche (invito) ──
     if (op === "invite-info" && method === "GET") return json(await inviteInfo(url.searchParams.get("token") ?? ""));
@@ -138,6 +144,7 @@ async function handle(request: Request): Promise<Response> {
       if (op === "supplier-submit" && method === "POST") return json({ supplier: await submitMyRegistration(user, origin) });
       if (op === "supplier-upload-token" && method === "POST") {
         const body = (await readJson(request)) as Parameters<typeof handleUploadPresigned>[0]["body"];
+        if (!body || typeof body !== "object" || typeof (body as { type?: unknown }).type !== "string") throw new HttpError(400, "Richiesta di caricamento non valida");
         const result = await handleUploadPresigned({
           request, body,
           getSignedToken: async pathname => {

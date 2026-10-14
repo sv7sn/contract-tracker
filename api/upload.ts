@@ -10,6 +10,7 @@ export async function POST(request: Request) {
     const user = await requireUser(request);
     if (!canCreateContract(user)) throw new HttpError(403, "Operazione non consentita");
     const body = (await readJson(request)) as Parameters<typeof handleUploadPresigned>[0]["body"];
+    if (!body || typeof body !== "object" || typeof (body as { type?: unknown }).type !== "string") throw new HttpError(400, "Richiesta di caricamento non valida");
     const result = await handleUploadPresigned({
       request, body,
       getSignedToken: async pathname => {
