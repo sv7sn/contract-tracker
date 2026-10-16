@@ -12,6 +12,7 @@ import { InviteLanding } from "./components/InviteLanding.tsx";
 import { LoginScreen } from "./components/LoginScreen.tsx";
 import { BOFormModal, ContractForm } from "./components/Modals.tsx";
 import { AccountMenu } from "./components/AccountMenu.tsx";
+import { getLang, setLang } from "./i18n/index.ts";
 import { Dashboard } from "./views/Dashboard.tsx";
 import { ContractList } from "./views/ContractList.tsx";
 import { ContractDetail } from "./views/ContractDetail.tsx";
@@ -98,7 +99,7 @@ export default function App() {
     let cancelled = false;
     (async () => {
       let user: User | null = null;
-      try { user = (await api.me()).user; if (!cancelled) setMode("api"); }
+      try { user = (await api.me()).user; if (!cancelled) setMode("api"); if (user.lang && user.lang !== getLang()) { setLang(user.lang); return; } }
       catch (err) {
         if (cancelled) return;
         if (err instanceof ApiError && err.status === 401) { setMode("api"); setSetupRequired(err.data.setupRequired === true); }
@@ -134,6 +135,8 @@ export default function App() {
     }
     try {
       const { user } = await api.login(email, password);
+      // La lingua scelta sul profilo vale su ogni dispositivo: se è diversa l'app si ridisegna e riparte dalla sessione appena aperta.
+      if (user.lang && user.lang !== getLang()) { setLang(user.lang); return null; }
       setCurrentUser(user); setView(homeFor(user, true)); setSetupRequired(false); applyDeepLink(user);
       await loadAll(user);
       return null;

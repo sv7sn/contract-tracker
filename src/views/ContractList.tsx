@@ -5,6 +5,7 @@ import { closedLabel, daysToDeadline, expiredWithoutOutcome, fmt, fmtDate, urgen
 import { canCreateContract, canViewTeam } from "../permissions.ts";
 import { Avatar, Card, DaysChip, EmptyState, Grid, RenewalBadge } from "../components/ui.tsx";
 import { Archive, FileText, LayoutGrid, Paperclip, Plus, Rows3, Search } from "../components/icons.tsx";
+import { t } from "../i18n/index.ts";
 
 const VIEW_KEY = "contract-tracker:list-view";
 const readView = (): "cards" | "table" => { try { return localStorage.getItem(VIEW_KEY) === "cards" ? "cards" : "table"; } catch { return "table"; } };
@@ -35,20 +36,20 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
     <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0,1fr)" }}>
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
         <div role="tablist" style={{ display: "flex", gap: 2, background: "#e9ecf2", borderRadius: 12, padding: 3 }}>
-          <button role="tab" aria-selected={!showArchive} onClick={() => setShowArchive(false)} style={seg(!showArchive)}><FileText size={15} />Attivi <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => !c.ceased).length}</span></button>
-          <button role="tab" aria-selected={showArchive} onClick={() => setShowArchive(true)} style={seg(showArchive)}><Archive size={15} />Storico <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => c.ceased).length}</span></button>
+          <button role="tab" aria-selected={!showArchive} onClick={() => setShowArchive(false)} style={seg(!showArchive)}><FileText size={15} />{t("Attivi")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => !c.ceased).length}</span></button>
+          <button role="tab" aria-selected={showArchive} onClick={() => setShowArchive(true)} style={seg(showArchive)}><Archive size={15} />{t("Storico")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => c.ceased).length}</span></button>
         </div>
         <div style={{ position: "relative", flex: "1 1 220px", minWidth: 200 }} className="mobile-only">
           <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
-          <input value={search} onChange={e => onSearch(e.target.value)} placeholder="Cerca fornitore, oggetto, owner…" aria-label="Cerca" style={{ ...iStyle, padding: "10px 12px 10px 36px" }} />
+          <input value={search} onChange={e => onSearch(e.target.value)} placeholder={t("Cerca fornitore, oggetto, owner…")} aria-label={t("Cerca")} style={{ ...iStyle, padding: "10px 12px 10px 36px" }} />
         </div>
         <div style={{ flex: 1 }} />
-        <select value={sort} onChange={e => setSort(e.target.value)} aria-label="Ordina" style={{ ...iStyle, width: "auto", padding: "8px 10px", fontSize: 13, color: C.muted }}>
-          <option value="expiry">Ordina per scadenza</option><option value="value">Ordina per valore</option><option value="supplier">Ordina per fornitore</option>
+        <select value={sort} onChange={e => setSort(e.target.value)} aria-label={t("Ordina")} style={{ ...iStyle, width: "auto", padding: "8px 10px", fontSize: 13, color: C.muted }}>
+          <option value="expiry">{t("Ordina per scadenza")}</option><option value="value">{t("Ordina per valore")}</option><option value="supplier">{t("Ordina per fornitore")}</option>
         </select>
-        <div className="desktop-only-flex" role="group" aria-label="Vista" style={{ gap: 2, background: "#e9ecf2", borderRadius: 10, padding: 3 }}>
-          <button onClick={() => setLayoutSaved("table")} aria-pressed={layout === "table"} title="Tabella" aria-label="Vista tabella" style={iconBtn(layout === "table")}><Rows3 size={16} /></button>
-          <button onClick={() => setLayoutSaved("cards")} aria-pressed={layout === "cards"} title="Schede" aria-label="Vista a schede" style={iconBtn(layout === "cards")}><LayoutGrid size={16} /></button>
+        <div className="desktop-only-flex" role="group" aria-label={t("Vista")} style={{ gap: 2, background: "#e9ecf2", borderRadius: 10, padding: 3 }}>
+          <button onClick={() => setLayoutSaved("table")} aria-pressed={layout === "table"} title={t("Tabella")} aria-label={t("Vista tabella")} style={iconBtn(layout === "table")}><Rows3 size={16} /></button>
+          <button onClick={() => setLayoutSaved("cards")} aria-pressed={layout === "cards"} title={t("Schede")} aria-label={t("Vista a schede")} style={iconBtn(layout === "cards")}><LayoutGrid size={16} /></button>
         </div>
       </div>
 
@@ -56,7 +57,7 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
         <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
           {filters.map(([s, n]) => { const on = filter === s; return (
             <button key={s} onClick={() => setFilter(s)} aria-pressed={on} style={{ ...sans, display: "flex", alignItems: "center", gap: 7, padding: "6px 13px", borderRadius: 999, border: `1px solid ${on ? C.navy : C.border}`, background: on ? C.navy : "#fff", color: on ? "#fff" : C.muted, cursor: "pointer", fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0 }}>
-              {s}<span className="tabular" style={{ fontSize: 11.5, opacity: .75 }}>{n}</span>
+              {t(s)}<span className="tabular" style={{ fontSize: 11.5, opacity: .75 }}>{n}</span>
             </button>
           ); })}
         </div>
@@ -64,14 +65,14 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
 
       {filtered.length === 0 ? (
         contracts.length === 0 ? (
-          <EmptyState title="Nessun contratto ancora" text="Aggiungi il primo contratto con il suo documento: da quel momento ne seguiamo scadenze e rinnovi." action={canCreateContract(currentUser) && <button onClick={onNew} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, cursor: "pointer" }}><Plus size={17} />Crea il primo contratto</button>} />
-        ) : <EmptyState icon={<Search size={26} />} title="Nessun risultato" text="Nessun contratto corrisponde a ricerca e filtri. Prova a toglierne qualcuno." action={<button onClick={() => { onSearch(""); setFilter("Tutti"); }} style={{ ...sans, padding: "9px 16px", background: "#fff", border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontWeight: 600, cursor: "pointer" }}>Azzera filtri</button>} />
+          <EmptyState title={t("Nessun contratto ancora")} text={t("Aggiungi il primo contratto con il suo documento: da quel momento ne seguiamo scadenze e rinnovi.")} action={canCreateContract(currentUser) && <button onClick={onNew} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, cursor: "pointer" }}><Plus size={17} />{t("Crea il primo contratto")}</button>} />
+        ) : <EmptyState icon={<Search size={26} />} title={t("Nessun risultato")} text={t("Nessun contratto corrisponde a ricerca e filtri. Prova a toglierne qualcuno.")} action={<button onClick={() => { onSearch(""); setFilter("Tutti"); }} style={{ ...sans, padding: "9px 16px", background: "#fff", border: `1px solid ${C.border}`, borderRadius: 10, color: C.text, fontWeight: 600, cursor: "pointer" }}>{t("Azzera filtri")}</button>} />
       ) : (<>
         {/* Tabella: solo su schermi larghi */}
         {layout === "table" && (
           <div className="table-wrap desktop-only">
             <table className="data-table">
-              <thead><tr><th>Fornitore</th>{showOwner && <th>Owner</th>}<th>Scadenza</th><th>Rinnovo</th><th className="num">Valore</th><th aria-label="Documento" /></tr></thead>
+              <thead><tr><th>{t("Fornitore")}</th>{showOwner && <th>{t("Owner")}</th>}<th>{t("Scadenza")}</th><th>{t("Rinnovo")}</th><th className="num">{t("Valore")}</th><th aria-label={t("Documento")} /></tr></thead>
               <tbody>
                 {filtered.map(c => {
                   const days = daysToDeadline(c); const u = urgency(c);
@@ -82,10 +83,10 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
                         <div style={{ fontSize: 12, color: C.muted, marginTop: 1 }}>{c.object}</div>
                       </td>
                       {showOwner && <td><div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}><Avatar name={c.owner || "?"} size={26} /><span style={{ color: C.muted }}>{c.owner || "—"}</span></div></td>}
-                      <td style={{ whiteSpace: "nowrap" }}><div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}><span className="tabular" style={{ color: C.text }}>{fmtDate(c.end)}</span>{c.noticeDate && <span className="tabular" style={{ fontSize: 11.5, color: C.muted }}>Disdetta entro {fmtDate(c.noticeDate)}</span>}<DaysChip days={days} level={u} ceased={c.ceased && (closedLabel(c) ?? true)} /></div></td>
-                      <td>{c.ceased ? <span style={{ color: C.muted }}>{closedLabel(c)}</span> : expiredWithoutOutcome(c) ? <span style={{ color: C.red, fontWeight: 650 }}>Scaduto senza esito</span> : <RenewalBadge status={c.renewal} />}</td>
+                      <td style={{ whiteSpace: "nowrap" }}><div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}><span className="tabular" style={{ color: C.text }}>{fmtDate(c.end)}</span>{c.noticeDate && <span className="tabular" style={{ fontSize: 11.5, color: C.muted }}>{t("Disdetta entro {date}", { date: fmtDate(c.noticeDate) })}</span>}<DaysChip days={days} level={u} ceased={c.ceased && (closedLabel(c) ?? true)} /></div></td>
+                      <td>{c.ceased ? <span style={{ color: C.muted }}>{closedLabel(c)}</span> : expiredWithoutOutcome(c) ? <span style={{ color: C.red, fontWeight: 650 }}>{t("Scaduto senza esito")}</span> : <RenewalBadge status={c.renewal} />}</td>
                       <td className="num" style={{ fontWeight: 650, color: C.text, whiteSpace: "nowrap" }}>{fmt(c.value, c.currency)}</td>
-                      <td style={{ width: 36, color: c.fileName ? C.subtle : "transparent" }}>{c.fileName && <Paperclip size={15} aria-label="Ha un documento" />}</td>
+                      <td style={{ width: 36, color: c.fileName ? C.subtle : "transparent" }}>{c.fileName && <Paperclip size={15} aria-label={t("Ha un documento")} />}</td>
                     </tr>
                   );
                 })}
@@ -110,10 +111,10 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
                     <div className="tabular" style={{ ...sans, fontSize: 14, fontWeight: 700, flexShrink: 0, color: C.text }}>{fmt(c.value, c.currency)}</div>
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
-                    {c.ceased ? <span style={{ ...sans, fontSize: 11.5, color: C.gray, background: C.grayBg, borderRadius: 999, padding: "3px 10px", fontWeight: 600 }}>{closedLabel(c)}</span> : expiredWithoutOutcome(c) ? <span style={{ ...sans, fontSize: 11.5, color: C.red, background: C.redBg, borderRadius: 999, padding: "3px 10px", fontWeight: 650 }}>Scaduto senza esito</span> : <RenewalBadge status={c.renewal} />}
+                    {c.ceased ? <span style={{ ...sans, fontSize: 11.5, color: C.gray, background: C.grayBg, borderRadius: 999, padding: "3px 10px", fontWeight: 600 }}>{closedLabel(c)}</span> : expiredWithoutOutcome(c) ? <span style={{ ...sans, fontSize: 11.5, color: C.red, background: C.redBg, borderRadius: 999, padding: "3px 10px", fontWeight: 650 }}>{t("Scaduto senza esito")}</span> : <RenewalBadge status={c.renewal} />}
                     <span style={{ marginLeft: "auto" }}><DaysChip days={days} level={u} ceased={c.ceased && (closedLabel(c) ?? true)} /></span>
                   </div>
-                  {showOwner && <div style={{ ...sans, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.subtle, marginTop: 10 }}><Avatar name={c.owner || "?"} size={22} />{c.owner || "—"}<span style={{ marginLeft: "auto" }}>{c.noticeDate ? `Disdetta entro ${fmtDate(c.noticeDate)}` : `Scade il ${fmtDate(c.end)}`}</span></div>}
+                  {showOwner && <div style={{ ...sans, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.subtle, marginTop: 10 }}><Avatar name={c.owner || "?"} size={22} />{c.owner || "—"}<span style={{ marginLeft: "auto" }}>{c.noticeDate ? t("Disdetta entro {date}", { date: fmtDate(c.noticeDate) }) : t("Scade il {date}", { date: fmtDate(c.end) })}</span></div>}
                 </Card>
               );
             })}

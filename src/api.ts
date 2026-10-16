@@ -1,3 +1,4 @@
+import { fill, t } from "./i18n/index.ts";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type NegotiationBundle, type NegotiationSummary, type Obligation, type ReadinessCheck, type SecurityEvent, type ClmKpis, type ReviewRule, type ClauseView, type ClmAuditEntry, type ClmBundle, type ClmDiff, type ClmFindings, type ClmTemplateInfo, type FuncKey, type MyReview, type ReviewStatus, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type EligibleSupplier, type RdaSuggestion, type Task, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
 
 export class ApiError extends Error {
@@ -10,10 +11,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(path, { ...init, headers: { "Content-Type": "application/json" } });
   const type = res.headers.get("content-type") ?? "";
   // In sviluppo (`vite dev`) /api non esiste e restituisce HTML: lo trattiamo come "backend non disponibile" (status 0).
-  if (!type.includes("application/json")) throw new ApiError(0, "Backend non disponibile");
+  if (!type.includes("application/json")) throw new ApiError(0, t("Backend non disponibile"));
   const data = await res.json();
-  if (!res.ok) throw new ApiError(res.status, data?.error ?? `Errore ${res.status}`, data);
+  if (!res.ok) throw new ApiError(res.status, serverMessage(data, res.status), data);
   return data as T;
+}
+/** Messaggio d'errore del server nella lingua dell'utente: con valori variabili il server manda anche modello e valori. */
+function serverMessage(data: { error?: unknown; errorKey?: unknown; errorVars?: unknown } | null, status: number): string {
+  if (typeof data?.errorKey === "string") return t(data.errorKey, (data.errorVars ?? {}) as Record<string, string | number>);
+  return typeof data?.error === "string" ? t(data.error) : fill(t("Errore {status}"), { status });
 }
 const post = <T>(path: string, body: unknown) => request<T>(path, { method: "POST", body: JSON.stringify(body) });
 
@@ -22,6 +28,7 @@ export const api = {
   login: (email: string, password: string) => post<{ user: User }>("/api/login", { email, password }),
   logout: () => post<{ ok: true }>("/api/logout", {}),
   changePassword: (current: string, next: string) => post<{ ok: true }>("/api/password", { current, next }),
+  setLang: (lang: "it" | "en") => post<{ lang: string }>("/api/portal?op=my-lang", { lang }),
   revokeSessions: () => post<{ ok: true }>("/api/portal?op=sessions-revoke", {}),
   loadState: () => request<AppState>("/api/state"),
   commit: (payload: CommitPayload) => post<CommitResult>("/api/commit", payload),
@@ -35,9 +42,9 @@ export const api = {
 /** Controllo preventivo del file scelto; restituisce un messaggio di errore o null. */
 export function checkDocument(file: File): string | null {
   const ext = file.name.toLowerCase().split(".").pop() ?? "";
-  if (!(DOCUMENT_EXTENSIONS as readonly string[]).includes(ext)) return "Formato non supportato: usa PDF, DOC o DOCX";
-  if (file.size > MAX_DOCUMENT_BYTES) return `Il file supera il limite di ${MAX_DOCUMENT_BYTES / 1024 / 1024} MB`;
-  if (file.size === 0) return "Il file è vuoto";
+  if (!(DOCUMENT_EXTENSIONS as readonly string[]).includes(ext)) return t("Formato non supportato: usa PDF, DOC o DOCX");
+  if (file.size > MAX_DOCUMENT_BYTES) return t("Il file supera il limite di {mb} MB", { mb: MAX_DOCUMENT_BYTES / 1024 / 1024 });
+  if (file.size === 0) return t("Il file è vuoto");
   return null;
 }
 
@@ -53,11 +60,11 @@ export async function uploadDocument(file: File): Promise<string> {
     return result.pathname;
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
-    if (/content.?type|not allowed/i.test(message)) throw new Error("Tipo di file non accettato dall'archivio: usa PDF, DOC o DOCX");
-    if (/private/i.test(message)) throw new Error("L'archivio Blob su Vercel deve essere creato in modalità PRIVATA");
+    if (/content.?type|not allowed/i.test(message)) throw new Error(t("Tipo di file non accettato dall'archivio: usa PDF, DOC o DOCX"));
+    if (/private/i.test(message)) throw new Error(t("L'archivio Blob su Vercel deve essere creato in modalità PRIVATA"));
     // Il dettaglio tecnico resta visibile per capire subito cosa manca nella configurazione.
-    if (/token|store|credential|oidc|presigned|not.?found|suspended|configur/i.test(message)) throw new Error(`Archivio documenti non configurato su Vercel (${message.replace(/^Vercel Blob: /, "").slice(0, 180)})`);
-    throw new Error(message || "Caricamento del documento non riuscito");
+    if (/token|store|credential|oidc|presigned|not.?found|suspended|configur/i.test(message)) throw new Error(t("Archivio documenti non configurato su Vercel ({detail})", { detail: message.replace(/^Vercel Blob: /, "").slice(0, 180) }));
+    throw new Error(message || t("Caricamento del documento non riuscito"));
   }
 }
 
@@ -211,7 +218,7 @@ export async function uploadSupplierDocument(file: File): Promise<string> {
     const result = await uploadPresigned(`suppliers/${crypto.randomUUID()}/${safeName}`, file, { access: "private", handleUploadUrl: "/api/portal?op=supplier-upload-token" });
     return result.pathname;
   } catch (err) {
-    throw new Error(err instanceof Error && err.message ? err.message.replace(/^Vercel Blob: /, "").slice(0, 200) : "Caricamento del documento non riuscito");
+    throw new Error(err instanceof Error && err.message ? err.message.replace(/^Vercel Blob: /, "").slice(0, 200) : t("Caricamento del documento non riuscito"));
   }
 }
 
@@ -219,7 +226,7 @@ export async function uploadSupplierDocument(file: File): Promise<string> {
 export async function importSapFile(file: File, force = false): Promise<ImportResult> {
   const res = await fetch(`/api/portal?op=rda-import${force ? "&force=1" : ""}`, { method: "POST", headers: { "x-file-name": encodeURIComponent(file.name) }, body: file });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data?.error ?? `Errore ${res.status}`, data);
+  if (!res.ok) throw new ApiError(res.status, serverMessage(data, res.status), data);
   return data as ImportResult;
 }
 
@@ -227,6 +234,6 @@ export async function importSapFile(file: File, force = false): Promise<ImportRe
 export async function importBudgetFile(file: File, year: number, label: string): Promise<BudgetImport> {
   const res = await fetch(`/api/portal?op=budget-import&year=${year}&label=${encodeURIComponent(label)}`, { method: "POST", headers: { "x-file-name": encodeURIComponent(file.name) }, body: file });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(res.status, data?.error ?? `Errore ${res.status}`, data);
+  if (!res.ok) throw new ApiError(res.status, serverMessage(data, res.status), data);
   return data as BudgetImport;
 }

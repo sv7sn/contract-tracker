@@ -48,7 +48,7 @@ assert.deepEqual([...new Set(by("anon", r => r.status !== 401).map(x => x.split(
 // 2. Nessun errore del server con dati vuoti, per nessun ruolo
 const five = res.filter(r => r.status >= 500).map(r => `${r.role} ${r.method} ${r.op}`); assert.deepEqual(five, []); ok(`nessuna risposta 500 su ${res.length} chiamate con dati vuoti, per ogni ruolo e metodo`);
 // 3. Il fornitore esce solo dalla sua area
-assert.deepEqual([...new Set(by("supplier", r => !r.op.startsWith("supplier-") && ![403, 404, 405].includes(r.status)).map(x => x.split(" ")[1]))].sort(), ["activate", "doc-download", "health", "sso-config"]); ok("il fornitore non raggiunge nessuna operazione dello staff (solo i propri documenti)");
+assert.deepEqual([...new Set(by("supplier", r => !r.op.startsWith("supplier-") && ![403, 404, 405].includes(r.status)).map(x => x.split(" ")[1]))].sort(), ["activate", "doc-download", "health", "my-lang", "sso-config"]); ok("il fornitore non raggiunge nessuna operazione dello staff (solo i propri documenti)");
 // 4. Ruoli senza permessi di scrittura
 const writable = role => [...new Set(by(role, r => r.method !== "GET" && ![403, 404, 405].includes(r.status)))].sort();
 const base = ["POST activate"];

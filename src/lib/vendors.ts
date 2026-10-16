@@ -1,5 +1,6 @@
 import type { Supplier, SupplierStatus } from "../types.ts";
 import { C } from "../theme.ts";
+import { locale } from "../i18n/index.ts";
 
 export const STATUS_STYLE: Record<SupplierStatus, { label: string; color: string; bg: string }> = {
   invited: { label: "Invitato", color: C.gray, bg: C.grayBg },
@@ -13,7 +14,7 @@ export const STATUS_STYLE: Record<SupplierStatus, { label: string; color: string
 
 export const fmtSize = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
 
-export const supplierTimeline = (s: Supplier) => s.events.map(e => ({ ts: new Date(e.at).toLocaleString("it-IT", { dateStyle: "medium", timeStyle: "short" }), user: e.actor, action: e.action, detail: e.detail }));
+export const supplierTimeline = (s: Supplier) => s.events.map(e => ({ ts: new Date(e.at).toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" }), user: e.actor, action: e.action, detail: e.detail }));
 
 
 export const LIFECYCLE_STYLE = {

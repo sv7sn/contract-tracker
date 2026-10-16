@@ -266,6 +266,14 @@ async function handle(request: Request): Promise<Response> {
       if (op === "readiness") return json({ checks: await readiness(u) });
       return new Response(await securityCsv(u), { headers: { ...noStore, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="eventi-sicurezza.csv"' } });
     }
+    // ── Lingua dell'interfaccia e delle email (ogni utente, fornitori compresi) ──
+    if (op === "my-lang" && method === "POST") {
+      const u = await requireUser(request);
+      const { lang } = (await readJson(request)) as { lang?: unknown };
+      if (lang !== "it" && lang !== "en") throw new HttpError(400, "Lingua non supportata");
+      await getPool().query("update users set lang = $1 where id = $2", [lang, u.id]);
+      return json({ lang });
+    }
     // ── "Esci da tutti i dispositivi": chiude tutte le sessioni dell'utente, tranne questa ──
     if (op === "sessions-revoke" && method === "POST") {
       const u = await requireUser(request);
