@@ -333,10 +333,12 @@ export default function App() {
   );
 
   // ─── Navigazione per ruolo ─────────────────────────────────
-  const modules = modulesFor(currentUser, mode === "api");
+  // Amministrazione non compare tra i moduli (Home, barra, schede in basso): si apre dal menu del profilo.
+  const allModules = modulesFor(currentUser, mode === "api");
+  const modules = allModules.filter(m => m.key !== "admin");
   const hubAvailable = mode === "api" && currentUser.role !== "bo" && !REVIEWER_ROLES.includes(currentUser.role);
   const curModule = moduleOfView(view, currentUser.role);
-  const activeModule = modules.find(m => m.key === curModule);
+  const activeModule = allModules.find(m => m.key === curModule);
   const navItems = activeModule?.pages ?? [];
   const inContracts = curModule === "contracts" && view !== "clauses";
   const titles: Record<View, string> = { clauses: t("Libreria clausole"), reviews: t("Revisioni"), dashboard: t("Panoramica"), list: t("Contratti"), planning: currentUser.role === "manager" ? t("Piano del team") : t("Il mio piano"), team: t("Vista team"), notifiche: t("Avvisi di scadenza"), bo: t("Le mie richieste"), users: t("Utenti e permessi"), vendors: t("Fornitori"), expiries: t("Scadenze documenti"), tasks: t("Task"), kpi: t("Indicatori di processo"), budget: t("Master Plan"), spend: t("Spesa"), requests: t("Le mie RDA e i miei contratti"), hub: t("Home"), config: t("Configurazione"), supplier: t("Area fornitore"), detail: selected?.supplier ?? "" };

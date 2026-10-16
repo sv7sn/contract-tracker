@@ -44,7 +44,7 @@ export function modulesFor(user: User, apiMode: boolean): ModuleDef[] {
   if (apiMode && user.role === "manager") {
     mods.push({ key: "admin", label: t("Amministrazione"), description: t("Utenti, documenti richiesti, reminder e parametri SAP"), icon: s => <ShieldCheck size={s} />, pages: [page("config", t("Configurazione"), <SlidersHorizontal size={19} />), page("users", t("Utenti"), <ShieldCheck size={19} />)] });
   }
-  // Ordine nel menu e nella Home: Task, Contratti, Fornitori, Indicatori, Amministrazione.
+  // Ordine nel menu e nella Home: Task, Contratti, Fornitori, Indicatori. Amministrazione si apre dal menu del profilo.
   const order: ModuleKey[] = ["reviews", "tasks", "contracts", "vendors", "budget", "spend", "kpi", "admin"];
   return mods.sort((a, b) => order.indexOf(a.key) - order.indexOf(b.key));
 }
