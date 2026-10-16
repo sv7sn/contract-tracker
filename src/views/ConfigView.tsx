@@ -79,7 +79,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
   );
 
   return (
-    <div style={{ display: "grid", gap: 14, maxWidth: 920 }}>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14, maxWidth: 920 }}>
       <div><div style={{ ...font, fontSize: 18, fontWeight: 700, color: C.text }}>{t("Configurazione portale fornitori")}</div><div style={{ ...sans, fontSize: 12, color: C.muted }}>{t("Anagrafiche di supporto e parametri usati per creare i fornitori in SAP.")}</div></div>
       {noRec.length > 0 && <Notice kind="warn"><b>{t("Parametri SAP incompleti.")}</b> {t("Indica il conto di riconciliazione per: {groups}. Senza, il Finance non potrà registrare quei fornitori.", { groups: noRec.map(([g, l]) => `${g} (${t(l)})`).join(", ") })}</Notice>}
 
