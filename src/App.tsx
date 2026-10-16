@@ -2,23 +2,21 @@ import { useEffect, useRef, useState } from "react";
 import type { AppState, AuditEntry, CommitPayload, Contract, ContractData, NewUserInput, PlanStep, Role, User, View } from "./types.ts";
 import { api, ApiError, portalApi } from "./api.ts";
 import { C, font, iStyle, ROLE_LABELS, sans, shadow } from "./theme.ts";
-import { fmtDate, keyDate, tsNow } from "./lib/format.ts";
+import { fmtDate, keyDate, tsNow, urgency } from "./lib/format.ts";
 import { clearLocal, DEMO_PASSWORD, DEMO_USERS, demoState, loadLocal, saveLocal } from "./lib/demo.ts";
 import { makePlan, RENEWAL_BY_DECISION, reschedulePlan, stepTemplate } from "./lib/plan.ts";
 import { canCreateContract, canManageUsers } from "./permissions.ts";
 import { Avatar, BrandMark } from "./components/ui.tsx";
-import { AlertTriangle, CheckCircle2, ChevronLeft, House, LayoutGrid, Loader2, Plus, Search, Settings } from "./components/icons.tsx";
+import { AlertTriangle, CheckCircle2, ChevronLeft, Loader2, Plus, Search, Settings } from "./components/icons.tsx";
 import { InviteLanding } from "./components/InviteLanding.tsx";
 import { LoginScreen } from "./components/LoginScreen.tsx";
 import { BOFormModal, ContractForm } from "./components/Modals.tsx";
 import { AccountMenu } from "./components/AccountMenu.tsx";
 import { getLang, setLang, t } from "./i18n/index.ts";
-import { Dashboard } from "./views/Dashboard.tsx";
 import { ContractList } from "./views/ContractList.tsx";
 import { ContractDetail } from "./views/ContractDetail.tsx";
 import { TeamView } from "./views/TeamView.tsx";
 import { BOView } from "./views/BOView.tsx";
-import { AlertsView } from "./views/AlertsView.tsx";
 import { UsersView } from "./views/UsersView.tsx";
 import { SupplierPortal } from "./views/SupplierPortal.tsx";
 import { VendorsView } from "./views/VendorsView.tsx";
@@ -29,15 +27,15 @@ import { KpiView } from "./views/KpiView.tsx";
 import { teamSummary } from "./lib/plan.ts";
 import { BudgetView } from "./views/BudgetView.tsx";
 import { SpendView } from "./views/SpendView.tsx";
-import { HubView } from "./views/HubView.tsx";
 import { RequestsView } from "./views/RequestsView.tsx";
 import { ClausesView } from "./views/ClausesView.tsx";
 import { ReviewsView } from "./views/ReviewsView.tsx";
-import { moduleOfView, modulesFor } from "./lib/modules.tsx";
+import { navTabsFor, tabOfView } from "./lib/modules.tsx";
 
 type Mode = "loading" | "api" | "local";
 const REVIEWER_ROLES = ["legal", "compliance", "itsec"];
-const homeFor = (u: User, apiMode: boolean): View => (REVIEWER_ROLES.includes(u.role) ? "reviews" : u.role === "bo" ? "bo" : u.role === "supplier" ? "supplier" : !apiMode ? "dashboard" : "hub");
+/** Pagina d'arrivo dopo l'accesso: la prima voce della navigazione del ruolo (per Manager e Buyer i Task, il lavoro di oggi). */
+const homeFor = (u: User, apiMode: boolean): View => (u.role === "supplier" ? "supplier" : navTabsFor(u, apiMode)[0]?.key ?? "list");
 /** Ruoli che non lavorano sui contratti: non serve caricarli. */
 const hasContracts = (u: User) => u.role !== "supplier" && u.role !== "finance" && !REVIEWER_ROLES.includes(u.role);
 const EMPTY: AppState = { contracts: [], plans: {}, auditLogs: {} };
@@ -47,7 +45,7 @@ export default function App() {
   const [setupRequired, setSetupRequired] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [view, setView] = useState<View>("dashboard");
+  const [view, setView] = useState<View>("list");
   /** Pratica o fornitore da aprire subito dopo un clic su "Da fare adesso". */
   const [focus, setFocus] = useState<{ taskId?: number; vendorId?: number } | null>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -60,7 +58,7 @@ export default function App() {
   const [boFormContract, setBOFormContract] = useState<Contract | null>(null);
   const [showAccount, setShowAccount] = useState(false);
   const [listSearch, setListSearch] = useState("");
-  const [showModules, setShowModules] = useState(false);
+  const [badges, setBadges] = useState<{ tasks?: number; vendors?: number }>({});
   const [reviewFocus, setReviewFocus] = useState<number | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(() => new URLSearchParams(window.location.search).get("invite"));
 
@@ -70,7 +68,7 @@ export default function App() {
   const showToast = (msg: string) => { clearTimeout(toastTimer.current); setToast(msg); toastTimer.current = setTimeout(() => setToast(null), 3500); };
   useEffect(() => () => clearTimeout(toastTimer.current), []);
 
-  const resetSession = () => { setCurrentUser(null); setShowAccount(false); setShowForm(false); setEditingContract(null); setBOFormContract(null); setSelectedId(null); setView("dashboard"); if (mode === "api") { setData(EMPTY); setUsers([]); } };
+  const resetSession = () => { setCurrentUser(null); setShowAccount(false); setShowForm(false); setEditingContract(null); setBOFormContract(null); setSelectedId(null); setView("list"); if (mode === "api") { setData(EMPTY); setUsers([]); } };
   /** Link delle email (?review=ID per le funzioni, ?task=ID per il buyer): apre direttamente la bozza o il task. */
   const applyDeepLink = (user: User) => {
     const q = new URLSearchParams(window.location.search), rv = Number(q.get("review")), tk = Number(q.get("task"));
@@ -288,6 +286,20 @@ export default function App() {
     </div>
   );
 
+  // Pallini sulla barra: task in ritardo e fornitori da verificare (o da registrare, per il Finance). Si aggiornano cambiando pagina.
+  const badgeRole = currentUser?.role;
+  useEffect(() => {
+    if (mode !== "api" || !badgeRole || !["manager", "buyer", "finance"].includes(badgeRole)) return;
+    let off = false;
+    const staff = badgeRole === "manager" || badgeRole === "buyer";
+    Promise.allSettled([staff ? portalApi.taskSummary() : Promise.reject(), portalApi.vendors()]).then(([tk, v]) => {
+      if (off) return;
+      const mine = badgeRole === "finance" ? "approved" : "pending";
+      setBadges({ tasks: tk.status === "fulfilled" ? tk.value.overdue : undefined, vendors: v.status === "fulfilled" ? v.value.filter(x => x.status === mine).length : undefined });
+    });
+    return () => { off = true; };
+  }, [mode, badgeRole, view]);
+
   if (mode === "loading") return (
     <div style={{ ...sans, minHeight: "100vh", background: C.navy, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, color: "rgba(255,255,255,.7)", fontSize: 13.5 }}>
       <BrandMark size={52} /><Loader2 className="spin" size={22} /><span>{t("Caricamento…")}</span>
@@ -333,29 +345,33 @@ export default function App() {
   );
 
   // ─── Navigazione per ruolo ─────────────────────────────────
-  // Amministrazione non compare tra i moduli (Home, barra, schede in basso): si apre dal menu del profilo.
-  const allModules = modulesFor(currentUser, mode === "api");
-  const modules = allModules.filter(m => m.key !== "admin");
-  const hubAvailable = mode === "api" && currentUser.role !== "bo" && !REVIEWER_ROLES.includes(currentUser.role);
-  const curModule = moduleOfView(view, currentUser.role);
-  const activeModule = allModules.find(m => m.key === curModule);
-  const navItems = activeModule?.pages ?? [];
-  const inContracts = curModule === "contracts" && view !== "clauses";
-  const titles: Record<View, string> = { clauses: t("Libreria clausole"), reviews: t("Revisioni"), dashboard: t("Panoramica"), list: t("Contratti"), planning: currentUser.role === "manager" ? t("Piano del team") : t("Il mio piano"), team: t("Vista team"), notifiche: t("Avvisi di scadenza"), bo: t("Le mie richieste"), users: t("Utenti e permessi"), vendors: t("Fornitori"), expiries: t("Scadenze documenti"), tasks: t("Task"), kpi: t("Indicatori di processo"), budget: t("Master Plan"), spend: t("Spesa"), requests: t("Le mie RDA e i miei contratti"), hub: t("Home"), config: t("Configurazione"), supplier: t("Area fornitore"), detail: selected?.supplier ?? "" };
-  const eyebrow = curModule === "hub" ? "Procurement Lab" : activeModule?.label ?? t(ROLE_LABELS[currentUser.role]);
-  const activeNav = view === "detail" ? "list" : view;
-  const goModule = (m: { pages: { key: View }[] }) => { setView(m.pages[0].key); setShowModules(false); };
-  const sideBtn = (label: string, icon: React.ReactNode, on: boolean, click: () => void, sub = false) => (
-    <button key={label} onClick={click} aria-current={on ? "page" : undefined} style={{ ...sans, position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: sub ? "8px 12px 8px 14px" : "10px 12px", marginBottom: 3, border: "none", borderRadius: 10, cursor: "pointer", fontSize: sub ? 13.5 : 14, fontWeight: on ? 650 : 500, background: on ? "rgba(255,255,255,.1)" : "transparent", color: on ? "#fff" : "rgba(255,255,255,.66)", textAlign: "left" }}>
+  // Una pagina per voce, al massimo cinque voci: le stesse nella barra laterale (PC) e nella barra fissa in basso (telefono).
+  // Indicatori e Amministrazione (solo Manager) si aprono dal menu del profilo.
+  const tabs = navTabsFor(currentUser, mode === "api");
+  const activeTab = tabOfView(view, currentUser.role);
+  const inContracts = view === "list" || view === "detail";
+  const titles: Record<View, string> = { clauses: t("Libreria clausole"), reviews: t("Revisioni"), dashboard: t("Contratti"), list: t("Contratti"), planning: t("Contratti"), team: t("Contratti"), notifiche: t("Contratti"), bo: t("Le mie richieste"), users: t("Utenti e permessi"), vendors: t("Fornitori"), expiries: t("Scadenze documenti"), tasks: t("Task"), kpi: t("Indicatori di processo"), budget: t("Master Plan"), spend: t("Spesa"), requests: t("Le mie RDA e i miei contratti"), hub: t("Task"), config: t("Configurazione"), supplier: t("Area fornitore"), detail: selected?.supplier ?? "" };
+  const eyebrow = view === "config" || view === "users" ? t("Amministrazione") : view === "kpi" ? t("Indicatori") : view === "detail" ? t("Contratti") : view === "clauses" && activeTab === "list" ? t("Contratti") : "";
+  const urgentContracts = contracts.filter(c => !c.ceased && urgency(c) === "red").length;
+  const badgeOf = (b?: string) => (b === "tasks" ? badges.tasks : b === "vendors" ? badges.vendors : b === "contracts" && currentUser.role !== "bo" ? urgentContracts : undefined) || 0;
+  const dot = (n: number, side: boolean) => n > 0 && <span className="tabular" aria-label={t("{n} da guardare", { n })} style={{ ...sans, position: side ? "static" : "absolute", top: -4, right: -9, marginLeft: side ? "auto" : 0, minWidth: 18, height: 18, padding: "0 5px", boxSizing: "border-box", borderRadius: 9, background: C.red, color: "#fff", fontSize: 10.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{n > 99 ? "99+" : n}</span>;
+  const sideBtn = (key: string, label: string, icon: React.ReactNode, on: boolean, click: () => void, badge = 0) => (
+    <button key={key} onClick={click} aria-current={on ? "page" : undefined} style={{ ...sans, position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 12px", marginBottom: 3, border: "none", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: on ? 650 : 500, background: on ? "rgba(255,255,255,.1)" : "transparent", color: on ? "#fff" : "rgba(255,255,255,.66)", textAlign: "left" }}>
       {on && <span aria-hidden style={{ position: "absolute", left: -14, top: 8, bottom: 8, width: 4, borderRadius: "0 4px 4px 0", background: C.accent }} />}
-      <span style={{ display: "flex", color: on ? "#fff" : "rgba(255,255,255,.55)" }}>{icon}</span>{label}
+      <span style={{ display: "flex", color: on ? "#fff" : "rgba(255,255,255,.55)" }}>{icon}</span>{label}{dot(badge, true)}
     </button>
   );
-  const tabBtn = (label: string, icon: React.ReactNode, on: boolean, click: () => void) => (
-    <button key={label} onClick={click} aria-current={on ? "page" : undefined} style={{ flex: "1 0 66px", background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: on ? C.accent : C.subtle, padding: "2px 0" }}>
-      {icon}
-      <span style={{ ...sans, fontSize: 10, color: on ? C.accent : C.muted, fontWeight: on ? 650 : 500 }}>{label}</span>
+  const tabBtn = (key: string, label: string, icon: React.ReactNode, on: boolean, click: () => void, badge = 0) => (
+    <button key={key} onClick={click} aria-current={on ? "page" : undefined} style={{ flex: "1 1 0", minWidth: 0, background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: on ? C.accent : C.subtle, padding: "2px 0" }}>
+      <span style={{ position: "relative", display: "flex" }}>{icon}{dot(badge, false)}</span>
+      <span style={{ ...sans, fontSize: 10.5, color: on ? C.accent : C.muted, fontWeight: on ? 650 : 500, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
     </button>
+  );
+  /** Due pagine dello stesso argomento nella stessa voce (Fornitori/Scadenze documenti, Configurazione/Utenti): si passa dall'una all'altra senza lasciare la voce. */
+  const subTabs = (items: [View, string][]) => (
+    <div role="tablist" style={{ display: "inline-flex", gap: 2, background: "#e9ecf2", borderRadius: 12, padding: 3, marginBottom: 16 }}>
+      {items.map(([k, l]) => <button key={k} role="tab" aria-selected={view === k} onClick={() => setView(k)} style={{ ...sans, padding: "8px 14px", border: "none", borderRadius: 9, background: view === k ? "#fff" : "transparent", boxShadow: view === k ? shadow.sm : "none", color: view === k ? C.text : C.muted, fontWeight: view === k ? 650 : 500, fontSize: 13, cursor: "pointer" }}>{l}</button>)}
+    </div>
   );
 
   return (
@@ -366,17 +382,7 @@ export default function App() {
           <BrandMark size={38} />
           <div><div style={{ ...font, fontSize: 16, fontWeight: 700, color: "#fff" }}>Procurement Lab</div><div style={{ fontSize: 11, color: "rgba(255,255,255,.45)" }}>Indirect</div></div>
         </div>
-        {(hubAvailable || modules.length > 1) && (<>
-          <div style={{ fontSize: 10.5, fontWeight: 650, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.35)", padding: "0 12px 8px" }}>{t("Moduli")}</div>
-          <nav aria-label={t("Moduli")} style={{ marginBottom: 14 }}>
-            {hubAvailable && sideBtn(t("Home"), <House size={19} />, curModule === "hub", () => setView("hub"))}
-            {modules.map(m => sideBtn(m.label, m.icon(19), curModule === m.key, () => goModule(m)))}
-          </nav>
-        </>)}
-        {navItems.length > 1 && (<>
-          <div style={{ fontSize: 10.5, fontWeight: 650, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.35)", padding: "6px 12px 8px", borderTop: "1px solid rgba(255,255,255,.08)" }}>{activeModule?.label}</div>
-          <nav aria-label={t("Pagine del modulo")}>{navItems.map(n => sideBtn(n.label, n.icon, activeNav === n.key, () => setView(n.key), true))}</nav>
-        </>)}
+        {tabs.length > 1 && <nav aria-label={t("Menu principale")}>{tabs.map(x => sideBtn(x.key, x.label, x.icon(19), activeTab === x.key, () => setView(x.key), badgeOf(x.badge)))}</nav>}
         <div style={{ flex: 1 }} />
         <button onClick={() => setShowAccount(true)} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, background: "rgba(255,255,255,.06)", cursor: "pointer", textAlign: "left", width: "100%" }}>
           <Avatar name={currentUser.name} size={36} />
@@ -388,7 +394,7 @@ export default function App() {
       <div className="main-col">
         <header className="topbar">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {view === "detail" && <button className="topbar-back" onClick={() => setView("list")} aria-label={t("Torna alla lista")} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}><ChevronLeft size={22} /></button>}
+            {(view === "detail" || (view === "clauses" && activeTab === "list")) && <button className="topbar-back" onClick={() => setView("list")} aria-label={t("Torna alla lista")} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}><ChevronLeft size={22} /></button>}
             <div style={{ flex: 1, minWidth: 0 }}>
               {eyebrow !== titles[view] && <div className="topbar-eyebrow">{eyebrow}</div>}
               <div className="topbar-title">{titles[view]}</div>
@@ -417,16 +423,15 @@ export default function App() {
         )}
 
         <main className="page">
-          {view === "dashboard" && <Dashboard contracts={contracts} plans={plans} currentUser={currentUser} onNew={openNew} onNavigate={(v, c) => { setView(v); if (c) setSelectedId(c.id); }} />}
-          {view === "list" && <ContractList contracts={contracts} currentUser={currentUser} search={listSearch} onSearch={setListSearch} onSelect={openDetail} onNew={openNew} />}
+          {view === "list" && <ContractList contracts={contracts} plans={plans} currentUser={currentUser} search={listSearch} onSearch={setListSearch} onSelect={openDetail} onNew={openNew} onOpenClauses={mode === "api" && (currentUser.role === "manager" || currentUser.role === "buyer") ? () => setView("clauses") : undefined} onOpenKpi={currentUser.role === "manager" && mode === "api" ? () => setView("kpi") : undefined} />}
           {view === "bo" && currentUser.role === "bo" && <BOView contracts={contracts} plans={plans} currentUser={currentUser} onOpenBOForm={setBOFormContract} />}
           {view === "requests" && mode === "api" && currentUser.role === "bo" && <RequestsView currentUser={currentUser} contracts={contracts} onOpenBOForm={setBOFormContract} onOpenContract={openDetail} onSessionExpired={sessionExpired} />}
           {view === "reviews" && mode === "api" && (REVIEWER_ROLES.includes(currentUser.role) || currentUser.role === "bo") && <ReviewsView currentUser={currentUser} initialOpenId={reviewFocus} onSessionExpired={sessionExpired} />}
           {view === "clauses" && mode === "api" && ["manager", "buyer", "legal", "compliance", "itsec"].includes(currentUser.role) && <ClausesView currentUser={currentUser} onSessionExpired={sessionExpired} />}
-          {view === "notifiche" && currentUser.role !== "bo" && <AlertsView contracts={contracts} users={users} />}
+          {(view === "config" || view === "users") && currentUser.role === "manager" && mode === "api" && subTabs([["config", t("Configurazione")], ["users", t("Utenti")]])}
           {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} onPurge={handlePurge} />}
-          {view === "hub" && hubAvailable && <HubView user={currentUser} modules={modules} contracts={contracts} plans={plans} onOpen={(v, f) => { if (f?.contractId) { setSelectedId(f.contractId); setView("detail"); return; } setFocus(f?.taskId || f?.vendorId ? f : null); setView(v); }} />}
           {view === "tasks" && mode === "api" && (currentUser.role === "manager" || currentUser.role === "buyer") && <TasksView onUpdateStepDate={handleUpdateStepDate} initialOpenId={focus?.taskId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} contracts={contracts} plans={plans} onCompleteStep={handleCompleteStep} onSendBO={handleSendBO} onOpenContract={openDetail} notify={showToast} onSessionExpired={sessionExpired} />}
+          {(view === "vendors" || view === "expiries") && mode === "api" && subTabs([["vendors", t("Fornitori")], ["expiries", t("Scadenze documenti")]])}
           {view === "vendors" && mode === "api" && <VendorsView initialOpenId={focus?.vendorId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "expiries" && mode === "api" && <ExpiryView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "budget" && mode === "api" && ["manager", "buyer", "finance", "viewer"].includes(currentUser.role) && <BudgetView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
@@ -439,28 +444,15 @@ export default function App() {
 
       {view === "list" && canCreateContract(currentUser) && <button className="fab" onClick={openNew} aria-label={t("Nuovo contratto")}><Plus size={26} /></button>}
 
-      {view !== "detail" && (
+      {tabs.length > 1 && (
         <nav className="bottom-nav" aria-label={t("Navigazione")}>
-          {hubAvailable && curModule !== "hub" && tabBtn(t("Home"), <House size={19} />, false, () => setView("hub"))}
-          {curModule === "hub" ? modules.map(m => tabBtn(m.label, m.icon(19), false, () => goModule(m))) : navItems.map(n => tabBtn(n.label, n.icon, activeNav === n.key, () => setView(n.key)))}
-          {(hubAvailable || modules.length > 1) && curModule !== "hub" && tabBtn(t("Moduli"), <LayoutGrid size={19} />, false, () => setShowModules(true))}
+          {tabs.map(x => tabBtn(x.key, x.label, x.icon(21), activeTab === x.key, () => setView(x.key), badgeOf(x.badge)))}
         </nav>
-      )}
-      {showModules && (
-        <div className="sheet-overlay" role="dialog" aria-modal="true" aria-label={t("Moduli")} onClick={e => { if (e.target === e.currentTarget) setShowModules(false); }}>
-          <div className="sheet" style={{ maxWidth: 420 }}>
-            <div style={{ ...font, fontSize: 17, fontWeight: 700, marginBottom: 12 }}>{t("Vai a")}</div>
-            <div style={{ display: "grid", gap: 8 }}>
-              {hubAvailable && <button onClick={() => { setView("hub"); setShowModules(false); }} style={{ ...sans, display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, border: `1px solid ${C.border}`, background: "#fff", cursor: "pointer", fontSize: 14.5, fontWeight: 600, textAlign: "left" }}><House size={20} />{t("Home")}</button>}
-              {modules.map(m => <button key={m.key} onClick={() => goModule(m)} style={{ ...sans, display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, border: `1px solid ${curModule === m.key ? C.accent : C.border}`, background: curModule === m.key ? C.accentLight : "#fff", cursor: "pointer", fontSize: 14.5, fontWeight: 600, textAlign: "left" }}>{m.icon(20)}{m.label}</button>)}
-            </div>
-          </div>
-        </div>
       )}
 
       {showForm && <ContractForm initial={editingContract} currentUser={currentUser} users={users} canUpload={mode === "api"} onSave={handleSave} onClose={() => { setShowForm(false); setEditingContract(null); }} />}
       {boFormContract && <BOFormModal contract={boFormContract} currentUser={currentUser} onSubmit={handleBOResponse} onClose={() => setBOFormContract(null)} />}
-      {showAccount && <AccountMenu user={currentUser} anchor="sidebar" canChangePassword={mode === "api"} onAdmin={currentUser.role === "manager" ? () => setView("config") : undefined} onProfileSaved={patch => setCurrentUser(u => (u ? { ...u, ...patch } : u))} onLogout={handleLogout} onClose={() => setShowAccount(false)} />}
+      {showAccount && <AccountMenu user={currentUser} anchor="sidebar" canChangePassword={mode === "api"} onAdmin={currentUser.role === "manager" ? () => setView("config") : undefined} onKpi={currentUser.role === "manager" && mode === "api" ? () => setView("kpi") : undefined} onProfileSaved={patch => setCurrentUser(u => (u ? { ...u, ...patch } : u))} onLogout={handleLogout} onClose={() => setShowAccount(false)} />}
       {toastEl}
     </div>
   );

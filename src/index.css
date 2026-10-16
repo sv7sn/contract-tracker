@@ -116,3 +116,13 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
   .account-overlay { background: rgba(16,24,43,.45); }
   .account-menu, .account-menu-sidebar, .account-menu-top { left: 0; right: 0; top: auto; bottom: 0; width: 100%; max-width: none; border-radius: 18px 18px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
 }
+
+/* Telefono: i riquadri con i numeri stanno due per riga e più compatti, così la lista compare subito */
+@media (max-width: 959px) {
+  .auto-grid:has(> .stat-card), .auto-grid:has(> button > .stat-card) { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+  .stat-card { padding: 11px 12px !important; gap: 5px !important; border-radius: 12px !important; }
+  .stat-card .stat-icon { width: 26px !important; height: 26px !important; border-radius: 8px !important; }
+  .stat-card .stat-icon svg { width: 15px; height: 15px; }
+  .stat-card .stat-value { font-size: 21px !important; }
+  .stat-card .stat-sub { font-size: 11px !important; line-height: 1.3; }
+}

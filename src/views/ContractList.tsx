@@ -1,19 +1,20 @@
 import { useMemo, useState } from "react";
-import type { Contract, User } from "../types.ts";
+import type { Contract, Plans, User } from "../types.ts";
+import { ContractSummary, type ContractFilter } from "./Dashboard.tsx";
 import { C, iStyle, radius, sans, shadow, URGENCY_COLORS } from "../theme.ts";
 import { closedLabel, daysToDeadline, expiredWithoutOutcome, fmt, fmtDate, urgency } from "../lib/format.ts";
 import { canCreateContract, canViewTeam } from "../permissions.ts";
 import { Avatar, Card, DaysChip, EmptyState, Grid, RenewalBadge } from "../components/ui.tsx";
-import { Archive, FileText, LayoutGrid, Paperclip, Plus, Rows3, Search } from "../components/icons.tsx";
+import { Archive, BookOpen, FileText, LayoutGrid, Paperclip, Plus, Rows3, Search, X } from "../components/icons.tsx";
 import { t } from "../i18n/index.ts";
 
 const VIEW_KEY = "contract-tracker:list-view";
 const readView = (): "cards" | "table" => { try { return localStorage.getItem(VIEW_KEY) === "cards" ? "cards" : "table"; } catch { return "table"; } };
 
-interface Props { contracts: Contract[]; currentUser: User; search: string; onSearch: (s: string) => void; onSelect: (c: Contract) => void; onNew: () => void }
+interface Props { contracts: Contract[]; plans: Plans; currentUser: User; search: string; onSearch: (s: string) => void; onSelect: (c: Contract) => void; onNew: () => void; onOpenClauses?: () => void; onOpenKpi?: () => void }
 
-export function ContractList({ contracts, currentUser, search, onSearch, onSelect, onNew }: Props) {
-  const [filter, setFilter] = useState("Tutti"); const [showArchive, setShowArchive] = useState(false); const [sort, setSort] = useState("expiry");
+export function ContractList({ contracts, plans, currentUser, search, onSearch, onSelect, onNew, onOpenClauses, onOpenKpi }: Props) {
+  const [filter, setFilter] = useState<ContractFilter>("Tutti"); const [showArchive, setShowArchive] = useState(false); const [sort, setSort] = useState("expiry");
   const [layout, setLayout] = useState<"cards" | "table">(readView);
   const setLayoutSaved = (l: "cards" | "table") => { setLayout(l); try { localStorage.setItem(VIEW_KEY, l); } catch { /* ignore */ } };
   const showOwner = canViewTeam(currentUser);
@@ -21,19 +22,18 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
   const filtered = useMemo(() => {
     let list = showArchive ? contracts.filter(c => c.ceased) : contracts.filter(c => !c.ceased);
     if (search) list = list.filter(c => `${c.supplier} ${c.object} ${c.owner} ${c.category}`.toLowerCase().includes(search.toLowerCase()));
-    if (!showArchive) { if (filter === "Urgenti") list = list.filter(c => urgency(c) === "red"); else if (filter === "In scadenza") list = list.filter(c => urgency(c) === "yellow"); else if (filter === "Regolari") list = list.filter(c => urgency(c) === "green"); }
+    if (!showArchive) { if (filter === "Urgenti") list = list.filter(c => urgency(c) === "red"); else if (filter === "In scadenza") list = list.filter(c => urgency(c) === "yellow"); else if (filter === "In attesa del BO") list = list.filter(c => (plans[c.id] || []).some(s => s.status === "pending_bo")); else if (filter === "Regolari") list = list.filter(c => urgency(c) === "green"); }
     list = [...list];
     if (sort === "expiry") list.sort((a, b) => daysToDeadline(a) - daysToDeadline(b)); else if (sort === "value") list.sort((a, b) => b.value - a.value); else list.sort((a, b) => a.supplier.localeCompare(b.supplier));
     return list;
-  }, [contracts, search, filter, sort, showArchive]);
+  }, [contracts, plans, search, filter, sort, showArchive]);
 
-  const count = (f: (c: Contract) => boolean) => contracts.filter(c => !c.ceased && f(c)).length;
-  const filters: [string, number][] = [["Tutti", count(() => true)], ["Urgenti", count(c => urgency(c) === "red")], ["In scadenza", count(c => urgency(c) === "yellow")], ["Regolari", count(c => urgency(c) === "green")]];
   const seg = (active: boolean): React.CSSProperties => ({ ...sans, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "8px 14px", border: "none", borderRadius: 9, background: active ? "#fff" : "transparent", color: active ? C.text : C.muted, cursor: "pointer", fontSize: 13, fontWeight: 600, boxShadow: active ? shadow.sm : "none", whiteSpace: "nowrap" });
   const iconBtn = (active: boolean): React.CSSProperties => ({ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 30, border: "none", borderRadius: 8, background: active ? "#fff" : "transparent", color: active ? C.text : C.subtle, cursor: "pointer", boxShadow: active ? shadow.sm : "none" });
 
   return (
     <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0,1fr)" }}>
+      {!showArchive && <ContractSummary contracts={contracts} plans={plans} currentUser={currentUser} filter={filter} onFilter={setFilter} onOpenKpi={onOpenKpi} />}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
         <div role="tablist" style={{ display: "flex", gap: 2, background: "#e9ecf2", borderRadius: 12, padding: 3 }}>
           <button role="tab" aria-selected={!showArchive} onClick={() => setShowArchive(false)} style={seg(!showArchive)}><FileText size={15} />{t("Attivi")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => !c.ceased).length}</span></button>
@@ -44,6 +44,7 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
           <input value={search} onChange={e => onSearch(e.target.value)} placeholder={t("Cerca fornitore, oggetto, owner…")} aria-label={t("Cerca")} style={{ ...iStyle, padding: "10px 12px 10px 36px" }} />
         </div>
         <div style={{ flex: 1 }} />
+        {onOpenClauses && <button onClick={onOpenClauses} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 10, padding: "7px 12px", fontSize: 13, fontWeight: 600, color: C.text, cursor: "pointer" }}><BookOpen size={15} />{t("Libreria clausole")}</button>}
         <select value={sort} onChange={e => setSort(e.target.value)} aria-label={t("Ordina")} style={{ ...iStyle, width: "auto", padding: "8px 10px", fontSize: 13, color: C.muted }}>
           <option value="expiry">{t("Ordina per scadenza")}</option><option value="value">{t("Ordina per valore")}</option><option value="supplier">{t("Ordina per fornitore")}</option>
         </select>
@@ -53,13 +54,10 @@ export function ContractList({ contracts, currentUser, search, onSearch, onSelec
         </div>
       </div>
 
-      {!showArchive && (
-        <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
-          {filters.map(([s, n]) => { const on = filter === s; return (
-            <button key={s} onClick={() => setFilter(s)} aria-pressed={on} style={{ ...sans, display: "flex", alignItems: "center", gap: 7, padding: "6px 13px", borderRadius: 999, border: `1px solid ${on ? C.navy : C.border}`, background: on ? C.navy : "#fff", color: on ? "#fff" : C.muted, cursor: "pointer", fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", flexShrink: 0 }}>
-              {t(s)}<span className="tabular" style={{ fontSize: 11.5, opacity: .75 }}>{n}</span>
-            </button>
-          ); })}
+      {!showArchive && filter !== "Tutti" && (
+        <div style={{ ...sans, display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.muted }}>
+          {t("Filtro")}: <b style={{ color: C.text }}>{t(filter)}</b>
+          <button onClick={() => setFilter("Tutti")} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 4, background: "none", border: `1px solid ${C.border}`, borderRadius: 999, padding: "3px 10px", cursor: "pointer", fontSize: 12, color: C.muted }}><X size={12} />{t("Mostra tutti")}</button>
         </div>
       )}
 

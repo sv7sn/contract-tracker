@@ -1,90 +1,54 @@
-import type { Contract, Plans, User, View } from "../types.ts";
-import { C, font, radius, sans, shadow, URGENCY_COLORS } from "../theme.ts";
-import { daysToDeadline, fmt, fmtCompact, NOW, urgency } from "../lib/format.ts";
+import { useState } from "react";
+import type { Contract, Plans, User } from "../types.ts";
+import { C, radius, sans, shadow } from "../theme.ts";
+import { fmt, fmtCompact, urgency } from "../lib/format.ts";
 import { getSuggestions } from "../lib/plan.ts";
-import { canCreateContract } from "../permissions.ts";
-import { Card, CardTitle, DaysChip, EmptyState, Grid, StatCard } from "../components/ui.tsx";
-import { AlertTriangle, ArrowRight, CalendarClock, FileText, Hourglass, Lightbulb, Plus, Wallet } from "../components/icons.tsx";
+import { Grid, StatCard } from "../components/ui.tsx";
+import { AlertTriangle, CalendarClock, ChevronDown, FileText, Hourglass, Lightbulb, Wallet } from "../components/icons.tsx";
 import { ExpiryColumns, RenewalStack, ValueBars } from "../components/charts.tsx";
-import { locale, t } from "../i18n/index.ts";
+import { t } from "../i18n/index.ts";
 
-const greeting = () => { const h = new Date().getHours(); return h < 13 ? t("Buongiorno") : h < 18 ? t("Buon pomeriggio") : t("Buonasera"); };
+export type ContractFilter = "Tutti" | "Urgenti" | "In scadenza" | "Regolari" | "In attesa del BO";
+const CHARTS_KEY = "pl-contracts-charts";
 
-export function Dashboard({ contracts, plans, currentUser, onNavigate, onNew }: { contracts: Contract[]; plans: Plans; currentUser: User; onNavigate: (v: View, c?: Contract) => void; onNew: () => void }) {
+/** Riepilogo in cima alla pagina Contratti: riquadri che filtrano l'elenco e, a richiesta, i grafici di scadenze, rinnovi e valore. */
+export function ContractSummary({ contracts, plans, currentUser, filter, onFilter, onOpenKpi }: {
+  contracts: Contract[]; plans: Plans; currentUser: User; filter: ContractFilter; onFilter: (f: ContractFilter) => void; onOpenKpi?: () => void;
+}) {
+  const [charts, setCharts] = useState(() => { try { return localStorage.getItem(CHARTS_KEY) === "1"; } catch { return false; } });
+  const toggleCharts = () => setCharts(o => { try { localStorage.setItem(CHARTS_KEY, o ? "0" : "1"); } catch { /* preferenza solo locale */ } return !o; });
   const mine = contracts.filter(c => !c.ceased);
   const totalEUR = mine.filter(c => c.currency === "EUR").reduce((a, c) => a + c.value, 0);
-  const urgent = [...mine].filter(c => urgency(c) !== "green").sort((a, b) => daysToDeadline(a) - daysToDeadline(b)).slice(0, 6);
   const isManager = currentUser.role === "manager";
-  const pendingBO = isManager ? mine.filter(c => (plans[c.id] || []).some(s => s.status === "pending_bo")).length : 0;
+  const pendingBO = mine.filter(c => (plans[c.id] || []).some(s => s.status === "pending_bo")).length;
   const suggestions = isManager ? getSuggestions(contracts, plans) : [];
-  const red = mine.filter(c => urgency(c) === "red").length;
-  const yellow = mine.filter(c => urgency(c) === "yellow").length;
-  const first = currentUser.name.split(" ")[0];
-  const today = NOW.toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" });
+  const red = mine.filter(c => urgency(c) === "red").length, yellow = mine.filter(c => urgency(c) === "yellow").length;
+  if (!mine.length) return null;
+  const tile = (f: ContractFilter | null, card: React.ReactNode) => f
+    ? <button onClick={() => onFilter(filter === f ? "Tutti" : f)} aria-pressed={filter === f} style={{ all: "unset", cursor: "pointer", display: "block", borderRadius: radius.lg, outline: filter === f ? `2px solid ${C.accent}` : undefined, outlineOffset: 1 }}>{card}</button>
+    : <div>{card}</div>;
 
   return (
-    <div style={{ display: "grid", gap: 20, gridTemplateColumns: "minmax(0,1fr)" }}>
-      <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ ...sans, fontSize: 12.5, color: C.subtle, textTransform: "capitalize", marginBottom: 2 }}>{today}</div>
-          <h2 style={{ ...font, margin: 0, fontSize: 24, fontWeight: 700, color: C.text }}>{greeting()}, {first}</h2>
-          <p style={{ ...sans, margin: "4px 0 0", fontSize: 14, color: C.muted, maxWidth: 620, lineHeight: 1.5 }}>
-            {mine.length === 0 ? t("Non ci sono ancora contratti: creane uno per iniziare.")
-              : red > 0 ? <>{t("Hai")} <b style={{ color: C.red }}>{red === 1 ? t("1 contratto") : t("{n} contratti", { n: red })}</b> {t("che richiedono attenzione entro 30 giorni")}{pendingBO ? t(", e {n} in attesa della risposta del Business Owner", { n: pendingBO }) : ""}.</>
-              : yellow > 0 ? <>{t("Nessuna scadenza urgente.")} <b>{yellow}</b> {yellow === 1 ? t("contratto scade entro 90 giorni.") : t("contratti scadono entro 90 giorni.")}</>
-              : t("Nessuna scadenza urgente nei prossimi 90 giorni.")}
-          </p>
-        </div>
-        {canCreateContract(currentUser) && <button className="mobile-only" onClick={onNew} style={{ ...sans, display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, fontSize: 13.5, cursor: "pointer", boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={17} />{t("Nuovo contratto")}</button>}
-      </div>
-
-      <Grid min={220} gap={14} fill>
-        <StatCard label={isManager ? t("Contratti attivi") : t("I tuoi contratti")} value={mine.length} color={C.blue} icon={<FileText size={18} />} sub={t("in portafoglio")} />
-        <StatCard label={t("Valore in euro")} value={fmtCompact(totalEUR)} title={fmt(totalEUR)} color={C.accent} icon={<Wallet size={18} />} sub={t("dei contratti attivi")} />
-        <StatCard label={t("Da gestire subito")} value={red} color={C.red} icon={<AlertTriangle size={18} />} sub={t("scaduti o entro 30 giorni")} />
-        {isManager
-          ? <StatCard label={t("In attesa del BO")} value={pendingBO} color={C.yellow} icon={<Hourglass size={18} />} sub={t("decisioni da ricevere")} />
-          : <StatCard label={t("In scadenza")} value={yellow} color={C.yellow} icon={<CalendarClock size={18} />} sub={t("tra 31 e 90 giorni")} />}
+    <div style={{ display: "grid", gap: 12, gridTemplateColumns: "minmax(0,1fr)" }}>
+      <Grid min={200} gap={12} fill>
+        {tile("Urgenti", <StatCard label={t("Da gestire subito")} value={red} color={C.red} icon={<AlertTriangle size={18} />} sub={t("scaduti o entro 30 giorni")} />)}
+        {tile("In scadenza", <StatCard label={t("In scadenza")} value={yellow} color={C.yellow} icon={<CalendarClock size={18} />} sub={t("tra 31 e 90 giorni")} />)}
+        {tile("In attesa del BO", <StatCard label={t("In attesa del BO")} value={pendingBO} color={C.purple} icon={<Hourglass size={18} />} sub={t("decisioni da ricevere")} />)}
+        {tile(null, <StatCard label={t("Valore in euro")} value={fmtCompact(totalEUR)} title={fmt(totalEUR)} color={C.accent} icon={<Wallet size={18} />} sub={t("{n} contratti attivi", { n: mine.length })} />)}
       </Grid>
-
-      {mine.length === 0 ? (
-        <EmptyState title={t("Nessun contratto da mostrare")} text={t("Quando inserirai i primi contratti qui vedrai scadenze, stato dei rinnovi e dove si concentra la spesa.")} action={canCreateContract(currentUser) && <button onClick={onNew} style={{ ...sans, padding: "10px 18px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, cursor: "pointer" }}>{t("Crea il primo contratto")}</button>} />
-      ) : (<>
-        <Grid min={420} gap={14} style={{ alignItems: "stretch" }}>
-          <ExpiryColumns contracts={contracts} />
-          <Card style={{ padding: 18 }}>
-            <CardTitle icon={<AlertTriangle size={16} />} action={<button onClick={() => onNavigate("list")} style={{ ...sans, display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 12.5, fontWeight: 650 }}>{t("Tutti")} <ArrowRight size={14} /></button>}>{t("Priorità immediate")}</CardTitle>
-            {urgent.length === 0 && <p style={{ ...sans, color: C.muted, fontSize: 13, margin: 0 }}>{t("Nessuna urgenza: tutto sotto controllo.")}</p>}
-            {urgent.map((c, i) => { const days = daysToDeadline(c); const u = urgency(c); return (
-              <div key={c.id} onClick={() => onNavigate("detail", c)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") onNavigate("detail", c); }}
-                style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 8px", margin: "0 -8px", borderTop: i ? `1px solid ${C.borderLight}` : "none", cursor: "pointer", borderRadius: 8 }}
-                onMouseEnter={e => e.currentTarget.style.background = "#f7f9fc"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                <span aria-hidden style={{ width: 4, alignSelf: "stretch", borderRadius: 2, background: URGENCY_COLORS[u] }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ ...sans, fontSize: 13.5, fontWeight: 600, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.supplier}</div>
-                  <div style={{ ...sans, fontSize: 12, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.object} · {c.owner}</div>
-                </div>
-                <DaysChip days={days} level={u} />
-              </div>
-            ); })}
-          </Card>
-        </Grid>
-
-        <Grid min={420} gap={14} style={{ alignItems: "stretch" }}>
-          <RenewalStack contracts={contracts} />
-          <ValueBars contracts={contracts} />
-        </Grid>
-
-        {suggestions.length > 0 && (
-          <div style={{ display: "flex", alignItems: "center", gap: 14, background: C.yellowBg, border: "1px solid #f3dca0", borderRadius: radius.lg, padding: "14px 18px", boxShadow: shadow.sm, flexWrap: "wrap" }}>
-            <span aria-hidden style={{ color: C.yellow, display: "flex" }}><Lightbulb size={22} /></span>
-            <div style={{ flex: 1, minWidth: 220 }}>
-              <div style={{ ...sans, fontSize: 13.5, fontWeight: 650, color: C.text }}>{suggestions.length === 1 ? t("1 suggerimento per bilanciare il carico") : t("{n} suggerimenti per bilanciare il carico", { n: suggestions.length })}</div>
-              <div style={{ ...sans, fontSize: 12.5, color: C.muted }}>{t("Alcuni buyer hanno troppe attività nello stesso mese.")}</div>
-            </div>
-            <button onClick={() => onNavigate("kpi")} style={{ ...sans, padding: "8px 14px", background: C.navy, border: "none", borderRadius: 9, color: "#fff", fontWeight: 650, fontSize: 12.5, cursor: "pointer" }}>{t("Apri la vista team")}</button>
-          </div>
-        )}
+      {suggestions.length > 0 && onOpenKpi && (
+        <div style={{ display: "flex", alignItems: "center", gap: 14, background: C.yellowBg, border: "1px solid #f3dca0", borderRadius: radius.lg, padding: "12px 16px", boxShadow: shadow.sm, flexWrap: "wrap" }}>
+          <span aria-hidden style={{ color: C.yellow, display: "flex" }}><Lightbulb size={20} /></span>
+          <div style={{ flex: 1, minWidth: 220, ...sans, fontSize: 13 }}><b>{suggestions.length === 1 ? t("1 suggerimento per bilanciare il carico") : t("{n} suggerimenti per bilanciare il carico", { n: suggestions.length })}</b> · {t("Alcuni buyer hanno troppe attività nello stesso mese.")}</div>
+          <button onClick={onOpenKpi} style={{ ...sans, padding: "7px 13px", background: C.navy, border: "none", borderRadius: 9, color: "#fff", fontWeight: 650, fontSize: 12.5, cursor: "pointer" }}>{t("Vedi il carico del team")}</button>
+        </div>
+      )}
+      <button onClick={toggleCharts} aria-expanded={charts} style={{ ...sans, alignSelf: "start", justifySelf: "start", display: "inline-flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.muted, fontSize: 12.5, fontWeight: 600, cursor: "pointer", padding: "2px 0" }}>
+        <FileText size={14} />{charts ? t("Nascondi i grafici") : t("Mostra i grafici: scadenze, rinnovi, valore")}<ChevronDown size={14} style={{ transform: charts ? "rotate(180deg)" : undefined }} />
+      </button>
+      {charts && (<>
+        <Grid min={420} gap={14} style={{ alignItems: "stretch" }}><ExpiryColumns contracts={contracts} /><RenewalStack contracts={contracts} /></Grid>
+        <ValueBars contracts={contracts} />
       </>)}
     </div>
   );
