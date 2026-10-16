@@ -4,7 +4,7 @@ import { COUNTRIES, countryName } from "../supplierRules.ts";
 import { ApiError, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, sans } from "../theme.ts";
 import { Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
-import { AlertTriangle, Bell, Building2, History, Lock, RotateCcw, ShieldCheck, Inbox, FileCheck2, Loader2, Pencil, Plus, Save, Settings, Sparkles, Trash2, Wallet, FileText, X, ShieldAlert } from "../components/icons.tsx";
+import { AlertTriangle, Bell, Building2, History, Lock, RotateCcw, ShieldCheck, Inbox, FileCheck2, Loader2, Pencil, Plus, Save, Settings, Sparkles, Trash2, Wallet, FileText, X, ShieldAlert, ChevronDown } from "../components/icons.tsx";
 import { Notice, Portal } from "../components/vendorUi.tsx";
 import { CategoriesCard } from "./CategoriesCard.tsx";
 import { ReviewRulesCard } from "./ReviewRulesCard.tsx";
@@ -83,6 +83,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
       <div><div style={{ ...font, fontSize: 18, fontWeight: 700, color: C.text }}>{t("Configurazione portale fornitori")}</div><div style={{ ...sans, fontSize: 12, color: C.muted }}>{t("Anagrafiche di supporto e parametri usati per creare i fornitori in SAP.")}</div></div>
       {noRec.length > 0 && <Notice kind="warn"><b>{t("Parametri SAP incompleti.")}</b> {t("Indica il conto di riconciliazione per: {groups}. Senza, il Finance non potrà registrare quei fornitori.", { groups: noRec.map(([g, l]) => `${g} (${t(l)})`).join(", ") })}</Notice>}
 
+      <ConfigGroup id="suppliers" icon={<Building2 size={18} />} title={t("Anagrafiche per i fornitori")} sub={t("Società del gruppo, codici merceologici, condizioni di pagamento, documenti di qualifica")}>
       <Card>
         <CardTitle icon={<Building2 size={16} />} action={addBtn("company", { code: "", name: "", sapCompanyCode: "", purchOrg: "" }, t("Aggiungi"))}>{t("Società del gruppo")}</CardTitle>
         {cfg.companies.length === 0 && <div style={{ ...sans, fontSize: 13, color: C.muted }}>{t("Nessuna società: aggiungine almeno una per poter invitare fornitori.")}</div>}
@@ -106,6 +107,9 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
         {cfg.docTypes.map(d => row(d.key, d.label, `${d.expires ? t("Con scadenza") : t("Senza scadenza")}${d.multiple ? ` · ${t("più file")}` : ""} — ${cfg.docRules.filter(r => r.docType === d.key).map(ruleText).join(" · ") || t("non richiesto a nessuno")}`, () => setDocDraft({ type: { ...d }, rules: cfg.docRules.filter(r => r.docType === d.key), isNew: false }), () => removeDocType(d)))}
       </Card>
 
+      </ConfigGroup>
+
+      <ConfigGroup id="checks" icon={<ShieldAlert size={18} />} title={t("Controlli e solleciti ai fornitori")} sub={t("Reminder dei documenti, controllo AI, liste sanzioni, verifica periodica del rischio")}>
       <Card>
         <CardTitle icon={<Bell size={16} />}>{t("Reminder di scadenza ai fornitori")}</CardTitle>
         {!cfg.emailConfigured && <Notice kind="warn"><b>{t("Le email non partono ancora.")}</b> {t("Per inviare i reminder serve un provider email: imposta")} <code>RESEND_API_KEY</code> {t("e")} <code>MAIL_FROM</code> {t("su Vercel. Intanto i messaggi vengono solo registrati.")}</Notice>}
@@ -128,6 +132,11 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
           : <Notice kind="info">{t("Non attivo. Il controllo è predisposto: si attiva scegliendo il motore AI con le variabili")} <code>DOC_AI_PROVIDER</code> ({t("es.")} <code>anthropic</code>) {t("e la relativa chiave")} (<code>ANTHROPIC_API_KEY</code>) {t("su Vercel. Prima di attivarlo verifica con l'azienda che i documenti possano essere inviati al servizio scelto.")}</Notice>}
       </Card>
 
+      <SanctionsCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
+      <RiskCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
+      </ConfigGroup>
+
+      <ConfigGroup id="purchasing" icon={<Inbox size={18} />} title={t("Acquisti e task")} sub={t("RDA da SAP, soglie, buyer per gruppo, categorie, avvisi ai Business Owner")}>
       <Card>
         <CardTitle icon={<Inbox size={16} />}>{t("RDA da SAP e task")}</CardTitle>
         <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-6px 0 12px", lineHeight: 1.55 }}>{t("Ogni RDA aperta in SAP diventa un task, assegnato al buyer del suo gruppo di acquisto. Il task si chiude da solo quando la RDA diventa un ordine (PO). I gruppi compaiono qui dopo il primo import dei file di SAP, dalla pagina Task.")}</p>
@@ -168,6 +177,15 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
         {cfg.rda.lastImports.length > 0 && <div style={{ ...sans, fontSize: 12, color: C.subtle, marginTop: 10 }}>{t("Ultimi import:")} {cfg.rda.lastImports.map(i => `${i.kind === "pr" ? t("RDA") : t("Ordini")} ${new Date(i.at).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" })} (${i.by})`).join(" · ")}</div>}
       </Card>
 
+      <CategoriesCard fail={fail} notify={notify} />
+      <BoSettingsCard fail={fail} notify={notify} />
+      </ConfigGroup>
+
+      <ConfigGroup id="contracts" icon={<FileText size={18} />} title={t("Contratti e revisioni")} sub={t("Chi deve rivedere le bozze e quando")}>
+      <ReviewRulesCard fail={fail} notify={notify} />
+      </ConfigGroup>
+
+      <ConfigGroup id="sap" icon={<Settings size={18} />} title={t("Parametri SAP")} sub={t("Valori fissi e conti di riconciliazione per creare i fornitori")} warn={noRec.length > 0}>
       <Card>
         <CardTitle icon={<Settings size={16} />}>{t("Parametri SAP")}</CardTitle>
         <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-6px 0 12px", lineHeight: 1.55 }}>{t("Valori fissi inviati a SAP in fase di creazione. I conti di riconciliazione dipendono dal gruppo conti e vanno confermati con il Finance.")}</p>
@@ -185,16 +203,21 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
         <button onClick={saveSap} disabled={busy} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}{t("Salva parametri SAP")}</button>
       </Card>
 
-      <ReviewRulesCard fail={fail} notify={notify} />
-      <BoSettingsCard fail={fail} notify={notify} />
-      <CategoriesCard fail={fail} notify={notify} />
-      <SanctionsCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
-      <RiskCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
+      </ConfigGroup>
+
+      <ConfigGroup id="security" icon={<Lock size={18} />} title={t("Privacy e sicurezza")} sub={t("Informativa e conservazione dei dati, accessi, stato dell'ambiente")}>
       <PrivacyCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
       <SecurityCard fail={fail} />
+      </ConfigGroup>
+
+      <ConfigGroup id="tools" icon={<RotateCcw size={18} />} title={t("Prove e manutenzione")} sub={t("Accessi di prova, pulizia dei dati")}>
       <TestAccessCard fail={fail} notify={notify} />
       <ResetCard fail={fail} notify={notify} />
+      </ConfigGroup>
+
+      <ConfigGroup id="audit" icon={<History size={18} />} title={t("Registro delle modifiche")} sub={t("Chi ha cambiato cosa e quando")}>
       <AuditCard cfg={cfg} fail={fail} />
+      </ConfigGroup>
 
       {docDraft && <Portal><DocTypeDialog draft={docDraft} cfg={cfg} fail={fail} onClose={() => setDocDraft(null)} onSaved={c => { adopt(c); setDocDraft(null); notify(t("Salvato")); }} /></Portal>}
       {draft && <Portal><ItemDialog draft={draft} cfg={cfg} fail={fail} onClose={() => setDraft(null)} onSaved={c => { adopt(c); setDraft(null); notify(t("Salvato")); }} /></Portal>}
@@ -308,6 +331,26 @@ function PrivacyCard({ cfg, fail, notify, onSaved }: { cfg: PortalConfig; fail: 
       </div>
       <button onClick={save} disabled={busy} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}{t("Salva")}</button>
     </Card>
+  );
+}
+
+/** Sezione della configurazione che si apre con un clic; ricorda quali sezioni l'utente tiene aperte. */
+function ConfigGroup({ id, icon, title, sub, warn, children }: { id: string; icon: React.ReactNode; title: string; sub: string; warn?: boolean; children: React.ReactNode }) {
+  const key = `pl-config-open-${id}`;
+  const [open, setOpen] = useState(() => { try { return localStorage.getItem(key) === "1"; } catch { return false; } } );
+  const toggle = () => setOpen(o => { try { localStorage.setItem(key, o ? "0" : "1"); } catch { /* preferenza solo locale */ } return !o; });
+  return (
+    <section style={{ background: "#fff", border: `1px solid ${warn ? "#f3dca0" : C.border}`, borderRadius: 16, overflow: "hidden" }}>
+      <button type="button" onClick={toggle} aria-expanded={open} style={{ all: "unset", ...sans, boxSizing: "border-box", width: "100%", cursor: "pointer", display: "flex", alignItems: "center", gap: 12, padding: "14px 16px" }}>
+        <span style={{ display: "flex", color: warn ? C.yellow : C.accent, background: warn ? C.yellowBg : C.accentLight, borderRadius: 10, padding: 8 }}>{icon}</span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span style={{ ...font, display: "block", fontSize: 15, fontWeight: 700, color: C.text }}>{title}{warn && <span style={{ ...sans, marginLeft: 8, fontSize: 11.5, fontWeight: 650, color: C.yellow }}>{t("da completare")}</span>}</span>
+          <span style={{ ...sans, display: "block", fontSize: 12.5, color: C.muted, marginTop: 2 }}>{sub}</span>
+        </span>
+        <ChevronDown size={18} color={C.subtle} style={{ transform: open ? "rotate(180deg)" : undefined, transition: "transform .15s", flexShrink: 0 }} />
+      </button>
+      {open && <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 14, padding: "0 14px 14px", background: C.bg, borderTop: `1px solid ${C.borderLight}`, paddingTop: 14 }}>{children}</div>}
+    </section>
   );
 }
 

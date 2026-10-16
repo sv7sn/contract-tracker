@@ -273,6 +273,22 @@ const en: Record<string, string> = {
   "Rischio medio: ogni (giorni)": "Medium risk: every (days)",
   "Rischio basso: ogni (giorni)": "Low risk: every (days)",
   "Massimo fornitori al giorno": "Maximum suppliers per day",
-  "Esegui ora": "Run now"
+  "Esegui ora": "Run now",
+  "Anagrafiche per i fornitori": "Supplier master data",
+  "Società del gruppo, codici merceologici, condizioni di pagamento, documenti di qualifica": "Group companies, commodity codes, payment terms, qualification documents",
+  "Controlli e solleciti ai fornitori": "Supplier checks and reminders",
+  "Reminder dei documenti, controllo AI, liste sanzioni, verifica periodica del rischio": "Document reminders, AI check, sanctions lists, periodic risk check",
+  "Acquisti e task": "Purchasing and tasks",
+  "RDA da SAP, soglie, buyer per gruppo, categorie, avvisi ai Business Owner": "PRs from SAP, thresholds, buyers by group, categories, Business Owner alerts",
+  "Contratti e revisioni": "Contracts and reviews",
+  "Chi deve rivedere le bozze e quando": "Who must review drafts and when",
+  "Valori fissi e conti di riconciliazione per creare i fornitori": "Fixed values and reconciliation accounts for creating suppliers",
+  "Privacy e sicurezza": "Privacy and security",
+  "Informativa e conservazione dei dati, accessi, stato dell'ambiente": "Privacy notice and data retention, sign-ins, environment status",
+  "Prove e manutenzione": "Testing and maintenance",
+  "Accessi di prova, pulizia dei dati": "Test accounts, data clean-up",
+  "Registro delle modifiche": "Change log",
+  "Chi ha cambiato cosa e quando": "Who changed what and when",
+  "da completare": "to complete"
 };
 export default en;
