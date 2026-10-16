@@ -9,7 +9,7 @@ Applicazione web per l'ufficio acquisti (procurement indiretto) che segue una pr
 | Modulo | Funzione |
 |---|---|
 | **Task** | RDA importate da SAP, rinnovi in scadenza, acquisti manuali e attività. Flusso a passaggi, regola di confronto tra fornitori sopra soglia, chiusura automatica all'arrivo del PO, assegnazione del buyer dall'internal order |
-| **Fornitori** | Registrazione da invito, qualifica e scadenza dei documenti, controlli (VIES, GLEIF, liste sanzioni, doppioni, IBAN), blocco/esclusione, valutazione, esportazione e anonimizzazione (GDPR) |
+| **Fornitori** | Registrazione da invito, qualifica e scadenza dei documenti, controlli (VIES, GLEIF, liste sanzioni, doppioni, IBAN), blocco/esclusione, valutazione, esportazione e anonimizzazione (GDPR). **Livello di rischio** (alto/medio/basso, con i motivi) e **verifica periodica automatica**: partita IVA, Registro Imprese e sanzioni si ripetono con frequenza secondo il rischio, con avviso ai buyer se la situazione peggiora |
 | **Contratti** | Registro, scadenze e data limite di disdetta, piano di rinnovo, avvisi al Business Owner, obblighi contrattuali |
 | **CLM** | Bozze in versioni, modelli con questionario, libreria di clausole, confronto versioni, revisione delle funzioni (Richiedente, Legal, Compliance, IT Security) con blocco della firma, trattativa con il fornitore, registro delle azioni |
 | **Budget** | Master Plan per internal order: budget, impegnato (da PO SAP), previsto e impegni futuri dei contratti |
@@ -55,7 +55,7 @@ api/        funzioni e logica; ~7.400 righe. I file con prefisso _ sono moduli, 
   _db.ts      schema, query, validazioni
   _permissions.ts, _auth.ts, _crypto.ts   accesso, sessioni, hash
   _tasks.ts, _task-steps.ts               task e passaggi
-  _portal.ts, _governance.ts, _sanctions.ts, _docs.ts, _rating.ts, _privacy.ts   fornitori
+  _portal.ts, _governance.ts, _sanctions.ts, _docs.ts, _rating.ts, _privacy.ts, _risk.ts   fornitori (rischio e verifica periodica in _risk.ts)
   _budget.ts, _spend.ts, _sap*.ts, _kpi.ts   budget, spesa, SAP, indicatori
   _clm*.ts, _docx.ts, _obligations.ts     CLM e obblighi
 tests/      suite automatiche (vedi §8)
@@ -117,7 +117,7 @@ Hosting attuale: Vercel (funzioni in regione `iad1`, Stati Uniti est) e Neon (Po
 ## 8. Test e qualità
 
 - `npm run lint`, `tsc` e la build passano senza errori; la stessa verifica gira in CI (`.github/workflows/ci.yml`).
-- **35 suite di integrazione, oltre 700 controlli**, che chiamano le funzioni reali contro un Postgres vero (`npm run test:api`, vedi `tests/run.sh`). Coprono permessi per ruolo, flussi dei task, fornitori, budget e spesa, CLM, riservatezza.
+- **36 suite di integrazione, oltre 720 controlli**, che chiamano le funzioni reali contro un Postgres vero (`npm run test:api`, vedi `tests/run.sh`). Coprono permessi per ruolo, flussi dei task, fornitori, budget e spesa, CLM, riservatezza.
 - Upload su Blob, email e controlli esterni sono simulati nei test. Cinque suite (budget, purchase, sourcing, spend, tasks) usano export SAP reali che **non** sono nel repository per riservatezza: partono solo se si fornisce la cartella `SAP_SAMPLES`.
 - `npm run test:i18n` controlla che ogni testo dell'interfaccia e ogni messaggio del server abbia la versione inglese (oltre 2.300 testi).
 - `npm audit` sulle dipendenze di produzione: 0 vulnerabilità note.

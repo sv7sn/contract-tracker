@@ -133,6 +133,8 @@ export interface Supplier {
   /** Solo per lo staff: differenze rispetto ai dati approvati, possibili doppioni e controlli di conformità. */
   changes: FieldChange[]; bankChanged: boolean; bankLetterAfterChange: boolean;
   duplicates: DuplicateMatch[]; compliance: ComplianceCheck[]; complianceCheckedAt: string | null;
+  /** Solo per lo staff: livello di rischio e storico delle verifiche esterne. */
+  risk?: RiskAssessment; riskHistory?: RiskCheckEntry[];
 }
 
 /** Stato operativo del fornitore, indipendente dal flusso di registrazione. */
@@ -143,7 +145,17 @@ export interface FieldChange { field: string; label: string; before: string; aft
 export interface DuplicateMatch { supplierId: number; name: string; status: SupplierStatus; lifecycle: Lifecycle; sapCode: string | null; fields: string[]; severe: boolean; confirmed: boolean }
 export type CheckStatus = "ok" | "warn" | "fail" | "todo" | "na";
 export interface ComplianceCheck { key: string; label: string; status: CheckStatus; detail: string }
-export type SupplierSummary = Omit<Supplier, "documents" | "events" | "data" | "docTypes" | "changes" | "duplicates" | "compliance" | "complianceCheckedAt" | "bankLetterAfterChange"> & { country: string; legalName: string; documentCount: number; duplicate: boolean };
+/** Livello di rischio del fornitore: il peggiore tra le aree controllate ("na" se non ancora registrato o disattivato). */
+export type RiskLevel = "high" | "medium" | "low" | "na";
+export type RiskArea = "lifecycle" | "company" | "vies" | "sanctions" | "documents" | "performance" | "dependency" | "unverified";
+/** Motivo del livello: testo italiano come modello (si traduce nell'interfaccia) e valori a parte. */
+export interface RiskFactor { area: RiskArea; level: "high" | "medium"; text: string; vars?: Record<string, string | number> }
+export interface RiskAssessment { level: RiskLevel; factors: RiskFactor[]; checkedAt: string | null; nextCheckAt: string | null; worsenedAt: string | null }
+/** Una verifica esterna registrata: esito di partita IVA, situazione dell'azienda e sanzioni, e cosa è peggiorato. */
+export interface RiskCheckEntry { at: string; trigger: "periodic" | "manual" | "onboarding"; vies: CheckStatus; company: CheckStatus; sanctions: CheckStatus; worsened: string[] }
+/** Verifica periodica: ogni quanti giorni ricontrollare i fornitori registrati, secondo il livello di rischio. */
+export interface RiskPolicy { enabled: boolean; days: { high: number; medium: number; low: number }; batch: number }
+export type SupplierSummary = Omit<Supplier, "documents" | "events" | "data" | "docTypes" | "changes" | "duplicates" | "compliance" | "complianceCheckedAt" | "bankLetterAfterChange" | "riskHistory"> & { country: string; legalName: string; documentCount: number; duplicate: boolean };
 
 export interface BuyingCompany { code: string; name: string; sapCompanyCode: string; purchOrg: string }
 export interface IndustryCode { code: string; name: string; buyerIds: number[] }
@@ -171,6 +183,8 @@ export interface PortalConfig {
   rda: RdaConfig; privacy: PrivacySettings; sanctions: SanctionsStatus;
   /** Fonti esterne collegate per la verifica dell'azienda. */
   externalChecks: { vies: boolean; openapi: boolean };
+  /** Verifica periodica dei fornitori registrati. */
+  risk: RiskPolicy;
 }
 
 export type MonitorState = "expired" | "expiring" | "missing" | "valid";

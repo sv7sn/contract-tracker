@@ -4,7 +4,7 @@ import { COUNTRIES, countryName } from "../supplierRules.ts";
 import { ApiError, portalApi } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, sans } from "../theme.ts";
 import { Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
-import { AlertTriangle, Bell, Building2, History, Lock, RotateCcw, ShieldCheck, Inbox, FileCheck2, Loader2, Pencil, Plus, Save, Settings, Sparkles, Trash2, Wallet, FileText, X } from "../components/icons.tsx";
+import { AlertTriangle, Bell, Building2, History, Lock, RotateCcw, ShieldCheck, Inbox, FileCheck2, Loader2, Pencil, Plus, Save, Settings, Sparkles, Trash2, Wallet, FileText, X, ShieldAlert } from "../components/icons.tsx";
 import { Notice, Portal } from "../components/vendorUi.tsx";
 import { CategoriesCard } from "./CategoriesCard.tsx";
 import { ReviewRulesCard } from "./ReviewRulesCard.tsx";
@@ -189,6 +189,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
       <BoSettingsCard fail={fail} notify={notify} />
       <CategoriesCard fail={fail} notify={notify} />
       <SanctionsCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
+      <RiskCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
       <PrivacyCard cfg={cfg} fail={fail} notify={notify} onSaved={adopt} />
       <SecurityCard fail={fail} />
       <TestAccessCard fail={fail} notify={notify} />
@@ -306,6 +307,45 @@ function PrivacyCard({ cfg, fail, notify, onSaved }: { cfg: PortalConfig; fail: 
         <Field label={t("Anonimizza i fornitori non attivi dopo (mesi)")} htmlFor="p-ret"><input id="p-ret" type="number" min={1} max={240} value={form.retentionMonths} onChange={e => setForm({ ...form, retentionMonths: e.target.value })} style={iStyle} /></Field>
       </div>
       <button onClick={save} disabled={busy} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Save size={16} />}{t("Salva")}</button>
+    </Card>
+  );
+}
+
+/** Verifica periodica dei fornitori registrati: frequenza secondo il livello di rischio. */
+function RiskCard({ cfg, fail, notify, onSaved }: { cfg: PortalConfig; fail: (e: unknown) => string; notify: (m: string) => void; onSaved: (c: PortalConfig) => void }) {
+  const r = cfg.risk;
+  const [form, setForm] = useState({ enabled: r.enabled, high: String(r.days.high), medium: String(r.days.medium), low: String(r.days.low), batch: String(r.batch) });
+  const [busy, setBusy] = useState<"" | "save" | "run">("");
+  const save = async () => {
+    setBusy("save");
+    try { onSaved(await portalApi.saveConfig("risk", "save", { enabled: form.enabled, days: { high: Number(form.high), medium: Number(form.medium), low: Number(form.low) }, batch: Number(form.batch) })); notify(t("Verifica periodica salvata")); }
+    catch (err) { notify(`⚠️ ${fail(err)}`); }
+    setBusy("");
+  };
+  const run = async () => {
+    setBusy("run");
+    try { const x = await portalApi.runRiskChecks(); notify(x.worsened ? t("Verifica eseguita: {checked} fornitori controllati, {worsened} peggiorati (buyer avvisati)", x) : t("Verifica eseguita: {checked} fornitori controllati su {due} da ricontrollare, nessun peggioramento", x)); }
+    catch (err) { notify(`⚠️ ${fail(err)}`); }
+    setBusy("");
+  };
+  const num = (k: "high" | "medium" | "low" | "batch", label: string, max: number) => (
+    <Field label={label} htmlFor={`rk-${k}`}><input id={`rk-${k}`} type="number" min={k === "batch" ? 1 : 7} max={max} value={form[k]} onChange={e => setForm({ ...form, [k]: e.target.value })} style={iStyle} /></Field>
+  );
+  return (
+    <Card>
+      <CardTitle icon={<ShieldAlert size={16} />}>{t("Verifica periodica dei fornitori")}</CardTitle>
+      <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-6px 0 12px", lineHeight: 1.55 }}>{t("Ogni notte i fornitori registrati vengono ricontrollati (partita IVA, situazione dell'azienda, liste sanzioni) quando la verifica è scaduta: più spesso quelli a rischio più alto. Se qualcosa peggiora, il buyer di riferimento riceve un'email e la scheda lo segnala. La verifica dell'azienda presso il Registro Imprese costa circa 0,10 € a fornitore.")}</p>
+      <label style={{ ...sans, display: "flex", gap: 8, alignItems: "center", fontSize: 13, marginBottom: 12, cursor: "pointer" }}><input type="checkbox" checked={form.enabled} onChange={e => setForm({ ...form, enabled: e.target.checked })} style={{ accentColor: C.accent, width: 16, height: 16 }} />{t("Verifica periodica automatica attiva")}</label>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 170px), 1fr))", columnGap: 14 }}>
+        {num("high", t("Rischio alto: ogni (giorni)"), 730)}
+        {num("medium", t("Rischio medio: ogni (giorni)"), 730)}
+        {num("low", t("Rischio basso: ogni (giorni)"), 730)}
+        {num("batch", t("Massimo fornitori al giorno"), 200)}
+      </div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button onClick={save} disabled={!!busy} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy === "save" ? <Loader2 className="spin" size={16} /> : <Save size={16} />}{t("Salva")}</button>
+        <button onClick={run} disabled={!!busy} style={{ ...btnGhost, padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 8 }}>{busy === "run" ? <Loader2 className="spin" size={16} /> : <RotateCcw size={16} />}{t("Esegui ora")}</button>
+      </div>
     </Card>
   );
 }

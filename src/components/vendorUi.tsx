@@ -1,13 +1,13 @@
 import { useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import type { AiCheck, Lifecycle, Qualification, SupplierStatus, SupplierSummary } from "../types.ts";
+import type { AiCheck, CheckStatus, Lifecycle, Qualification, RiskAssessment, RiskCheckEntry, RiskLevel, SupplierStatus, SupplierSummary } from "../types.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, sans } from "../theme.ts";
 import { docValidity } from "../supplierRules.ts";
 import { fmtDate } from "../lib/format.ts";
 import { AlertCircle, AlertTriangle, CheckCircle2, Clock, Download, ExternalLink, Hourglass, Loader2, Mail, X } from "./icons.tsx";
 import { supplierDocUrl } from "../api.ts";
 import { LIFECYCLE_STYLE, STATUS_STYLE } from "../lib/vendors.ts";
-import { t } from "../i18n/index.ts";
+import { locale, t } from "../i18n/index.ts";
 
 export function StatusBadge({ status, update }: { status: SupplierStatus; update?: boolean }) {
   const s = STATUS_STYLE[status];
@@ -104,6 +104,58 @@ export function VendorFlags({ lifecycle, qualification, duplicate }: { lifecycle
       {qualification === "expiring" && pill(t("Qualifica in scadenza"), C.yellow, C.yellowBg)}
       {duplicate && pill(t("Possibile doppione"), C.purple, C.purpleBg)}
     </>
+  );
+}
+
+/** Etichetta del livello di rischio (nulla se il fornitore non ha ancora un livello). */
+const RISK_STYLE: Record<Exclude<RiskLevel, "na">, { label: string; color: string; bg: string }> = {
+  high: { label: "Rischio alto", color: C.red, bg: C.redBg }, medium: { label: "Rischio medio", color: C.yellow, bg: C.yellowBg }, low: { label: "Rischio basso", color: C.green, bg: C.greenBg },
+};
+export function RiskBadge({ risk }: { risk?: RiskAssessment }) {
+  if (!risk || risk.level === "na") return <span style={{ color: C.subtle }}>—</span>;
+  const s = RISK_STYLE[risk.level];
+  return <span title={risk.factors.map(f => t(f.text, f.vars)).join(" · ")}>{pill(t(s.label), s.color, s.bg)}</span>;
+}
+const TRIGGER: Record<RiskCheckEntry["trigger"], string> = { periodic: "Verifica periodica", manual: "Ricontrollo manuale", onboarding: "Registrazione" };
+const DOT: Record<CheckStatus, string> = { ok: C.green, warn: C.yellow, fail: C.red, todo: C.subtle, na: C.subtle };
+
+/** Livello di rischio con i motivi, le date delle verifiche e lo storico dei ricontrolli. */
+export function RiskPanel({ risk, history }: { risk: RiskAssessment; history: RiskCheckEntry[] }) {
+  const [all, setAll] = useState(false);
+  if (risk.level === "na") return null;
+  const s = RISK_STYLE[risk.level];
+  const when = (d: string | null) => (d ? new Date(d).toLocaleDateString(locale(), { day: "2-digit", month: "short", year: "numeric" }) : "—");
+  const shown = all ? history : history.slice(0, 4);
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+        {pill(t(s.label), s.color, s.bg)}
+        {risk.worsenedAt && pill(t("Peggiorato il {date}", { date: when(risk.worsenedAt) }), C.red, C.redBg)}
+      </div>
+      {risk.factors.length === 0
+        ? <div style={{ ...sans, fontSize: 13, color: C.muted, marginBottom: 10 }}>{t("Nessuna criticità rilevata nei controlli.")}</div>
+        : <ul style={{ ...sans, margin: "0 0 10px", paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>{risk.factors.map((f, i) => <li key={i} style={{ color: f.level === "high" ? C.red : C.text }}>{t(f.text, f.vars)}</li>)}</ul>}
+      <div style={{ ...sans, fontSize: 12, color: C.muted, display: "flex", gap: 16, flexWrap: "wrap" }}>
+        <span>{t("Ultima verifica esterna")}: <b style={{ color: C.text }}>{when(risk.checkedAt)}</b></span>
+        <span>{t("Prossima verifica automatica")}: <b style={{ color: C.text }}>{when(risk.nextCheckAt)}</b></span>
+      </div>
+      {history.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ ...sans, fontSize: 11.5, fontWeight: 700, color: C.subtle, textTransform: "uppercase", letterSpacing: ".04em", marginBottom: 4 }}>{t("Storico delle verifiche")}</div>
+          {shown.map((h, i) => (
+            <div key={i} style={{ ...sans, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "6px 0", borderTop: `1px solid ${C.borderLight}`, fontSize: 12.5 }}>
+              <span className="tabular" style={{ minWidth: 92, color: C.muted }}>{when(h.at)}</span>
+              <span style={{ minWidth: 130 }}>{t(TRIGGER[h.trigger])}</span>
+              <span style={{ display: "inline-flex", gap: 10, color: C.muted }}>
+                {([["vies", "IVA"], ["company", "Azienda"], ["sanctions", "Sanzioni"]] as const).map(([k, l]) => <span key={k} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span aria-hidden style={{ width: 8, height: 8, borderRadius: 4, background: DOT[h[k]] }} />{t(l)}</span>)}
+              </span>
+              {h.worsened.length > 0 && <span style={{ color: C.red, fontWeight: 650 }}>{t("Peggiorato")}: {h.worsened.map(w => t(w)).join(", ")}</span>}
+            </div>
+          ))}
+          {history.length > 4 && <button onClick={() => setAll(a => !a)} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12, marginTop: 6 }}>{all ? t("Mostra meno") : t("Mostra tutte ({n})", { n: history.length })}</button>}
+        </div>
+      )}
+    </div>
   );
 }
 

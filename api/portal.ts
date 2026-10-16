@@ -29,6 +29,7 @@ import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudge
 import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
 import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, registerTaskContract, setIoBuyer, setTaskLinks, setTaskSupplier, tasksArchive, suggestRdas, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
 import { ssoCallback, ssoPublicConfig, ssoStart } from "./_oidc.js";
+import { runRiskChecks } from "./_risk.js";
 import { clientIp, errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
 import {
@@ -103,7 +104,8 @@ async function handle(request: Request): Promise<Response> {
       const sanctions = await refreshIfStale().catch(err => ({ error: err instanceof Error ? err.message : "errore" }));
       const boNotices = await runBoNotices(originOf(request)).catch(err => ({ error: err instanceof Error ? err.message : "errore" }));
       const reviews = await runReviewReminders(originOf(request)).catch(err => ({ error: err instanceof Error ? err.message : "errore" }));
-      return json({ ...reminders, retention, sanctions, boNotices, reviews });
+      const risk = await runRiskChecks(originOf(request)).catch(err => ({ error: err instanceof Error ? err.message : "errore" }));
+      return json({ ...reminders, retention, sanctions, boNotices, reviews, risk });
     }
 
     // ── Ingresso automatico dei file SAP (es. da una regola sulla casella che riceve le mail di SAP) ──
@@ -352,6 +354,10 @@ async function handle(request: Request): Promise<Response> {
       if (!Number.isInteger(supplierId) || supplierId <= 0) throw new HttpError(400, "Indica il fornitore");
       return json(await remindSupplier(user, supplierId, body.channel === "phone" ? "phone" : "email", typeof body.note === "string" ? body.note : "", origin));
     }
+    if (op === "risk-run" && method === "POST") {
+      if (!canConfigurePortal(user)) throw new HttpError(403, "Operazione non consentita");
+      return json(await runRiskChecks(origin, { force: true }));
+    }
     if (op === "reminders-run" && method === "POST") {
       if (!canConfigurePortal(user)) throw new HttpError(403, "Operazione non consentita");
       return json(await runReminders(origin));
@@ -403,7 +409,7 @@ async function handle(request: Request): Promise<Response> {
     if (op === "vendors" && method === "GET") return json({ vendors: await listVendors(user) });
     if (op === "vendor-checks" && method === "POST") {
       const id = idOf(url); await getVendor(user, id);
-      await runExternalChecks(getPool(), id);
+      await runExternalChecks(getPool(), id, "manual");
       return json({ supplier: await getVendor(user, id) });
     }
     if (op === "vendor-rating" && method === "GET") return json({ scorecard: await supplierScorecard(user, idOf(url)) });
