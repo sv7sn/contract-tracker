@@ -10,6 +10,7 @@ import { CheckCircle2, Clock, Copy, FileCheck2, Hourglass, Loader2, Mail, Paperc
 import { AiResult, VendorFlags, CloseButton, DocLink, KV, Notice, ReasonDialog, StatusBadge, ValidityChip , Portal } from "../components/vendorUi.tsx";
 import { CHECK_STYLE, fmtSize, STATUS_STYLE, supplierTimeline } from "../lib/vendors.ts";
 import { Summary } from "./SupplierPortal.tsx";
+import { locale, t } from "../i18n/index.ts";
 
 interface Props { initialOpenId?: number; onFocusUsed?: () => void; currentUser: User; notify: (m: string) => void; onSessionExpired: () => void }
 
@@ -29,8 +30,8 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
   const [ratings, setRatings] = useState<Record<number, { overall: number; count: number }>>({});
 
   const fail = useCallback((err: unknown) => {
-    if (err instanceof ApiError && err.status === 401) { onSessionExpired(); return "Sessione scaduta"; }
-    return err instanceof Error ? err.message : "Operazione non riuscita";
+    if (err instanceof ApiError && err.status === 401) { onSessionExpired(); return t("Sessione scaduta"); }
+    return err instanceof Error ? err.message : t("Operazione non riuscita");
   }, [onSessionExpired]);
   const reload = useCallback(async () => {
     try { const [v, c] = await Promise.all([portalApi.vendors(), portalApi.config()]); setVendors(v); setConfig(c); setError(null); portalApi.ratings().then(setRatings).catch(() => undefined); }
@@ -45,7 +46,7 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
 
   const makeDemo = async () => {
     setDemoBusy(true);
-    try { const d = await portalApi.demoSupplier(); setDemo(d); notify(`${d.name} creato`); await reload(); } catch (err) { notify(`⚠️ ${fail(err)}`); }
+    try { const d = await portalApi.demoSupplier(); setDemo(d); notify(t("{name} creato", { name: d.name })); await reload(); } catch (err) { notify(`⚠️ ${fail(err)}`); }
     setDemoBusy(false);
   };
   const canInvite = currentUser.role === "manager" || currentUser.role === "buyer";
@@ -64,31 +65,31 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
       .sort((a, b) => (a.status === mine ? -1 : 0) - (b.status === mine ? -1 : 0) || b.updatedAt.localeCompare(a.updatedAt));
   }, [vendors, filter, search, mine]);
 
-  if (error) return <EmptyState icon={<AlertTriangle size={26} />} title="Impossibile caricare i fornitori" text={error} action={<button onClick={reload} style={{ ...btnGhost, padding: "9px 16px" }}>Riprova</button>} />;
+  if (error) return <EmptyState icon={<AlertTriangle size={26} />} title={t("Impossibile caricare i fornitori")} text={error} action={<button onClick={reload} style={{ ...btnGhost, padding: "9px 16px" }}>{t("Riprova")}</button>} />;
   if (!vendors || !config) return <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Loader2 className="spin" size={26} color={C.subtle} /></div>;
 
   const tiles: { key: SupplierStatus | "lapsed"; label: string; icon: React.ReactNode; color: string; sub: string }[] = [
-    { key: "pending", label: "Da verificare", icon: <Hourglass size={18} />, color: C.yellow, sub: "Passaggio del Buyer" },
-    { key: "approved", label: "In attesa del Finance", icon: <FileCheck2 size={18} />, color: C.purple, sub: "Da registrare in SAP" },
-    { key: "pending_revision", label: "Modifiche richieste", icon: <RotateCcw size={18} />, color: C.red, sub: "Attesa del fornitore" },
-    { key: "registered", label: "Registrati in SAP", icon: <CheckCircle2 size={18} />, color: C.green, sub: "Codice assegnato" },
-    { key: "invited", label: "Inviti aperti", icon: <Mail size={18} />, color: C.gray, sub: "Non ancora attivati" },
-    { key: "lapsed", label: "Qualifica scaduta", icon: <AlertTriangle size={18} />, color: C.red, sub: "Documenti obbligatori scaduti" },
+    { key: "pending", label: t("Da verificare"), icon: <Hourglass size={18} />, color: C.yellow, sub: t("Passaggio del Buyer") },
+    { key: "approved", label: t("In attesa del Finance"), icon: <FileCheck2 size={18} />, color: C.purple, sub: t("Da registrare in SAP") },
+    { key: "pending_revision", label: t("Modifiche richieste"), icon: <RotateCcw size={18} />, color: C.red, sub: t("Attesa del fornitore") },
+    { key: "registered", label: t("Registrati in SAP"), icon: <CheckCircle2 size={18} />, color: C.green, sub: t("Codice assegnato") },
+    { key: "invited", label: t("Inviti aperti"), icon: <Mail size={18} />, color: C.gray, sub: t("Non ancora attivati") },
+    { key: "lapsed", label: t("Qualifica scaduta"), icon: <AlertTriangle size={18} />, color: C.red, sub: t("Documenti obbligatori scaduti") },
   ];
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
         <div>
-          <div style={{ ...font, fontSize: 18, fontWeight: 700, color: C.text }}>Fornitori</div>
-          <div style={{ ...sans, fontSize: 12, color: C.muted }}>{vendors.length} schede · {counts[mine] ?? 0} {currentUser.role === "finance" ? "da registrare" : "da verificare"}</div>
+          <div style={{ ...font, fontSize: 18, fontWeight: 700, color: C.text }}>{t("Fornitori")}</div>
+          <div style={{ ...sans, fontSize: 12, color: C.muted }}>{t("{n} schede", { n: vendors.length })} · {counts[mine] ?? 0} {currentUser.role === "finance" ? t("da registrare") : t("da verificare")}</div>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {currentUser.role === "manager" && <button onClick={makeDemo} disabled={demoBusy} title="Crea un fornitore già registrato e in regola, per provare contratti e acquisti" style={{ ...btnGhost, display: "flex", alignItems: "center", gap: 7, padding: "9px 14px", fontSize: 13 }}>{demoBusy ? <Loader2 className="spin" size={15} /> : <Plus size={15} />}Fornitore di prova</button>}
-          {canInvite && <button onClick={() => setInviting(true)} style={{ ...sans, display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, cursor: "pointer", fontSize: 13, boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={16} />Invita fornitore</button>}
+          {currentUser.role === "manager" && <button onClick={makeDemo} disabled={demoBusy} title={t("Crea un fornitore già registrato e in regola, per provare contratti e acquisti")} style={{ ...btnGhost, display: "flex", alignItems: "center", gap: 7, padding: "9px 14px", fontSize: 13 }}>{demoBusy ? <Loader2 className="spin" size={15} /> : <Plus size={15} />}{t("Fornitore di prova")}</button>}
+          {canInvite && <button onClick={() => setInviting(true)} style={{ ...sans, display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, cursor: "pointer", fontSize: 13, boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={16} />{t("Invita fornitore")}</button>}
         </div>
       </div>
-      {demo && <Notice kind="ok"><b>{demo.name} creato</b>: registrato, documenti validi e controlli superati. Per provare anche l'area del fornitore accedi con <b>{demo.email}</b> e password <b style={{ userSelect: "all" }}>{demo.password}</b> (mostrata solo ora).</Notice>}
+      {demo && <Notice kind="ok"><b>{t("{name} creato", { name: demo.name })}</b>: {t("registrato, documenti validi e controlli superati. Per provare anche l'area del fornitore accedi con")} <b>{demo.email}</b> {t("e password")} <b style={{ userSelect: "all" }}>{demo.password}</b> {t("(mostrata solo ora).")}</Notice>}
 
       <Grid min={190} gap={12} fill style={{ marginBottom: 16 }}>
         {tiles.filter(t => currentUser.role !== "finance" || t.key !== "invited").map(t => (
@@ -101,28 +102,28 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: "1 1 240px", maxWidth: 420 }}>
           <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca per nome, email, codice SAP…" aria-label="Cerca fornitori" style={{ ...iStyle, paddingLeft: 36 }} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Cerca per nome, email, codice SAP…")} aria-label={t("Cerca fornitori")} style={{ ...iStyle, paddingLeft: 36 }} />
         </div>
-        <select value={filter} onChange={e => setFilter(e.target.value as typeof filter)} aria-label="Filtra per stato" style={{ ...iStyle, width: "auto", minWidth: 190 }}>
-          <option value="all">Tutti gli stati</option>
-          {(Object.keys(STATUS_STYLE) as SupplierStatus[]).map(k => <option key={k} value={k}>{STATUS_STYLE[k].label}</option>)}
-          <option value="lapsed">Qualifica scaduta</option><option value="flags">Bloccati, disattivati o esclusi</option><option value="dups">Possibili doppioni</option>
+        <select value={filter} onChange={e => setFilter(e.target.value as typeof filter)} aria-label={t("Filtra per stato")} style={{ ...iStyle, width: "auto", minWidth: 190 }}>
+          <option value="all">{t("Tutti gli stati")}</option>
+          {(Object.keys(STATUS_STYLE) as SupplierStatus[]).map(k => <option key={k} value={k}>{t(STATUS_STYLE[k].label)}</option>)}
+          <option value="lapsed">{t("Qualifica scaduta")}</option><option value="flags">{t("Bloccati, disattivati o esclusi")}</option><option value="dups">{t("Possibili doppioni")}</option>
         </select>
       </div>
 
       {shown.length === 0 ? (
         vendors.length === 0
-          ? <EmptyState icon={<Users size={26} />} title="Nessun fornitore ancora" text="Invita il primo fornitore: riceverà un link personale per registrarsi e caricare i documenti di qualifica." action={canInvite && <button onClick={() => setInviting(true)} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}><Plus size={17} />Invita fornitore</button>} />
-          : <EmptyState icon={<Search size={26} />} title="Nessun risultato" text="Nessun fornitore corrisponde a ricerca e filtri." action={<button onClick={() => { setSearch(""); setFilter("all"); }} style={{ ...btnGhost, padding: "9px 16px" }}>Azzera filtri</button>} />
+          ? <EmptyState icon={<Users size={26} />} title={t("Nessun fornitore ancora")} text={t("Invita il primo fornitore: riceverà un link personale per registrarsi e caricare i documenti di qualifica.")} action={canInvite && <button onClick={() => setInviting(true)} style={{ ...btnPrimary, padding: "10px 18px", display: "inline-flex", alignItems: "center", gap: 8 }}><Plus size={17} />{t("Invita fornitore")}</button>} />
+          : <EmptyState icon={<Search size={26} />} title={t("Nessun risultato")} text={t("Nessun fornitore corrisponde a ricerca e filtri.")} action={<button onClick={() => { setSearch(""); setFilter("all"); }} style={{ ...btnGhost, padding: "9px 16px" }}>{t("Azzera filtri")}</button>} />
       ) : (<>
         <div className="table-wrap desktop-only">
           <table className="data-table">
-            <thead><tr><th>Fornitore</th><th>Paese</th><th>Società</th><th>Stato</th><th>Buyer</th><th>Voto</th><th>Aggiornato</th><th aria-label="Documenti" /></tr></thead>
+            <thead><tr><th>{t("Fornitore")}</th><th>{t("Paese")}</th><th>{t("Società")}</th><th>{t("Stato")}</th><th>{t("Buyer")}</th><th>{t("Voto")}</th><th>{t("Aggiornato")}</th><th aria-label={t("Documenti")} /></tr></thead>
             <tbody>
               {shown.map(v => (
                 <tr key={v.id} onClick={() => setOpenId(v.id)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setOpenId(v.id); }}>
                   <td style={{ minWidth: 220, boxShadow: v.status === mine ? `inset 3px 0 0 ${C.accent}` : undefined }}><div style={{ fontWeight: 650, color: C.text }}>{v.legalName || v.name}</div><div style={{ fontSize: 12, color: C.muted }}>{v.email}</div></td>
-                  <td>{v.country ? countryName(v.country) : "—"}</td>
+                  <td>{v.country ? t(countryName(v.country)) : "—"}</td>
                   <td style={{ color: C.muted }}>{v.companyCodes.join(", ")}</td>
                   <td><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><StatusBadge status={v.status} update={v.isUpdate} /><VendorFlags lifecycle={v.lifecycle} qualification={v.qualification} duplicate={v.duplicate} /></div></td>
                   <td><div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}><Avatar name={v.referenceBuyerName || "?"} size={24} /><span style={{ color: C.muted }}>{v.referenceBuyerName || "—"}</span></div></td>
@@ -176,37 +177,37 @@ function InviteModal({ config, currentUser, onClose, onDone, fail }: { config: P
         {link ? (
           <>
             <div style={{ color: C.green, display: "flex", marginBottom: 8 }}><CheckCircle2 size={40} strokeWidth={1.6} /></div>
-            <h3 style={{ ...font, margin: "0 0 6px", fontSize: 18 }}>Invito creato</h3>
-            <p style={{ ...sans, fontSize: 13, color: C.muted, lineHeight: 1.55, margin: "0 0 12px" }}>Il fornitore riceve il link per email. Se l'invio email non è ancora configurato, copia il link qui sotto e mandaglielo tu: vale una sola volta e scade tra pochi giorni.</p>
+            <h3 style={{ ...font, margin: "0 0 6px", fontSize: 18 }}>{t("Invito creato")}</h3>
+            <p style={{ ...sans, fontSize: 13, color: C.muted, lineHeight: 1.55, margin: "0 0 12px" }}>{t("Il fornitore riceve il link per email. Se l'invio email non è ancora configurato, copia il link qui sotto e mandaglielo tu: vale una sola volta e scade tra pochi giorni.")}</p>
             <div style={{ ...sans, fontSize: 12.5, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: 10, overflowWrap: "anywhere", marginBottom: 12 }}>{link}</div>
             <div style={{ display: "flex", gap: 10 }}>
-              <button type="button" onClick={async () => setCopied(await copyText(link))} style={{ ...btnGhost, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}><Copy size={15} />{copied ? "Copiato" : "Copia link"}</button>
-              <button type="button" onClick={onClose} style={{ ...btnPrimary, flex: 1 }}>Chiudi</button>
+              <button type="button" onClick={async () => setCopied(await copyText(link))} style={{ ...btnGhost, flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 7 }}><Copy size={15} />{copied ? t("Copiato") : t("Copia link")}</button>
+              <button type="button" onClick={onClose} style={{ ...btnPrimary, flex: 1 }}>{t("Chiudi")}</button>
             </div>
           </>
         ) : (
           <>
-            <h3 style={{ ...font, margin: "0 0 14px", fontSize: 18 }}>Invita un fornitore</h3>
-            <Field label="Ragione sociale" req htmlFor="i-name"><input id="i-name" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} style={iStyle} /></Field>
-            <Field label="Email del referente" req htmlFor="i-mail"><input id="i-mail" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} style={iStyle} /></Field>
-            <Field label="Società che lo ingaggiano" req>
+            <h3 style={{ ...font, margin: "0 0 14px", fontSize: 18 }}>{t("Invita un fornitore")}</h3>
+            <Field label={t("Ragione sociale")} req htmlFor="i-name"><input id="i-name" required value={f.name} onChange={e => setF({ ...f, name: e.target.value })} style={iStyle} /></Field>
+            <Field label={t("Email del referente")} req htmlFor="i-mail"><input id="i-mail" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} style={iStyle} /></Field>
+            <Field label={t("Società che lo ingaggiano")} req>
               <div style={{ display: "grid", gap: 6 }}>
                 {config.companies.map(c => <label key={c.code} style={{ ...sans, display: "flex", gap: 8, alignItems: "center", fontSize: 13.5, cursor: "pointer" }}><input type="checkbox" checked={f.companyCodes.includes(c.code)} onChange={() => toggle(c.code)} style={{ accentColor: C.accent, width: 16, height: 16 }} />{c.name} <span style={{ color: C.subtle }}>({c.code})</span></label>)}
-                {config.companies.length === 0 && <div style={{ ...sans, fontSize: 12.5, color: C.red }}>Nessuna società configurata: chiedi a un Manager di aggiungerla in Configurazione.</div>}
+                {config.companies.length === 0 && <div style={{ ...sans, fontSize: 12.5, color: C.red }}>{t("Nessuna società configurata: chiedi a un Manager di aggiungerla in Configurazione.")}</div>}
               </div>
             </Field>
-            <Field label="Codice merceologico" req htmlFor="i-ind">
-              <select id="i-ind" required value={f.industryCode} onChange={e => setF({ ...f, industryCode: e.target.value })} style={iStyle}><option value="">Seleziona…</option>{config.industryCodes.map(i => <option key={i.code} value={i.code}>{i.code} · {i.name}</option>)}</select>
+            <Field label={t("Codice merceologico")} req htmlFor="i-ind">
+              <select id="i-ind" required value={f.industryCode} onChange={e => setF({ ...f, industryCode: e.target.value })} style={iStyle}><option value="">{t("Seleziona…")}</option>{config.industryCodes.map(i => <option key={i.code} value={i.code}>{i.code} · {i.name}</option>)}</select>
             </Field>
-            {f.industryCode === "CT00" && <Field label="Codice cliente" req htmlFor="i-cust"><input id="i-cust" required value={f.customerCode ?? ""} onChange={e => setF({ ...f, customerCode: e.target.value })} style={iStyle} /></Field>}
-            <Field label="Buyer di riferimento" req htmlFor="i-buy">
-              <select id="i-buy" required value={f.referenceBuyerId || ""} onChange={e => setF({ ...f, referenceBuyerId: Number(e.target.value) })} style={iStyle}><option value="">Seleziona…</option>{config.buyers.filter(b => b.active).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
+            {f.industryCode === "CT00" && <Field label={t("Codice cliente")} req htmlFor="i-cust"><input id="i-cust" required value={f.customerCode ?? ""} onChange={e => setF({ ...f, customerCode: e.target.value })} style={iStyle} /></Field>}
+            <Field label={t("Buyer di riferimento")} req htmlFor="i-buy">
+              <select id="i-buy" required value={f.referenceBuyerId || ""} onChange={e => setF({ ...f, referenceBuyerId: Number(e.target.value) })} style={iStyle}><option value="">{t("Seleziona…")}</option>{config.buyers.filter(b => b.active).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>
             </Field>
             {error && <Notice kind="error">{error}</Notice>}
             {dups && <DuplicateList dups={dups} />}
             <div style={{ display: "flex", gap: 10 }}>
-              <button type="button" onClick={onClose} style={{ ...btnGhost, flex: 1 }}>Annulla</button>
-              <button type="submit" disabled={busy || f.companyCodes.length === 0} style={{ ...btnPrimary, flex: 2, opacity: busy || f.companyCodes.length === 0 ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Send size={16} />}{dups ? "Non è un doppione: invita" : "Invia invito"}</button>
+              <button type="button" onClick={onClose} style={{ ...btnGhost, flex: 1 }}>{t("Annulla")}</button>
+              <button type="submit" disabled={busy || f.companyCodes.length === 0} style={{ ...btnPrimary, flex: 2, opacity: busy || f.companyCodes.length === 0 ? 0.6 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{busy ? <Loader2 className="spin" size={16} /> : <Send size={16} />}{dups ? t("Non è un doppione: invita") : t("Invia invito")}</button>
             </div>
           </>
         )}
@@ -247,7 +248,7 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
   };
   const rerunChecks = async () => {
     setBusy("checks"); setError(null);
-    try { setS(await portalApi.vendorChecks(id)); notify("Controlli eseguiti"); } catch (err) { setError(fail(err)); }
+    try { setS(await portalApi.vendorChecks(id)); notify(t("Controlli eseguiti")); } catch (err) { setError(fail(err)); }
     setBusy(null);
   };
   const recheck = async (docId: number) => {
@@ -258,8 +259,8 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
   const invite = async (what: "resend" | "delete") => {
     setBusy(what); setError(null);
     try {
-      if (what === "resend") { const r = await portalApi.reinvite(id); setS(r.supplier); notify("Invito rinviato"); }
-      else { if (!window.confirm("Eliminare questo invito?")) { setBusy(null); return; } await portalApi.deleteInvite(id); notify("Invito eliminato"); onClose(); }
+      if (what === "resend") { const r = await portalApi.reinvite(id); setS(r.supplier); notify(t("Invito rinviato")); }
+      else { if (!window.confirm(t("Eliminare questo invito?"))) { setBusy(null); return; } await portalApi.deleteInvite(id); notify(t("Invito eliminato")); onClose(); }
       onChanged();
     } catch (err) { setError(fail(err)); }
     setBusy(null);
@@ -269,7 +270,7 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
   const btn = (primary: boolean, danger = false) => ({ ...(primary ? btnPrimary : btnGhost), padding: "10px 16px", display: "inline-flex", alignItems: "center", gap: 8, ...(danger ? { color: C.red, borderColor: "#f0c9c9" } : {}) }) as const;
 
   return (
-    <div className="sheet-overlay" role="dialog" aria-modal="true" aria-label="Scheda fornitore" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+    <div className="sheet-overlay" role="dialog" aria-modal="true" aria-label={t("Scheda fornitore")} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="sheet" style={{ maxWidth: 820 }}>
         <div className="sheet-head">
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -286,83 +287,83 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
           <div style={{ display: "grid", gap: 14 }}>
             {s.status === "invited" && (
               <Card style={{ background: C.bg, boxShadow: "none" }}>
-                <div style={{ ...sans, fontSize: 13, color: C.muted, lineHeight: 1.55, marginBottom: 10 }}>Il fornitore non ha ancora attivato l'invito{s.expiresAt ? ` (scade il ${fmtDate(s.expiresAt)})` : ""}.</div>
+                <div style={{ ...sans, fontSize: 13, color: C.muted, lineHeight: 1.55, marginBottom: 10 }}>{s.expiresAt ? t("Il fornitore non ha ancora attivato l'invito (scade il {date}).", { date: fmtDate(s.expiresAt) }) : t("Il fornitore non ha ancora attivato l'invito.")}</div>
                 {s.inviteLink && <div style={{ ...sans, fontSize: 12, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 8, padding: 8, overflowWrap: "anywhere", marginBottom: 10 }}>{s.inviteLink}</div>}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {s.inviteLink && <button onClick={async () => setCopied(await copyText(s.inviteLink!))} style={btn(false)}><Copy size={15} />{copied ? "Copiato" : "Copia link"}</button>}
-                  {isBuyerStep && <button onClick={() => invite("resend")} disabled={!!busy} style={btn(false)}>{spin("resend")}<Mail size={15} />Rinvia invito</button>}
-                  {isBuyerStep && <button onClick={() => invite("delete")} disabled={!!busy} style={btn(false, true)}>{spin("delete")}<Trash2 size={15} />Elimina</button>}
+                  {s.inviteLink && <button onClick={async () => setCopied(await copyText(s.inviteLink!))} style={btn(false)}><Copy size={15} />{copied ? t("Copiato") : t("Copia link")}</button>}
+                  {isBuyerStep && <button onClick={() => invite("resend")} disabled={!!busy} style={btn(false)}>{spin("resend")}<Mail size={15} />{t("Rinvia invito")}</button>}
+                  {isBuyerStep && <button onClick={() => invite("delete")} disabled={!!busy} style={btn(false, true)}>{spin("delete")}<Trash2 size={15} />{t("Elimina")}</button>}
                 </div>
               </Card>
             )}
 
-            {s.rejectionReason && (s.status === "pending_revision" || s.status === "rejected") && <Notice kind={s.status === "rejected" ? "error" : "warn"}><b>{s.status === "rejected" ? "Motivo del rifiuto" : "Modifiche richieste"}:</b> {s.rejectionReason}</Notice>}
-            {s.anonymizedAt && <Notice kind="info"><b>Dati personali anonimizzati il {fmtDate(s.anonymizedAt)}.</b> Restano solo ragione sociale, partita IVA e IBAN.</Notice>}
-            {s.lifecycle !== "active" && <Notice kind="error"><b>{s.lifecycle === "blocked" ? "Fornitore bloccato" : s.lifecycle === "inactive" ? "Fornitore disattivato" : "Fornitore escluso"}.</b> {s.lifecycleReason} {s.sapCode ? "Ricorda di bloccarlo anche in SAP." : ""}</Notice>}
-            {s.qualification === "lapsed" && <Notice kind="error"><b>Qualifica scaduta:</b> almeno un documento obbligatorio è scaduto o mancante. Il fornitore riceve i reminder; puoi sollecitarlo dalla pagina Scadenze.</Notice>}
-            {s.isUpdate && s.status === "pending" && <Notice kind="info">Il fornitore, già registrato in SAP{s.sapCode ? ` (${s.sapCode})` : ""}, ha modificato dati o documenti: serve una nuova verifica.</Notice>}
+            {s.rejectionReason && (s.status === "pending_revision" || s.status === "rejected") && <Notice kind={s.status === "rejected" ? "error" : "warn"}><b>{s.status === "rejected" ? t("Motivo del rifiuto") : t("Modifiche richieste")}:</b> {s.rejectionReason}</Notice>}
+            {s.anonymizedAt && <Notice kind="info"><b>{t("Dati personali anonimizzati il {date}.", { date: fmtDate(s.anonymizedAt) })}</b> {t("Restano solo ragione sociale, partita IVA e IBAN.")}</Notice>}
+            {s.lifecycle !== "active" && <Notice kind="error"><b>{s.lifecycle === "blocked" ? t("Fornitore bloccato") : s.lifecycle === "inactive" ? t("Fornitore disattivato") : t("Fornitore escluso")}.</b> {s.lifecycleReason} {s.sapCode ? t("Ricorda di bloccarlo anche in SAP.") : ""}</Notice>}
+            {s.qualification === "lapsed" && <Notice kind="error"><b>{t("Qualifica scaduta:")}</b> {t("almeno un documento obbligatorio è scaduto o mancante. Il fornitore riceve i reminder; puoi sollecitarlo dalla pagina Scadenze.")}</Notice>}
+            {s.isUpdate && s.status === "pending" && <Notice kind="info">{s.sapCode ? t("Il fornitore, già registrato in SAP ({code}), ha modificato dati o documenti: serve una nuova verifica.", { code: s.sapCode }) : t("Il fornitore, già registrato in SAP, ha modificato dati o documenti: serve una nuova verifica.")}</Notice>}
 
             {s.status !== "invited" && (<>
               {/* Azioni del flusso */}
               {s.status === "pending" && isBuyerStep && (
                 <Card style={{ borderColor: "#f1d9a6", background: "#fffdf6" }}>
-                  <CardTitle icon={<Hourglass size={16} />}>Verifica del Buyer</CardTitle>
-                  <p style={{ ...sans, fontSize: 13, color: C.muted, margin: "0 0 12px", lineHeight: 1.55 }}>Controlla dati e documenti, scegli le condizioni di pagamento e approva: la scheda passa al Finance. Per tornare dal fornitore usa “Chiedi modifiche”.</p>
-                  <Field label="Condizioni di pagamento" req htmlFor="v-terms">
-                    <select id="v-terms" value={terms} onChange={e => setTerms(e.target.value)} style={iStyle}><option value="">Seleziona…</option>{config.paymentTerms.map(p => <option key={p.code} value={p.code}>{p.code} · {p.label}</option>)}</select>
+                  <CardTitle icon={<Hourglass size={16} />}>{t("Verifica del Buyer")}</CardTitle>
+                  <p style={{ ...sans, fontSize: 13, color: C.muted, margin: "0 0 12px", lineHeight: 1.55 }}>{t("Controlla dati e documenti, scegli le condizioni di pagamento e approva: la scheda passa al Finance. Per tornare dal fornitore usa “Chiedi modifiche”.")}</p>
+                  <Field label={t("Condizioni di pagamento")} req htmlFor="v-terms">
+                    <select id="v-terms" value={terms} onChange={e => setTerms(e.target.value)} style={iStyle}><option value="">{t("Seleziona…")}</option>{config.paymentTerms.map(p => <option key={p.code} value={p.code}>{p.code} · {p.label}</option>)}</select>
                   </Field>
-                  {s.bankChanged && !s.bankLetterAfterChange && <Notice kind="error">Le coordinate bancarie sono cambiate ma il fornitore non ha caricato la nuova lettera della banca: chiedi modifiche.</Notice>}
+                  {s.bankChanged && !s.bankLetterAfterChange && <Notice kind="error">{t("Le coordinate bancarie sono cambiate ma il fornitore non ha caricato la nuova lettera della banca: chiedi modifiche.")}</Notice>}
                   {s.duplicates.some(d => !d.confirmed) && (
                     <div style={{ marginBottom: 12 }}>
                       <DuplicateList dups={s.duplicates.filter(d => !d.confirmed)} />
-                      <label style={{ ...sans, display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, margin: "4px 0 8px", cursor: "pointer" }}><input type="checkbox" checked={dupOk} onChange={e => setDupOk(e.target.checked)} style={{ accentColor: C.accent, width: 16, height: 16, marginTop: 2 }} />Ho verificato: è un fornitore diverso (o una sede distinta) e va registrato comunque</label>
-                      {dupOk && <textarea value={dupReason} onChange={e => setDupReason(e.target.value)} placeholder="Perché non è un doppione?" aria-label="Motivo" style={{ ...iStyle, height: 60, resize: "vertical" }} />}
+                      <label style={{ ...sans, display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, margin: "4px 0 8px", cursor: "pointer" }}><input type="checkbox" checked={dupOk} onChange={e => setDupOk(e.target.checked)} style={{ accentColor: C.accent, width: 16, height: 16, marginTop: 2 }} />{t("Ho verificato: è un fornitore diverso (o una sede distinta) e va registrato comunque")}</label>
+                      {dupOk && <textarea value={dupReason} onChange={e => setDupReason(e.target.value)} placeholder={t("Perché non è un doppione?")} aria-label={t("Motivo")} style={{ ...iStyle, height: 60, resize: "vertical" }} />}
                     </div>
                   )}
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={() => run("approve", "approve", { paymentTerms: terms, confirmDuplicates: dupOk, duplicateReason: dupReason })} disabled={!!busy || !terms} style={{ ...btn(true), opacity: busy || !terms ? 0.6 : 1 }}>{spin("approve")}<CheckCircle2 size={16} />Approva e passa al Finance</button>
-                    <button onClick={() => setDialog("revision")} disabled={!!busy} style={btn(false)}><RotateCcw size={15} />Chiedi modifiche</button>
-                    <button onClick={() => setDialog("reject")} disabled={!!busy} style={btn(false, true)}><Ban size={15} />Rifiuta</button>
+                    <button onClick={() => run("approve", "approve", { paymentTerms: terms, confirmDuplicates: dupOk, duplicateReason: dupReason })} disabled={!!busy || !terms} style={{ ...btn(true), opacity: busy || !terms ? 0.6 : 1 }}>{spin("approve")}<CheckCircle2 size={16} />{t("Approva e passa al Finance")}</button>
+                    <button onClick={() => setDialog("revision")} disabled={!!busy} style={btn(false)}><RotateCcw size={15} />{t("Chiedi modifiche")}</button>
+                    <button onClick={() => setDialog("reject")} disabled={!!busy} style={btn(false, true)}><Ban size={15} />{t("Rifiuta")}</button>
                   </div>
                 </Card>
               )}
               {s.status === "approved" && isFinanceStep && (
                 <Card style={{ borderColor: "#d9d2f5", background: "#fbfaff" }}>
-                  <CardTitle icon={<FileCheck2 size={16} />}>Registrazione in SAP</CardTitle>
-                  <p style={{ ...sans, fontSize: 13, color: C.muted, margin: "0 0 12px", lineHeight: 1.55 }}>Il Buyer ha approvato (condizioni di pagamento {s.paymentTerms ?? "—"}). Il portale invia l'anagrafica a SAP e salva il codice fornitore, che viene comunicato a fornitore e Buyer.</p>
+                  <CardTitle icon={<FileCheck2 size={16} />}>{t("Registrazione in SAP")}</CardTitle>
+                  <p style={{ ...sans, fontSize: 13, color: C.muted, margin: "0 0 12px", lineHeight: 1.55 }}>{t("Il Buyer ha approvato (condizioni di pagamento {terms}). Il portale invia l'anagrafica a SAP e salva il codice fornitore, che viene comunicato a fornitore e Buyer.", { terms: s.paymentTerms ?? "—" })}</p>
                   {s.bankChanged && (
                     <div style={{ background: C.redBg, borderRadius: 12, padding: 12, marginBottom: 12 }}>
-                      <div style={{ ...sans, fontSize: 13, color: C.red, fontWeight: 650, marginBottom: 6 }}>Coordinate bancarie cambiate: verifica obbligatoria</div>
-                      <div style={{ ...sans, fontSize: 12.5, color: C.text, lineHeight: 1.5, marginBottom: 8 }}>Chiama il fornitore a un numero già noto (non quello indicato nella richiesta) e fatti confermare il nuovo conto. Nuova lettera della banca: <b>{s.bankLetterAfterChange ? "caricata" : "mancante"}</b>.</div>
-                      <input value={bankContact} onChange={e => setBankContact(e.target.value)} placeholder="Chi hai chiamato e a quale numero" aria-label="Contatto chiamato" style={{ ...iStyle, marginBottom: 8 }} />
-                      <input value={bankNote} onChange={e => setBankNote(e.target.value)} placeholder="Esito della verifica" aria-label="Esito della verifica" style={iStyle} />
+                      <div style={{ ...sans, fontSize: 13, color: C.red, fontWeight: 650, marginBottom: 6 }}>{t("Coordinate bancarie cambiate: verifica obbligatoria")}</div>
+                      <div style={{ ...sans, fontSize: 12.5, color: C.text, lineHeight: 1.5, marginBottom: 8 }}>{t("Chiama il fornitore a un numero già noto (non quello indicato nella richiesta) e fatti confermare il nuovo conto. Nuova lettera della banca:")} <b>{s.bankLetterAfterChange ? t("caricata") : t("mancante")}</b>.</div>
+                      <input value={bankContact} onChange={e => setBankContact(e.target.value)} placeholder={t("Chi hai chiamato e a quale numero")} aria-label={t("Contatto chiamato")} style={{ ...iStyle, marginBottom: 8 }} />
+                      <input value={bankNote} onChange={e => setBankNote(e.target.value)} placeholder={t("Esito della verifica")} aria-label={t("Esito della verifica")} style={iStyle} />
                     </div>
                   )}
                   {s.compliance.some(c => c.status === "fail" || c.status === "warn" || c.status === "todo") && (
                     <div style={{ marginBottom: 12 }}>
-                      <label style={{ ...sans, display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, marginBottom: 8, cursor: "pointer" }}><input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} style={{ accentColor: C.accent, width: 16, height: 16, marginTop: 2 }} />Ho valutato i controlli di conformità non superati (vedi sotto) e confermo la registrazione</label>
-                      {ack && <textarea value={ackNote} onChange={e => setAckNote(e.target.value)} placeholder="Nota sulla valutazione" aria-label="Nota sui controlli" style={{ ...iStyle, height: 60, resize: "vertical" }} />}
+                      <label style={{ ...sans, display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, marginBottom: 8, cursor: "pointer" }}><input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} style={{ accentColor: C.accent, width: 16, height: 16, marginTop: 2 }} />{t("Ho valutato i controlli di conformità non superati (vedi sotto) e confermo la registrazione")}</label>
+                      {ack && <textarea value={ackNote} onChange={e => setAckNote(e.target.value)} placeholder={t("Nota sulla valutazione")} aria-label={t("Nota sui controlli")} style={{ ...iStyle, height: 60, resize: "vertical" }} />}
                     </div>
                   )}
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <button onClick={() => { if (window.confirm("Creare il fornitore in SAP?")) run("sap", "approve", { bankVerification: { contact: bankContact, note: bankNote }, complianceAck: ack, complianceNote: ackNote }); }} disabled={!!busy} style={btn(true)}>{spin("sap")}<Send size={16} />Registra in SAP</button>
-                    <button onClick={() => setDialog("revision")} disabled={!!busy} style={btn(false)}><RotateCcw size={15} />Chiedi modifiche</button>
-                    <button onClick={() => setDialog("reject")} disabled={!!busy} style={btn(false, true)}><Ban size={15} />Rifiuta</button>
+                    <button onClick={() => { if (window.confirm(t("Creare il fornitore in SAP?"))) run("sap", "approve", { bankVerification: { contact: bankContact, note: bankNote }, complianceAck: ack, complianceNote: ackNote }); }} disabled={!!busy} style={btn(true)}>{spin("sap")}<Send size={16} />{t("Registra in SAP")}</button>
+                    <button onClick={() => setDialog("revision")} disabled={!!busy} style={btn(false)}><RotateCcw size={15} />{t("Chiedi modifiche")}</button>
+                    <button onClick={() => setDialog("reject")} disabled={!!busy} style={btn(false, true)}><Ban size={15} />{t("Rifiuta")}</button>
                   </div>
                 </Card>
               )}
-              {s.status === "pending" && !isBuyerStep && <Notice kind="info">In attesa della verifica del Buyer di riferimento{s.referenceBuyerName ? ` (${s.referenceBuyerName})` : ""}.</Notice>}
-              {s.status === "approved" && !isFinanceStep && <Notice kind="info">Approvato dal Buyer: ora tocca al Finance registrarlo in SAP.</Notice>}
-              {s.status === "registered" && <Notice kind="ok"><b>Registrato in SAP</b>{s.sapCode ? <> · codice fornitore <b>{s.sapCode}</b></> : null}{s.sapAccountGroup ? ` · gruppo conti ${s.sapAccountGroup}` : ""}</Notice>}
+              {s.status === "pending" && !isBuyerStep && <Notice kind="info">{s.referenceBuyerName ? t("In attesa della verifica del Buyer di riferimento ({name}).", { name: s.referenceBuyerName }) : t("In attesa della verifica del Buyer di riferimento.")}</Notice>}
+              {s.status === "approved" && !isFinanceStep && <Notice kind="info">{t("Approvato dal Buyer: ora tocca al Finance registrarlo in SAP.")}</Notice>}
+              {s.status === "registered" && <Notice kind="ok"><b>{t("Registrato in SAP")}</b>{s.sapCode ? <> · {t("codice fornitore")} <b>{s.sapCode}</b></> : null}{s.sapAccountGroup ? " · " + t("gruppo conti {group}", { group: s.sapAccountGroup }) : ""}</Notice>}
               {error && <Notice kind="error">{error}</Notice>}
 
               {s.changes.length > 0 && (
                 <Card style={{ borderColor: s.bankChanged ? "#f0c9c9" : undefined }}>
-                  <CardTitle icon={<RotateCcw size={16} />}>Modifiche rispetto ai dati approvati{s.approvedAt ? ` il ${fmtDate(s.approvedAt)}` : ""}</CardTitle>
+                  <CardTitle icon={<RotateCcw size={16} />}>{s.approvedAt ? t("Modifiche rispetto ai dati approvati il {date}", { date: fmtDate(s.approvedAt) }) : t("Modifiche rispetto ai dati approvati")}</CardTitle>
                   <div style={{ overflowX: "auto" }}>
                     <table className="data-table" style={{ minWidth: 480 }}>
-                      <thead><tr><th>Campo</th><th>Prima</th><th>Ora</th></tr></thead>
-                      <tbody>{s.changes.map(c => <tr key={c.field} style={{ cursor: "default", background: c.bank ? C.redBg : undefined }}><td style={{ fontWeight: 650, color: c.bank ? C.red : C.text }}>{c.label}</td><td style={{ color: C.muted, overflowWrap: "anywhere" }}>{c.before || "—"}</td><td style={{ overflowWrap: "anywhere" }}>{c.after || "—"}</td></tr>)}</tbody>
+                      <thead><tr><th>{t("Campo")}</th><th>{t("Prima")}</th><th>{t("Ora")}</th></tr></thead>
+                      <tbody>{s.changes.map(c => <tr key={c.field} style={{ cursor: "default", background: c.bank ? C.redBg : undefined }}><td style={{ fontWeight: 650, color: c.bank ? C.red : C.text }}>{t(c.label)}</td><td style={{ color: C.muted, overflowWrap: "anywhere" }}>{c.before || "—"}</td><td style={{ overflowWrap: "anywhere" }}>{c.after || "—"}</td></tr>)}</tbody>
                     </table>
                   </div>
                 </Card>
@@ -370,59 +371,59 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
 
               {s.status !== "draft" && (
                 <Card>
-                  <CardTitle icon={<FileCheck2 size={16} />} action={<button onClick={rerunChecks} disabled={!!busy} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}>{spin("checks")}<RotateCcw size={13} />Ripeti</button>}>Controlli di conformità</CardTitle>
+                  <CardTitle icon={<FileCheck2 size={16} />} action={<button onClick={rerunChecks} disabled={!!busy} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 6 }}>{spin("checks")}<RotateCcw size={13} />{t("Ripeti")}</button>}>{t("Controlli di conformità")}</CardTitle>
                   {s.compliance.map(c => (
                     <div key={c.key} style={{ display: "flex", gap: 10, alignItems: "flex-start", padding: "8px 0", borderTop: `1px solid ${C.borderLight}`, flexWrap: "wrap" }}>
-                      <span style={{ ...sans, flex: "0 0 auto", background: CHECK_STYLE[c.status].bg, color: CHECK_STYLE[c.status].color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 650, minWidth: 96, textAlign: "center" }}>{CHECK_STYLE[c.status].label}</span>
-                      <div style={{ flex: "1 1 260px", minWidth: 0 }}><div style={{ ...sans, fontSize: 13, fontWeight: 650 }}>{c.label}</div><div style={{ ...sans, fontSize: 12.5, color: C.muted, overflowWrap: "anywhere" }}>{c.detail}</div></div>
-                      {c.key === "sanctions" && c.status === "todo" && <button onClick={() => setDialog("sanctions")} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12 }}>Registra verifica manuale</button>}
+                      <span style={{ ...sans, flex: "0 0 auto", background: CHECK_STYLE[c.status].bg, color: CHECK_STYLE[c.status].color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 650, minWidth: 96, textAlign: "center" }}>{t(CHECK_STYLE[c.status].label)}</span>
+                      <div style={{ flex: "1 1 260px", minWidth: 0 }}><div style={{ ...sans, fontSize: 13, fontWeight: 650 }}>{t(c.label)}</div><div style={{ ...sans, fontSize: 12.5, color: C.muted, overflowWrap: "anywhere" }}>{c.detail}</div></div>
+                      {c.key === "sanctions" && c.status === "todo" && <button onClick={() => setDialog("sanctions")} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12 }}>{t("Registra verifica manuale")}</button>}
                     </div>
                   ))}
-                  {s.complianceCheckedAt && <div style={{ ...sans, fontSize: 11.5, color: C.subtle, marginTop: 6 }}>Controlli esterni eseguiti il {new Date(s.complianceCheckedAt).toLocaleString("it-IT", { dateStyle: "medium", timeStyle: "short" })}</div>}
+                  {s.complianceCheckedAt && <div style={{ ...sans, fontSize: 11.5, color: C.subtle, marginTop: 6 }}>{t("Controlli esterni eseguiti il {date}", { date: new Date(s.complianceCheckedAt).toLocaleString(locale(), { dateStyle: "medium", timeStyle: "short" }) })}</div>}
                 </Card>
               )}
 
-              {s.duplicates.length > 0 && <Card><CardTitle>Possibili doppioni</CardTitle><DuplicateList dups={s.duplicates} /></Card>}
+              {s.duplicates.length > 0 && <Card><CardTitle>{t("Possibili doppioni")}</CardTitle><DuplicateList dups={s.duplicates} /></Card>}
 
               <Card>
-                <CardTitle>Anagrafica</CardTitle>
+                <CardTitle>{t("Anagrafica")}</CardTitle>
                 <Summary s={s} data={s.data} />
               </Card>
             </>)}
 
             {currentUser.role === "manager" && (/^Fornitore di Prova/i.test(s.name) || /^(PROVA|SIMV)/.test(s.sapCode ?? "")) && (
               <Card>
-                <CardTitle>Accesso di prova</CardTitle>
-                <div style={{ ...sans, fontSize: 13, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>Fornitore di prova: genera una password per entrare come lui e vedere l'area fornitore (richieste di offerta, documenti). Apri l'accesso in una finestra anonima per non uscire dal tuo.</div>
-                {access && <Notice kind="ok">Email <b style={{ userSelect: "all" }}>{access.email}</b> · password <b style={{ userSelect: "all" }}>{access.password}</b> (mostrata solo ora).</Notice>}
-                <button onClick={async () => { setError(null); try { setAccess(await portalApi.testAccess(s.id)); } catch (err) { setError(fail(err)); } }} style={{ ...btnGhost, padding: "8px 14px", fontSize: 13 }}>{access ? "Genera una nuova password" : "Genera accesso di prova"}</button>
+                <CardTitle>{t("Accesso di prova")}</CardTitle>
+                <div style={{ ...sans, fontSize: 13, color: C.muted, marginBottom: 10, lineHeight: 1.5 }}>{t("Fornitore di prova: genera una password per entrare come lui e vedere l'area fornitore (richieste di offerta, documenti). Apri l'accesso in una finestra anonima per non uscire dal tuo.")}</div>
+                {access && <Notice kind="ok">{t("Email")} <b style={{ userSelect: "all" }}>{access.email}</b> · {t("password")} <b style={{ userSelect: "all" }}>{access.password}</b> {t("(mostrata solo ora).")}</Notice>}
+                <button onClick={async () => { setError(null); try { setAccess(await portalApi.testAccess(s.id)); } catch (err) { setError(fail(err)); } }} style={{ ...btnGhost, padding: "8px 14px", fontSize: 13 }}>{access ? t("Genera una nuova password") : t("Genera accesso di prova")}</button>
               </Card>
             )}
 
             {s.status === "registered" && (currentUser.role === "manager" || currentUser.role === "buyer") && <RatingCard supplierId={s.id} fail={fail} notify={notify} />}
 
             <Card>
-              <CardTitle>Dati interni</CardTitle>
+              <CardTitle>{t("Dati interni")}</CardTitle>
               <KV rows={[
-                ["Società", s.companyCodes.map(c => config.companies.find(x => x.code === c)?.name ?? c).join(", ")],
-                ["Codice merceologico", `${s.industryCode} · ${config.industryCodes.find(i => i.code === s.industryCode)?.name ?? ""}`],
-                ["Codice cliente", s.customerCode], ["Buyer di riferimento", s.referenceBuyerName],
-                ["Condizioni di pagamento", s.paymentTerms ? `${s.paymentTerms} · ${config.paymentTerms.find(p => p.code === s.paymentTerms)?.label ?? ""}` : ""],
-                ["Codice SAP", s.sapCode], ["Invitato il", fmtDate(s.invitedAt)], ["Inviata il", s.submittedAt ? fmtDate(s.submittedAt) : ""],
+                [t("Società"), s.companyCodes.map(c => config.companies.find(x => x.code === c)?.name ?? c).join(", ")],
+                [t("Codice merceologico"), `${s.industryCode} · ${config.industryCodes.find(i => i.code === s.industryCode)?.name ?? ""}`],
+                [t("Codice cliente"), s.customerCode], [t("Buyer di riferimento"), s.referenceBuyerName],
+                [t("Condizioni di pagamento"), s.paymentTerms ? `${s.paymentTerms} · ${config.paymentTerms.find(p => p.code === s.paymentTerms)?.label ?? ""}` : ""],
+                [t("Codice SAP"), s.sapCode], [t("Invitato il"), fmtDate(s.invitedAt)], [t("Inviata il"), s.submittedAt ? fmtDate(s.submittedAt) : ""],
               ]} />
             </Card>
 
             {s.status !== "invited" && (
               <Card>
-                <CardTitle icon={<Paperclip size={16} />}>Documenti ({s.documents.length})</CardTitle>
-                {s.documents.length === 0 ? <div style={{ ...sans, fontSize: 13, color: C.muted }}>Nessun documento caricato.</div> : s.documents.map((d, i) => (
+                <CardTitle icon={<Paperclip size={16} />}>{t("Documenti ({n})", { n: s.documents.length })}</CardTitle>
+                {s.documents.length === 0 ? <div style={{ ...sans, fontSize: 13, color: C.muted }}>{t("Nessun documento caricato.")}</div> : s.documents.map((d, i) => (
                   <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", padding: "9px 0", borderTop: i ? `1px solid ${C.borderLight}` : "none" }}>
                     <div style={{ minWidth: 0, flex: "1 1 220px" }}>
                       <div style={{ ...sans, fontSize: 13, fontWeight: 650, color: C.text }}>{d.typeLabel}</div>
                       <div style={{ ...sans, fontSize: 12, color: C.muted, overflowWrap: "anywhere" }}>{d.fileName} · {fmtSize(d.size)}</div>
                     </div>
                     <ValidityChip validUntil={d.validUntil} /><DocLink id={d.id} name={d.fileName} />
-                    {isBuyerStep && config.ai.configured && <button onClick={() => recheck(d.id)} disabled={!!busy} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5 }}>{busy === `ai${d.id}` ? <Loader2 className="spin" size={13} /> : <RotateCcw size={13} />}{d.ai ? "Ripeti controllo" : "Controlla"}</button>}
+                    {isBuyerStep && config.ai.configured && <button onClick={() => recheck(d.id)} disabled={!!busy} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5 }}>{busy === `ai${d.id}` ? <Loader2 className="spin" size={13} /> : <RotateCcw size={13} />}{d.ai ? t("Ripeti controllo") : t("Controlla")}</button>}
                     <AiResult check={d.ai} audience="staff" />
                   </div>
                 ))}
@@ -431,55 +432,55 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
 
             {(isBuyerStep && s.status !== "invited") && (
               <Card>
-                <CardTitle icon={<Ban size={16} />}>Stato del fornitore</CardTitle>
-                <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-6px 0 10px", lineHeight: 1.5 }}>Bloccato: resta nel portale ma non può essere approvato. Disattivato: non accede più. Escluso: non accede e non può essere reinvitato senza un Manager. Il blocco in SAP, per ora, va fatto a mano.</p>
+                <CardTitle icon={<Ban size={16} />}>{t("Stato del fornitore")}</CardTitle>
+                <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "-6px 0 10px", lineHeight: 1.5 }}>{t("Bloccato: resta nel portale ma non può essere approvato. Disattivato: non accede più. Escluso: non accede e non può essere reinvitato senza un Manager. Il blocco in SAP, per ora, va fatto a mano.")}</p>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  {s.lifecycle === "active" && <button onClick={() => setDialog("block")} style={btn(false)}>Blocca</button>}
-                  {currentUser.role === "manager" && s.lifecycle !== "inactive" && <button onClick={() => setDialog("deactivate")} style={btn(false)}>Disattiva</button>}
-                  {currentUser.role === "manager" && s.lifecycle !== "excluded" && <button onClick={() => setDialog("exclude")} style={btn(false, true)}>Escludi</button>}
-                  {currentUser.role === "manager" && s.lifecycle !== "active" && !s.anonymizedAt && <button onClick={() => setDialog("reactivate")} style={btn(true)}>Riattiva</button>}
+                  {s.lifecycle === "active" && <button onClick={() => setDialog("block")} style={btn(false)}>{t("Blocca")}</button>}
+                  {currentUser.role === "manager" && s.lifecycle !== "inactive" && <button onClick={() => setDialog("deactivate")} style={btn(false)}>{t("Disattiva")}</button>}
+                  {currentUser.role === "manager" && s.lifecycle !== "excluded" && <button onClick={() => setDialog("exclude")} style={btn(false, true)}>{t("Escludi")}</button>}
+                  {currentUser.role === "manager" && s.lifecycle !== "active" && !s.anonymizedAt && <button onClick={() => setDialog("reactivate")} style={btn(true)}>{t("Riattiva")}</button>}
                 </div>
                 {currentUser.role === "manager" && (
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12, paddingTop: 12, borderTop: `1px solid ${C.borderLight}`, alignItems: "center" }}>
-                    <span style={{ ...sans, fontSize: 12, color: C.muted, flex: "1 1 200px" }}>Privacy: esporta tutti i dati del fornitore o, se non è più attivo, cancellane i dati personali.</span>
-                    <a href={vendorExportUrl(s.id)} style={{ ...btn(false), textDecoration: "none", display: "inline-flex", alignItems: "center" }}>Esporta dati</a>
-                    {!s.anonymizedAt && (s.lifecycle !== "active" || s.status !== "registered") && <button onClick={() => setDialog("anonymize")} style={btn(false, true)}>Anonimizza</button>}
+                    <span style={{ ...sans, fontSize: 12, color: C.muted, flex: "1 1 200px" }}>{t("Privacy: esporta tutti i dati del fornitore o, se non è più attivo, cancellane i dati personali.")}</span>
+                    <a href={vendorExportUrl(s.id)} style={{ ...btn(false), textDecoration: "none", display: "inline-flex", alignItems: "center" }}>{t("Esporta dati")}</a>
+                    {!s.anonymizedAt && (s.lifecycle !== "active" || s.status !== "registered") && <button onClick={() => setDialog("anonymize")} style={btn(false, true)}>{t("Anonimizza")}</button>}
                   </div>
                 )}
               </Card>
             )}
             {s.contracts && (
               <Card>
-                <CardTitle icon={<FileText size={16} />}>Contratti</CardTitle>
-                {s.contracts.length === 0 ? <div style={{ ...sans, fontSize: 13, color: C.subtle }}>Nessun contratto collegato a questo fornitore.</div> : s.contracts.map((c, i) => (
+                <CardTitle icon={<FileText size={16} />}>{t("Contratti")}</CardTitle>
+                {s.contracts.length === 0 ? <div style={{ ...sans, fontSize: 13, color: C.subtle }}>{t("Nessun contratto collegato a questo fornitore.")}</div> : s.contracts.map((c, i) => (
                   <div key={c.id} style={{ ...sans, display: "flex", gap: 10, padding: "8px 0", borderTop: i ? `1px solid ${C.borderLight}` : "none", fontSize: 13, flexWrap: "wrap", alignItems: "baseline" }}>
                     <span style={{ flex: "1 1 200px", fontWeight: 600, color: c.status === "active" ? C.text : C.muted }}>{c.object}</span>
                     <span className="tabular" style={{ color: C.muted }}>{fmt(c.value, c.currency)}</span>
-                    <span className="tabular" style={{ color: C.muted }}>scad. {fmtDate(c.end)}</span>
-                    <span style={{ fontSize: 11.5, fontWeight: 650, borderRadius: 999, padding: "2px 9px", background: c.status === "active" ? C.greenBg : C.grayBg, color: c.status === "active" ? C.green : C.gray }}>{c.status === "active" ? "Attivo" : ({ renewed: "Rinnovato", replaced: "Sostituito", ceased: "Cessato", extended: "Prorogato" } as Record<string, string>)[c.outcome] ?? "Chiuso"}</span>
+                    <span className="tabular" style={{ color: C.muted }}>{t("scad. {date}", { date: fmtDate(c.end) })}</span>
+                    <span style={{ fontSize: 11.5, fontWeight: 650, borderRadius: 999, padding: "2px 9px", background: c.status === "active" ? C.greenBg : C.grayBg, color: c.status === "active" ? C.green : C.gray }}>{c.status === "active" ? t("Attivo") : ({ renewed: t("Rinnovato"), replaced: t("Sostituito"), ceased: t("Cessato"), extended: t("Prorogato") } as Record<string, string>)[c.outcome] ?? t("Chiuso")}</span>
                   </div>
                 ))}
               </Card>
             )}
             <AuditTrail entries={supplierTimeline(s)} />
-            <div style={{ ...sans, fontSize: 11.5, color: C.subtle, display: "flex", alignItems: "center", gap: 6 }}><Clock size={13} />Aggiornato il {fmtDate(s.updatedAt)}</div>
+            <div style={{ ...sans, fontSize: 11.5, color: C.subtle, display: "flex", alignItems: "center", gap: 6 }}><Clock size={13} />{t("Aggiornato il {date}", { date: fmtDate(s.updatedAt) })}</div>
           </div>
         )}
       </div>
 
       {dialog && s && (() => {
         const cfg = {
-          reject: ["Rifiuta la registrazione", "Il fornitore riceverà questo motivo via email e potrà correggere e reinviare.", "Rifiuta", true, "reject"],
-          revision: ["Chiedi modifiche al fornitore", "Spiega cosa deve correggere: il fornitore riceverà il testo via email e potrà modificare dati e documenti.", "Invia richiesta", false, "request_revision"],
-          block: ["Blocca il fornitore", "Il fornitore non potrà essere approvato finché non viene riattivato. Il motivo resta nello storico.", "Blocca", true, "block"],
-          deactivate: ["Disattiva il fornitore", "Il fornitore non potrà più accedere all'area personale né ricevere reminder.", "Disattiva", true, "deactivate"],
-          exclude: ["Escludi il fornitore", "Esclusione definitiva: non accede, non riceve reminder e non può essere reinvitato senza un Manager.", "Escludi", true, "exclude"],
-          reactivate: ["Riattiva il fornitore", "Il fornitore torna operativo.", "Riattiva", false, "reactivate"],
-          sanctions: ["Verifica manuale delle sanzioni", "Indica la fonte consultata (es. lista consolidata UE, OFAC) e l'esito.", "Registra verifica", false, "sanctions_manual"],
-          anonymize: ["Anonimizza i dati personali", "Vengono cancellati contatti, indirizzo, documenti e account del fornitore. Restano ragione sociale, partita IVA e IBAN per il controllo dei doppioni. L'operazione non si può annullare.", "Anonimizza", true, "reject"],
+          reject: [t("Rifiuta la registrazione"), t("Il fornitore riceverà questo motivo via email e potrà correggere e reinviare."), t("Rifiuta"), true, "reject"],
+          revision: [t("Chiedi modifiche al fornitore"), t("Spiega cosa deve correggere: il fornitore riceverà il testo via email e potrà modificare dati e documenti."), t("Invia richiesta"), false, "request_revision"],
+          block: [t("Blocca il fornitore"), t("Il fornitore non potrà essere approvato finché non viene riattivato. Il motivo resta nello storico."), t("Blocca"), true, "block"],
+          deactivate: [t("Disattiva il fornitore"), t("Il fornitore non potrà più accedere all'area personale né ricevere reminder."), t("Disattiva"), true, "deactivate"],
+          exclude: [t("Escludi il fornitore"), t("Esclusione definitiva: non accede, non riceve reminder e non può essere reinvitato senza un Manager."), t("Escludi"), true, "exclude"],
+          reactivate: [t("Riattiva il fornitore"), t("Il fornitore torna operativo."), t("Riattiva"), false, "reactivate"],
+          sanctions: [t("Verifica manuale delle sanzioni"), t("Indica la fonte consultata (es. lista consolidata UE, OFAC) e l'esito."), t("Registra verifica"), false, "sanctions_manual"],
+          anonymize: [t("Anonimizza i dati personali"), t("Vengono cancellati contatti, indirizzo, documenti e account del fornitore. Restano ragione sociale, partita IVA e IBAN per il controllo dei doppioni. L'operazione non si può annullare."), t("Anonimizza"), true, "reject"],
         }[dialog] as [string, string, string, boolean, VendorAction];
         const confirm = dialog === "anonymize"
-          ? async (reason: string) => { try { setS(await portalApi.anonymize(s.id, reason)); onChanged(); notify("Dati personali anonimizzati"); setDialog(null); return null; } catch (err) { return fail(err); } }
+          ? async (reason: string) => { try { setS(await portalApi.anonymize(s.id, reason)); onChanged(); notify(t("Dati personali anonimizzati")); setDialog(null); return null; } catch (err) { return fail(err); } }
           : async (reason: string) => { const e = await run(dialog, cfg[4], { reason }); if (!e) setDialog(null); return e; };
         return <ReasonDialog title={cfg[0]} text={cfg[1]} confirmLabel={cfg[2]} danger={cfg[3]} onConfirm={confirm} onClose={() => setDialog(null)} />;
       })()}
@@ -493,8 +494,8 @@ function DuplicateList({ dups }: { dups: DuplicateMatch[] }) {
     <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
       {dups.map(d => (
         <div key={d.supplierId} style={{ ...sans, background: d.severe ? C.redBg : C.purpleBg, color: d.severe ? C.red : C.purple, borderRadius: 10, padding: "9px 12px", fontSize: 12.5, lineHeight: 1.5 }}>
-          <b>{d.name}</b>{d.sapCode ? ` · SAP ${d.sapCode}` : ""} · {STATUS_STYLE[d.status].label}{d.lifecycle !== "active" ? ` · ${LIFECYCLE_LABEL[d.lifecycle]}` : ""}
-          <div>Stessi dati: {d.fields.join(", ")}{d.severe ? " — attenzione: possibile frode o fornitore escluso" : ""}{d.confirmed ? " — già verificato come fornitore distinto" : ""}</div>
+          <b>{d.name}</b>{d.sapCode ? ` · SAP ${d.sapCode}` : ""} · {t(STATUS_STYLE[d.status].label)}{d.lifecycle !== "active" ? " · " + t(LIFECYCLE_LABEL[d.lifecycle]) : ""}
+          <div>{t("Stessi dati:")} {d.fields.map(f => t(f)).join(", ")}{d.severe ? " — " + t("attenzione: possibile frode o fornitore escluso") : ""}{d.confirmed ? " — " + t("già verificato come fornitore distinto") : ""}</div>
         </div>
       ))}
     </div>

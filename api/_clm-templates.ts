@@ -153,7 +153,7 @@ export interface Rendered { paras: string[]; heads: number[]; cols: 1 | 2; langs
 export function renderTemplate(tpl: Template, answers: Record<string, unknown>, langs: Lang[], clauseText: (code: string, lang: Lang) => string | null): Rendered {
   if (!langs.length || langs.length > 2 || langs.some(l => !LANGS.includes(l))) throw new HttpError(400, "Scegli una o due lingue (italiano, inglese)");
   const miss = tpl.questions.filter(x => x.required && (answers[x.key] === undefined || String(answers[x.key]).trim() === "")).map(x => x.label.it);
-  if (miss.length) throw new HttpError(400, `Compila: ${miss.join(", ")}`);
+  if (miss.length) throw HttpError.t(400, "Compila: {fields}", { fields: miss.join(", ") });
   const val = (k: string, lang: Lang): string => {
     const qn = tpl.questions.find(x => x.key === k);
     const raw = String(answers[k] ?? qn?.default ?? "").trim();

@@ -6,6 +6,7 @@ import { fmt, fmtDate } from "../lib/format.ts";
 import { Card, CardTitle, Field } from "./ui.tsx";
 import { Loader2, Paperclip, Send, Trash2, Upload } from "./icons.tsx";
 import { Notice } from "./vendorUi.tsx";
+import { t } from "../i18n/index.ts";
 
 /** Richieste di offerta ricevute dal fornitore: risponde con importo e note, oppure rinuncia. */
 export function SupplierRfqs({ fail, notify }: { fail: (e: unknown) => string; notify: (m: string) => void }) {
@@ -16,18 +17,18 @@ export function SupplierRfqs({ fail, notify }: { fail: (e: unknown) => string; n
   if (!rfqs) return null;
   if (!open.length && !past.length) return (
     <Card>
-      <CardTitle icon={<Send size={16} />}>Richieste di offerta</CardTitle>
-      <div style={{ ...sans, fontSize: 13, color: C.muted }}>Nessuna richiesta ricevuta. Quando un buyer ti invita a presentare un'offerta, la trovi qui e puoi rispondere con importo e note.</div>
+      <CardTitle icon={<Send size={16} />}>{t("Richieste di offerta")}</CardTitle>
+      <div style={{ ...sans, fontSize: 13, color: C.muted }}>{t("Nessuna richiesta ricevuta. Quando un buyer ti invita a presentare un'offerta, la trovi qui e puoi rispondere con importo e note.")}</div>
     </Card>
   );
   return (
     <Card>
-      <CardTitle icon={<Send size={16} />}>Richieste di offerta</CardTitle>
+      <CardTitle icon={<Send size={16} />}>{t("Richieste di offerta")}</CardTitle>
       <div style={{ display: "grid", gap: 12 }}>
-        {open.map(r => <RfqForm key={r.id} r={r} fail={fail} onSaved={x => { setRfqs(x); notify("Risposta inviata"); }} />)}
+        {open.map(r => <RfqForm key={r.id} r={r} fail={fail} onSaved={x => { setRfqs(x); notify(t("Risposta inviata")); }} />)}
         {past.map(r => (
           <div key={r.id} style={{ ...sans, fontSize: 13, color: C.muted, borderTop: `1px solid ${C.borderLight}`, paddingTop: 10 }}>
-            <b style={{ color: C.text }}>{r.title}</b> · chiusa il {fmtDate(r.deadline)} · {r.myQuote.declined ? "hai rinunciato" : `la tua offerta: ${fmt(r.myQuote.amount ?? 0)}`}
+            <b style={{ color: C.text }}>{r.title}</b> · {t("chiusa il {date}", { date: fmtDate(r.deadline) })} · {r.myQuote.declined ? t("hai rinunciato") : t("la tua offerta: {amount}", { amount: fmt(r.myQuote.amount ?? 0) })}
           </div>
         ))}
       </div>
@@ -57,22 +58,22 @@ function RfqForm({ r, fail, onSaved }: { r: SupplierRfq; fail: (e: unknown) => s
   return (
     <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: "14px 16px" }}>
       <div style={{ ...sans, fontWeight: 650, fontSize: 14.5, color: C.text }}>{r.title}</div>
-      <div style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "2px 0 8px" }}>Rispondi entro il {fmtDate(r.deadline)}{q.quotedAt ? ` · ${q.declined ? "hai rinunciato" : `hai già risposto (${fmt(q.amount ?? 0)})`}: puoi modificare la risposta fino alla scadenza` : ""}</div>
+      <div style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "2px 0 8px" }}>{t("Rispondi entro il {date}", { date: fmtDate(r.deadline) })}{q.quotedAt ? " · " + t("{state}: puoi modificare la risposta fino alla scadenza", { state: q.declined ? t("hai rinunciato") : t("hai già risposto ({amount})", { amount: fmt(q.amount ?? 0) }) }) : ""}</div>
       {r.description && <div style={{ ...sans, fontSize: 13, whiteSpace: "pre-wrap", marginBottom: 10 }}>{r.description}</div>}
       {r.specFile && <a href={supplierRfqSpecUrl(r.id)} target="_blank" rel="noreferrer" style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13, color: C.blue, marginBottom: 10 }}><Paperclip size={14} />{r.specFile}</a>}
       {err && <Notice kind="error">{err}</Notice>}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-        <Field label="Importo offerto (EUR, IVA esclusa)" htmlFor={`rfq-a-${r.id}`}><input id={`rfq-a-${r.id}`} inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} style={iStyle} placeholder="es. 12500" /></Field>
-        <Field label="Note (tempi, validità, condizioni)" htmlFor={`rfq-n-${r.id}`}><input id={`rfq-n-${r.id}`} value={notes} onChange={e => setNotes(e.target.value)} style={iStyle} /></Field>
+        <Field label={t("Importo offerto (EUR, IVA esclusa)")} htmlFor={`rfq-a-${r.id}`}><input id={`rfq-a-${r.id}`} inputMode="decimal" value={amount} onChange={e => setAmount(e.target.value)} style={iStyle} placeholder={t("es. 12500")} /></Field>
+        <Field label={t("Note (tempi, validità, condizioni)")} htmlFor={`rfq-n-${r.id}`}><input id={`rfq-n-${r.id}`} value={notes} onChange={e => setNotes(e.target.value)} style={iStyle} /></Field>
       </div>
       <div style={{ ...sans, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontSize: 13, marginBottom: 12 }}>
         <input ref={fileRef} type="file" hidden accept=".pdf,.doc,.docx,.ppt,.pptx,.jpg,.jpeg,.png" onChange={e => { setFile(e.target.files?.[0] ?? null); setRemoveFile(false); }} />
-        <button type="button" onClick={() => fileRef.current?.click()} style={{ ...btnGhost, padding: "7px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}><Upload size={14} />{file || attached ? "Cambia l'offerta in allegato" : "Allega l'offerta (PDF)"}</button>
-        {file ? <span style={{ color: C.muted }}>{file.name}</span> : attached ? <span style={{ color: C.muted, display: "inline-flex", alignItems: "center", gap: 6 }}><Paperclip size={14} />{q.fileName}<button type="button" onClick={() => setRemoveFile(true)} aria-label="Rimuovi allegato" style={{ background: "none", border: "none", cursor: "pointer", color: C.subtle, display: "flex" }}><Trash2 size={14} /></button></span> : null}
+        <button type="button" onClick={() => fileRef.current?.click()} style={{ ...btnGhost, padding: "7px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}><Upload size={14} />{file || attached ? t("Cambia l'offerta in allegato") : t("Allega l'offerta (PDF)")}</button>
+        {file ? <span style={{ color: C.muted }}>{file.name}</span> : attached ? <span style={{ color: C.muted, display: "inline-flex", alignItems: "center", gap: 6 }}><Paperclip size={14} />{q.fileName}<button type="button" onClick={() => setRemoveFile(true)} aria-label={t("Rimuovi allegato")} style={{ background: "none", border: "none", cursor: "pointer", color: C.subtle, display: "flex" }}><Trash2 size={14} /></button></span> : null}
       </div>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button onClick={() => send(false)} disabled={busy || !amount.trim()} style={{ ...btnPrimary, padding: "9px 16px", display: "inline-flex", alignItems: "center", gap: 6 }}>{busy && <Loader2 className="spin" size={14} />}Invia offerta</button>
-        <button onClick={() => send(true)} disabled={busy} style={{ ...btnGhost, padding: "9px 16px" }}>Non partecipo</button>
+        <button onClick={() => send(false)} disabled={busy || !amount.trim()} style={{ ...btnPrimary, padding: "9px 16px", display: "inline-flex", alignItems: "center", gap: 6 }}>{busy && <Loader2 className="spin" size={14} />}{t("Invia offerta")}</button>
+        <button onClick={() => send(true)} disabled={busy} style={{ ...btnGhost, padding: "9px 16px" }}>{t("Non partecipo")}</button>
       </div>
     </div>
   );

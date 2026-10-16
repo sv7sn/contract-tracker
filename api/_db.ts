@@ -570,8 +570,10 @@ export async function deleteUser(actor: User, id: number): Promise<void> {
   const owned = await countOwnedContracts(target);
   const asBo = (await getPool().query("select count(*)::int as n from contracts where lower(bo_email) = lower($1)", [target.email])).rows[0].n;
   if (owned || asBo) {
-    const parts = [owned && `contract owner di ${owned}`, asBo && `Business Owner di ${asBo}`].filter(Boolean).join(" e ");
-    throw new HttpError(409, `${target.name} è ${parts} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)`);
+    const name = target.name;
+    if (owned && asBo) throw HttpError.t(409, "{name} è contract owner di {owned} e Business Owner di {bo} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)", { name, owned, bo: asBo });
+    if (owned) throw HttpError.t(409, "{name} è contract owner di {owned} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)", { name, owned });
+    throw HttpError.t(409, "{name} è Business Owner di {bo} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)", { name, bo: asBo });
   }
   await getPool().query("delete from users where id = $1", [id]);
   await getPool().query("delete from login_attempts where lower(email) = lower($1)", [target.email]);
@@ -588,7 +590,7 @@ export async function updateUser(actor: User, input: unknown): Promise<User> {
   if (target.id === actor.id && (role !== actor.role || !active)) bad("Non puoi cambiare il tuo ruolo né disattivare il tuo account");
   if (role !== target.role && role === "bo") {
     const owned = await countOwnedContracts(target);
-    if (owned > 0) throw new HttpError(409, `${target.name} è contract owner di ${owned} contratti: riassegnali prima di renderlo Business Owner`);
+    if (owned > 0) throw HttpError.t(409, "{name} è contract owner di {owned} contratti: riassegnali prima di renderlo Business Owner", { name: target.name, owned });
   }
   if (target.role === "manager" && target.active && (role !== "manager" || !active)) {
     const { rows } = await getPool().query("select count(*)::int as n from users where role = 'manager' and active and id <> $1", [target.id]);

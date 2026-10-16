@@ -6,6 +6,7 @@ import { FUNC_LABEL } from "../clmRules.ts";
 import { Portal } from "../components/vendorUi.tsx";
 import { AuditView, DiffView, FindingsView, TemplateWizard } from "./DraftTools.tsx";
 import { AlertTriangle, Check, CheckCircle2, Clock, Download, Loader2, MessageSquare, Send, Upload, X } from "../components/icons.tsx";
+import { locale, t } from "../i18n/index.ts";
 
 // Bozza del contratto: versioni, testo con commenti ancorati, pareri delle funzioni. Riservata a buyer, Manager e funzioni invitate.
 const STATUS: Record<ReviewStatus, { label: string; fg: string; bg: string }> = {
@@ -13,13 +14,13 @@ const STATUS: Record<ReviewStatus, { label: string; fg: string; bg: string }> = 
   approved_comments: { label: "approva con commenti", fg: C.green, bg: C.greenBg }, changes: { label: "chiede modifiche", fg: C.red, bg: C.redBg },
 };
 const fmtDay = (d: string | null) => (d ? d.split("-").reverse().join("/") : "");
-const errText = (e: unknown) => (e instanceof Error ? e.message : "Operazione non riuscita");
+const errText = (e: unknown) => (e instanceof Error ? e.message : t("Operazione non riuscita"));
 
 export function ReviewChips({ bundle }: { bundle: ClmBundle }) {
-  if (!bundle.reviews.length) return <span style={{ ...sans, fontSize: 12.5, color: C.subtle }}>Nessuna funzione invitata</span>;
+  if (!bundle.reviews.length) return <span style={{ ...sans, fontSize: 12.5, color: C.subtle }}>{t("Nessuna funzione invitata")}</span>;
   return <span style={{ display: "inline-flex", flexWrap: "wrap", gap: 6 }}>{bundle.reviews.map(r => {
     const s = STATUS[r.status];
-    return <span key={r.id} style={{ ...sans, background: s.bg, color: s.fg, borderRadius: 999, padding: "2px 9px", fontSize: 11.5, fontWeight: 650 }}>{FUNC_LABEL[r.func]}: {s.label}</span>;
+    return <span key={r.id} style={{ ...sans, background: s.bg, color: s.fg, borderRadius: 999, padding: "2px 9px", fontSize: 11.5, fontWeight: 650 }}>{t(FUNC_LABEL[r.func])}: {t(s.label)}</span>;
   })}</span>;
 }
 
@@ -34,12 +35,12 @@ export function DraftSummary({ taskId, canManage, onChanged, currentUser }: { ta
   return (
     <div style={{ display: "grid", gap: 6 }}>
       {b && cur ? <>
-        <div style={{ ...sans, fontSize: 13, color: C.text }}>Versione {cur.version} · {cur.fileName}</div>
+        <div style={{ ...sans, fontSize: 13, color: C.text }}>{t("Versione {v} · {file}", { v: cur.version, file: cur.fileName })}</div>
         <ReviewChips bundle={b} />
         {b.gate && <div style={{ ...sans, fontSize: 12.5, color: C.red, display: "flex", gap: 6, alignItems: "flex-start" }}><AlertTriangle size={14} style={{ marginTop: 2, flexShrink: 0 }} />{b.gate}</div>}
-        {!b.gate && <div style={{ ...sans, fontSize: 12.5, color: C.green, display: "flex", gap: 6, alignItems: "center" }}><CheckCircle2 size={14} />Tutte le funzioni hanno approvato: si può firmare</div>}
-      </> : <div style={{ ...sans, fontSize: 13, color: C.muted }}>Nessuna bozza caricata. Carica la bozza per farla rivedere a richiedente, Legal, Compliance e IT Security.</div>}
-      {canManage && <div><button onClick={() => setOpen(true)} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}><MessageSquare size={14} />{cur ? "Apri bozza e revisioni" : "Carica la bozza"}</button></div>}
+        {!b.gate && <div style={{ ...sans, fontSize: 12.5, color: C.green, display: "flex", gap: 6, alignItems: "center" }}><CheckCircle2 size={14} />{t("Tutte le funzioni hanno approvato: si può firmare")}</div>}
+      </> : <div style={{ ...sans, fontSize: 13, color: C.muted }}>{t("Nessuna bozza caricata. Carica la bozza per farla rivedere a richiedente, Legal, Compliance e IT Security.")}</div>}
+      {canManage && <div><button onClick={() => setOpen(true)} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", alignItems: "center", gap: 6 }}><MessageSquare size={14} />{cur ? t("Apri bozza e revisioni") : t("Carica la bozza")}</button></div>}
       {open && <DraftDialog taskId={taskId} onClose={close} currentUser={currentUser} />}
     </div>
   );
@@ -48,9 +49,9 @@ export function DraftSummary({ taskId, canManage, onChanged, currentUser }: { ta
 export function DraftDialog({ taskId, onClose, currentUser }: { taskId: number; onClose: () => void; currentUser?: User }) {
   return (
     <Portal>
-      <div className="dialog-overlay" role="dialog" aria-modal="true" aria-label="Bozza del contratto" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="dialog-overlay" role="dialog" aria-modal="true" aria-label={t("Bozza del contratto")} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
         <div className="dialog" style={{ maxWidth: 980, padding: 18 }}>
-          <div style={{ display: "flex", justifyContent: "flex-end" }}><button onClick={onClose} aria-label="Chiudi" style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}><X size={20} /></button></div>
+          <div style={{ display: "flex", justifyContent: "flex-end" }}><button onClick={onClose} aria-label={t("Chiudi")} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}><X size={20} /></button></div>
           <DraftPanel taskId={taskId} currentUser={currentUser} />
         </div>
       </div>
@@ -119,45 +120,45 @@ export function DraftPanel({ taskId, currentUser }: { taskId: number; currentUse
     <div style={{ ...sans, display: "grid", gap: 14, minWidth: 0 }}>
       <div>
         <h3 style={{ margin: 0, fontSize: 17, color: C.text }}>{b.brief.title}</h3>
-        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 3 }}>{[b.brief.supplier, b.brief.value ? `${b.brief.value.toLocaleString("it-IT")} ${b.brief.currency}` : "", b.brief.due ? `scadenza task ${fmtDay(b.brief.due)}` : ""].filter(Boolean).join(" · ")}</div>
-        <div style={{ fontSize: 11.5, color: C.subtle, marginTop: 4 }}>Riservata: la vedono solo il buyer, il Manager e le funzioni invitate.</div>
+        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 3 }}>{[b.brief.supplier, b.brief.value ? `${b.brief.value.toLocaleString(locale())} ${b.brief.currency}` : "", b.brief.due ? t("scadenza task {d}", { d: fmtDay(b.brief.due) }) : ""].filter(Boolean).join(" · ")}</div>
+        <div style={{ fontSize: 11.5, color: C.subtle, marginTop: 4 }}>{t("Riservata: la vedono solo il buyer, il Manager e le funzioni invitate.")}</div>
       </div>
       {err && <div role="alert" style={{ color: C.red, fontSize: 13, background: C.redBg, borderRadius: 10, padding: "8px 12px" }}>{err}</div>}
 
       {/* Versioni e caricamento */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        {b.drafts.map(d => <button key={d.id} onClick={() => load(d.id)} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12.5, ...(d.id === b.draftId ? { borderColor: C.accent, color: C.accent, fontWeight: 650 } : {}) }}>v{d.version}{d.origin === "supplier" ? " (fornitore)" : d.sharedAt ? " · condivisa" : ""}</button>)}
-        {b.owner && cur && cur.origin === "internal" && isLatest && <button onClick={() => run("share", () => portalApi.clm.share(taskId, cur.id, !cur.sharedAt))} disabled={busy === "share"} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12.5, ...(cur.sharedAt ? { borderColor: C.blue, color: C.blue } : {}) }}>{busy === "share" ? "…" : cur.sharedAt ? "Ritira dal fornitore" : "Condividi con il fornitore"}</button>}
+        {b.drafts.map(d => <button key={d.id} onClick={() => load(d.id)} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12.5, ...(d.id === b.draftId ? { borderColor: C.accent, color: C.accent, fontWeight: 650 } : {}) }}>v{d.version}{d.origin === "supplier" ? " " + t("(fornitore)") : d.sharedAt ? " · " + t("condivisa") : ""}</button>)}
+        {b.owner && cur && cur.origin === "internal" && isLatest && <button onClick={() => run("share", () => portalApi.clm.share(taskId, cur.id, !cur.sharedAt))} disabled={busy === "share"} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12.5, ...(cur.sharedAt ? { borderColor: C.blue, color: C.blue } : {}) }}>{busy === "share" ? "…" : cur.sharedAt ? t("Ritira dal fornitore") : t("Condividi con il fornitore")}</button>}
         {cur && <a href={draftFileUrl(cur.id)} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12.5, color: C.blue, display: "inline-flex", gap: 5, alignItems: "center", textDecoration: "none" }}><Download size={14} />{cur.fileName}</a>}
         {b.owner && <>
-          <input value={note} onChange={e => setNote(e.target.value)} placeholder="Nota sulla nuova versione (facoltativa)" style={{ ...iStyle, flex: 1, minWidth: 160, padding: "6px 10px", fontSize: 12.5 }} />
-          <button onClick={() => fileRef.current?.click()} disabled={busy === "upload"} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", gap: 6, alignItems: "center" }}>{busy === "upload" ? <Loader2 className="spin" size={14} /> : <Upload size={14} />}{b.drafts.length ? "Carica nuova versione" : "Carica la bozza"}</button>
-          <button onClick={() => setWizard(true)} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5 }}>Nuova da modello</button>
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder={t("Nota sulla nuova versione (facoltativa)")} style={{ ...iStyle, flex: 1, minWidth: 160, padding: "6px 10px", fontSize: 12.5 }} />
+          <button onClick={() => fileRef.current?.click()} disabled={busy === "upload"} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5, display: "inline-flex", gap: 6, alignItems: "center" }}>{busy === "upload" ? <Loader2 className="spin" size={14} /> : <Upload size={14} />}{b.drafts.length ? t("Carica nuova versione") : t("Carica la bozza")}</button>
+          <button onClick={() => setWizard(true)} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5 }}>{t("Nuova da modello")}</button>
           <input ref={fileRef} type="file" accept=".docx,.doc,.pdf" hidden onChange={e => onUpload(e.target.files?.[0])} />
         </>}
       </div>
       {wizard && <TemplateWizard taskId={taskId} onClose={() => setWizard(false)} onDone={nb => { setB(nb); setWizard(false); setTab("text"); }} />}
-      {cur && !isLatest && <div style={{ fontSize: 12.5, color: C.yellow }}>Stai guardando una versione precedente: i pareri si danno sull'ultima.</div>}
-      {cur?.note && <div style={{ fontSize: 12.5, color: C.muted }}>Nota del buyer: {cur.note}</div>}
+      {cur && !isLatest && <div style={{ fontSize: 12.5, color: C.yellow }}>{t("Stai guardando una versione precedente: i pareri si danno sull'ultima.")}</div>}
+      {cur?.note && <div style={{ fontSize: 12.5, color: C.muted }}>{t("Nota del buyer: {n}", { n: cur.note })}</div>}
 
       {/* Pareri */}
       {cur && (
         <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, display: "grid", gap: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <strong style={{ fontSize: 13, color: C.text }}>Pareri delle funzioni</strong>
-            {b.owner && isLatest && <button onClick={() => setInviting(v => !v)} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12.5 }}>{inviting ? "Chiudi" : "Invita funzioni"}</button>}
+            <strong style={{ fontSize: 13, color: C.text }}>{t("Pareri delle funzioni")}</strong>
+            {b.owner && isLatest && <button onClick={() => setInviting(v => !v)} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12.5 }}>{inviting ? t("Chiudi") : t("Invita funzioni")}</button>}
           </div>
           {b.reviews.map(r => { const s = STATUS[r.status]; return (
             <div key={r.id} style={{ display: "flex", gap: 8, alignItems: "baseline", flexWrap: "wrap", fontSize: 13 }}>
-              <span style={{ background: s.bg, color: s.fg, borderRadius: 999, padding: "2px 9px", fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}>{FUNC_LABEL[r.func]}: {s.label}</span>
-              {r.status === "pending" && r.due && <span style={{ color: r.due < new Date().toISOString().slice(0, 10) ? C.red : C.subtle, fontSize: 12, display: "inline-flex", gap: 4, alignItems: "center" }}><Clock size={12} />entro {fmtDay(r.due)}</span>}
+              <span style={{ background: s.bg, color: s.fg, borderRadius: 999, padding: "2px 9px", fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}>{t(FUNC_LABEL[r.func])}: {t(s.label)}</span>
+              {r.status === "pending" && r.due && <span style={{ color: r.due < new Date().toISOString().slice(0, 10) ? C.red : C.subtle, fontSize: 12, display: "inline-flex", gap: 4, alignItems: "center" }}><Clock size={12} />{t("entro {d}", { d: fmtDay(r.due) })}</span>}
               {r.decidedBy && <span style={{ color: C.subtle, fontSize: 12 }}>{r.decidedBy}</span>}
               {r.note && <span style={{ color: C.muted, fontSize: 12.5 }}>— {r.note}</span>}
             </div>); })}
-          {!b.reviews.length && <div style={{ fontSize: 13, color: C.muted }}>Nessuna funzione invitata.</div>}
-          {b.required.some(q => !q.invited) && <div style={{ fontSize: 12.5, color: C.yellow }}>Richieste dalle regole e non ancora invitate: {b.required.filter(q => !q.invited).map(q => `${FUNC_LABEL[q.func]} (${q.reason})`).join("; ")}.</div>}
+          {!b.reviews.length && <div style={{ fontSize: 13, color: C.muted }}>{t("Nessuna funzione invitata.")}</div>}
+          {b.required.some(q => !q.invited) && <div style={{ fontSize: 12.5, color: C.yellow }}>{t("Richieste dalle regole e non ancora invitate: {list}.", { list: b.required.filter(q => !q.invited).map(q => `${t(FUNC_LABEL[q.func])} (${q.reason})`).join("; ") })}</div>}
           {inviting && <InviteForm bundle={b} busy={busy === "invite"} onSend={(funcs, msg) => run("invite", () => portalApi.clm.invite(taskId, funcs, msg)).then(ok => { if (ok) setInviting(false); })} />}
-          {b.gate ? <div style={{ fontSize: 12.5, color: C.red }}>{b.gate}</div> : cur && b.reviews.length > 0 && <div style={{ fontSize: 12.5, color: C.green }}>Tutte le funzioni hanno approvato.</div>}
+          {b.gate ? <div style={{ fontSize: 12.5, color: C.red }}>{b.gate}</div> : cur && b.reviews.length > 0 && <div style={{ fontSize: 12.5, color: C.green }}>{t("Tutte le funzioni hanno approvato.")}</div>}
           {b.canDecide && b.myFunc && <DecideForm func={b.myFunc} mine={b.reviews.find(r => r.func === b.myFunc)?.status} busy={busy === "decide"} onDecide={(d, n) => run("decide", () => portalApi.clm.decide(taskId, d, n))} />}
         </div>
       )}
@@ -167,7 +168,7 @@ export function DraftPanel({ taskId, currentUser }: { taskId: number; currentUse
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 14, alignItems: "start" }}>
           <div>
             <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-              {([["text", "Testo"], ["diff", "Confronta"], ["clauses", "Clausole"], ...(b.owner ? [["audit", "Storico"]] : [])] as [typeof tab, string][]).map(([k, n]) => (
+              {([["text", t("Testo")], ["diff", t("Confronta")], ["clauses", t("Clausole")], ...(b.owner ? [["audit", t("Storico")]] : [])] as [typeof tab, string][]).map(([k, n]) => (
                 <button key={k} onClick={() => setTab(k)} style={{ ...btnGhost, padding: "4px 11px", fontSize: 12.5, ...(tab === k ? { borderColor: C.accent, color: C.accent, fontWeight: 650 } : {}) }}>{n}</button>))}
             </div>
             {tab === "diff" && <DiffView taskId={taskId} versions={b.drafts.map(d => ({ id: d.id, version: d.version }))} />}
@@ -188,24 +189,24 @@ export function DraftPanel({ taskId, currentUser }: { taskId: number; currentUse
                   return rows;
                 })()}
               </div>
-            ) : <div style={{ border: `1px dashed ${C.border}`, borderRadius: 12, padding: 14, fontSize: 13, color: C.muted }}>Anteprima del testo non disponibile per questo formato: scarica il file e usa i commenti generali. Per commentare frase per frase carica la bozza in Word (.docx).</div>}
+            ) : <div style={{ border: `1px dashed ${C.border}`, borderRadius: 12, padding: 14, fontSize: 13, color: C.muted }}>{t("Anteprima del testo non disponibile per questo formato: scarica il file e usa i commenti generali. Per commentare frase per frase carica la bozza in Word (.docx).")}</div>}
             </>}
           </div>
           <div style={{ display: "grid", gap: 10 }}>
-            <div style={{ fontSize: 11.5, fontWeight: 700, color: C.subtle, textTransform: "uppercase", letterSpacing: ".04em" }}>Commenti ({top.filter(c => c.status === "open").length} aperti)</div>
+            <div style={{ fontSize: 11.5, fontWeight: 700, color: C.subtle, textTransform: "uppercase", letterSpacing: ".04em" }}>{t("Commenti ({n} aperti)", { n: top.filter(c => c.status === "open").length })}</div>
             <div style={{ display: "grid", gap: 8, maxHeight: 340, overflowY: "auto" }}>
-              {!top.length && <div style={{ fontSize: 13, color: C.muted }}>Nessun commento su questa versione.</div>}
+              {!top.length && <div style={{ fontSize: 13, color: C.muted }}>{t("Nessun commento su questa versione.")}</div>}
               {top.map(c => <CommentCard key={c.id} c={c} thread={threadOf(c.id)} owner={b.owner} busy={busy} reply={reply} setReply={setReply}
                 onResolve={(id, v) => run("res" + id, () => portalApi.clm.resolve(id, v))}
                 onReply={(txt) => run("reply", () => portalApi.clm.comment(taskId, { draftId: c.draftId, body: txt, parentId: c.id })).then(ok => { if (ok) setReply(null); })}
                 onJump={() => { if (c.para !== null) textRef.current?.querySelector(`[data-para="${c.para}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" }); }} />)}
             </div>
             <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 10, display: "grid", gap: 8 }}>
-              {sel ? <div style={{ fontSize: 12.5, color: C.muted, display: "flex", gap: 6, justifyContent: "space-between" }}><span>Su: «{sel.quote.length > 90 ? sel.quote.slice(0, 90) + "…" : sel.quote}»</span><button onClick={() => setSel(null)} aria-label="Togli selezione" style={{ background: "none", border: "none", cursor: "pointer", color: C.subtle }}><X size={14} /></button></div>
-                : <div style={{ fontSize: 12.5, color: C.subtle }}>Commento generale (seleziona una frase nel testo per ancorarlo).</div>}
-              <textarea value={text} onChange={e => setText(e.target.value)} rows={3} placeholder="Scrivi il commento…" style={{ ...iStyle, resize: "vertical" }} />
-              {b.owner && cur?.sharedAt && <label style={{ fontSize: 12.5, color: C.text, display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={ext} onChange={e => setExt(e.target.checked)} />Visibile al fornitore</label>}
-              <button onClick={send} disabled={!text.trim() || busy === "comment"} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 13, justifySelf: "end", display: "inline-flex", gap: 6, alignItems: "center", opacity: text.trim() ? 1 : .5 }}>{busy === "comment" ? <Loader2 className="spin" size={14} /> : <Send size={14} />}Commenta</button>
+              {sel ? <div style={{ fontSize: 12.5, color: C.muted, display: "flex", gap: 6, justifyContent: "space-between" }}><span>{t("Su: «{q}»", { q: sel.quote.length > 90 ? sel.quote.slice(0, 90) + "…" : sel.quote })}</span><button onClick={() => setSel(null)} aria-label={t("Togli selezione")} style={{ background: "none", border: "none", cursor: "pointer", color: C.subtle }}><X size={14} /></button></div>
+                : <div style={{ fontSize: 12.5, color: C.subtle }}>{t("Commento generale (seleziona una frase nel testo per ancorarlo).")}</div>}
+              <textarea value={text} onChange={e => setText(e.target.value)} rows={3} placeholder={t("Scrivi il commento…")} style={{ ...iStyle, resize: "vertical" }} />
+              {b.owner && cur?.sharedAt && <label style={{ fontSize: 12.5, color: C.text, display: "flex", gap: 6, alignItems: "center" }}><input type="checkbox" checked={ext} onChange={e => setExt(e.target.checked)} />{t("Visibile al fornitore")}</label>}
+              <button onClick={send} disabled={!text.trim() || busy === "comment"} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 13, justifySelf: "end", display: "inline-flex", gap: 6, alignItems: "center", opacity: text.trim() ? 1 : .5 }}>{busy === "comment" ? <Loader2 className="spin" size={14} /> : <Send size={14} />}{t("Commenta")}</button>
             </div>
           </div>
         </div>
@@ -218,20 +219,20 @@ function CommentCard({ c, thread, owner, busy, reply, setReply, onResolve, onRep
   const resolved = c.status === "resolved";
   const line = (x: ClmComment, first = false): ReactNode => (
     <div key={x.id} style={{ fontSize: 13, color: C.text, paddingTop: first ? 0 : 6 }}>
-      <span style={{ fontWeight: 650 }}>{x.authorName}</span> <span style={{ color: C.subtle, fontSize: 11.5 }}>{x.func === "buyer" ? "Buyer" : x.func === "supplier" ? "Fornitore" : FUNC_LABEL[x.func as FuncKey] ?? x.func}{x.external && x.func !== "supplier" ? " (visibile al fornitore)" : ""} · {new Date(x.createdAt).toLocaleDateString("it-IT")}</span>
+      <span style={{ fontWeight: 650 }}>{x.authorName}</span> <span style={{ color: C.subtle, fontSize: 11.5 }}>{x.func === "buyer" ? t("Buyer") : x.func === "supplier" ? t("Fornitore") : FUNC_LABEL[x.func as FuncKey] ? t(FUNC_LABEL[x.func as FuncKey]) : x.func}{x.external && x.func !== "supplier" ? " (" + t("visibile al fornitore") + ")" : ""} · {new Date(x.createdAt).toLocaleDateString(locale())}</span>
       <div style={{ whiteSpace: "pre-wrap", marginTop: 2 }}>{x.body}</div>
     </div>);
   return (
     <div style={{ border: `1px solid ${C.borderLight}`, borderRadius: 10, padding: 10, opacity: resolved ? .65 : 1, background: resolved ? C.bg : "#fff" }}>
       {c.quote && <button onClick={onJump} style={{ all: "unset", cursor: "pointer", display: "block", fontSize: 12, color: C.muted, borderLeft: `3px solid ${C.accent}`, paddingLeft: 7, marginBottom: 6 }}>«{c.quote.length > 110 ? c.quote.slice(0, 110) + "…" : c.quote}»</button>}
-      {line(c, true)}{thread.map(t => line(t))}
+      {line(c, true)}{thread.map(y => line(y))}
       <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
-        <button onClick={() => setReply(reply?.id === c.id ? null : { id: c.id, text: "" })} style={{ all: "unset", cursor: "pointer", fontSize: 12, color: C.blue }}>Rispondi</button>
-        {(owner || c.mine) && <button onClick={() => onResolve(c.id, !resolved)} disabled={busy === "res" + c.id} style={{ all: "unset", cursor: "pointer", fontSize: 12, color: C.muted, display: "inline-flex", gap: 4, alignItems: "center" }}><Check size={12} />{resolved ? "Riapri" : "Segna risolto"}</button>}
+        <button onClick={() => setReply(reply?.id === c.id ? null : { id: c.id, text: "" })} style={{ all: "unset", cursor: "pointer", fontSize: 12, color: C.blue }}>{t("Rispondi")}</button>
+        {(owner || c.mine) && <button onClick={() => onResolve(c.id, !resolved)} disabled={busy === "res" + c.id} style={{ all: "unset", cursor: "pointer", fontSize: 12, color: C.muted, display: "inline-flex", gap: 4, alignItems: "center" }}><Check size={12} />{resolved ? t("Riapri") : t("Segna risolto")}</button>}
       </div>
       {reply?.id === c.id && <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
         <textarea value={reply.text} onChange={e => setReply({ id: c.id, text: e.target.value })} rows={2} style={{ ...iStyle, fontSize: 13 }} />
-        <button onClick={() => onReply(reply.text)} disabled={!reply.text.trim() || busy === "reply"} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12.5, justifySelf: "end" }}>Invia risposta</button>
+        <button onClick={() => onReply(reply.text)} disabled={!reply.text.trim() || busy === "reply"} style={{ ...btnGhost, padding: "5px 11px", fontSize: 12.5, justifySelf: "end" }}>{t("Invia risposta")}</button>
       </div>}
     </div>
   );
@@ -242,16 +243,16 @@ function InviteForm({ bundle, busy, onSend }: { bundle: ClmBundle; busy: boolean
   const [req, setReq] = useState<number>(bundle.requesters[0]?.id ?? 0);
   const [msg, setMsg] = useState("");
   const list = (["requester", "legal", "compliance", "itsec"] as FuncKey[]).filter(f => !bundle.reviews.some(r => r.func === f));
-  if (!list.length) return <div style={{ fontSize: 12.5, color: C.muted }}>Sono già state invitate tutte le funzioni.</div>;
+  if (!list.length) return <div style={{ fontSize: 12.5, color: C.muted }}>{t("Sono già state invitate tutte le funzioni.")}</div>;
   const funcs = list.filter(f => picked[f]).map(f => (f === "requester" ? { func: f, userId: req } : { func: f }));
   return (
     <div style={{ display: "grid", gap: 8, borderTop: `1px solid ${C.borderLight}`, paddingTop: 8 }}>
       {list.map(f => <label key={f} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13, color: C.text }}>
-        <input type="checkbox" checked={!!picked[f]} onChange={e => setPicked({ ...picked, [f]: e.target.checked })} />{FUNC_LABEL[f]}
+        <input type="checkbox" checked={!!picked[f]} onChange={e => setPicked({ ...picked, [f]: e.target.checked })} />{t(FUNC_LABEL[f])}
         {f === "requester" && picked[f] && <select value={req} onChange={e => setReq(Number(e.target.value))} style={{ ...iStyle, width: "auto", padding: "4px 8px", fontSize: 12.5 }}>{bundle.requesters.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select>}
       </label>)}
-      <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={2} placeholder="Messaggio per chi deve rivedere (facoltativo)" style={{ ...iStyle, fontSize: 13 }} />
-      <button onClick={() => onSend(funcs, msg)} disabled={!funcs.length || busy} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 13, justifySelf: "end", opacity: funcs.length ? 1 : .5 }}>{busy ? "Invio…" : "Invita e avvisa per email"}</button>
+      <textarea value={msg} onChange={e => setMsg(e.target.value)} rows={2} placeholder={t("Messaggio per chi deve rivedere (facoltativo)")} style={{ ...iStyle, fontSize: 13 }} />
+      <button onClick={() => onSend(funcs, msg)} disabled={!funcs.length || busy} style={{ ...btnPrimary, padding: "8px 14px", fontSize: 13, justifySelf: "end", opacity: funcs.length ? 1 : .5 }}>{busy ? t("Invio…") : t("Invita e avvisa per email")}</button>
     </div>
   );
 }
@@ -260,12 +261,12 @@ function DecideForm({ func, mine, busy, onDecide }: { func: FuncKey; mine?: Revi
   const [note, setNote] = useState("");
   return (
     <div style={{ display: "grid", gap: 8, borderTop: `1px solid ${C.borderLight}`, paddingTop: 8 }}>
-      <strong style={{ fontSize: 13, color: C.text }}>Il tuo parere come {FUNC_LABEL[func]}{mine && mine !== "pending" ? ` (attuale: ${STATUS[mine].label})` : ""}</strong>
-      <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder="Nota (obbligatoria se chiedi modifiche)" style={{ ...iStyle, fontSize: 13 }} />
+      <strong style={{ fontSize: 13, color: C.text }}>{t("Il tuo parere come {f}", { f: t(FUNC_LABEL[func]) })}{mine && mine !== "pending" ? " " + t("(attuale: {s})", { s: t(STATUS[mine].label) }) : ""}</strong>
+      <textarea value={note} onChange={e => setNote(e.target.value)} rows={2} placeholder={t("Nota (obbligatoria se chiedi modifiche)")} style={{ ...iStyle, fontSize: 13 }} />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button onClick={() => onDecide("approved", note)} disabled={busy} style={{ ...btnPrimary, background: C.green, padding: "8px 14px", fontSize: 13 }}>Approvo</button>
-        <button onClick={() => onDecide("approved_comments", note)} disabled={busy} style={{ ...btnGhost, padding: "8px 14px", fontSize: 13, color: C.green, borderColor: C.green }}>Approvo con commenti</button>
-        <button onClick={() => onDecide("changes", note)} disabled={busy} style={{ ...btnGhost, padding: "8px 14px", fontSize: 13, color: C.red, borderColor: C.red }}>Chiedo modifiche</button>
+        <button onClick={() => onDecide("approved", note)} disabled={busy} style={{ ...btnPrimary, background: C.green, padding: "8px 14px", fontSize: 13 }}>{t("Approvo")}</button>
+        <button onClick={() => onDecide("approved_comments", note)} disabled={busy} style={{ ...btnGhost, padding: "8px 14px", fontSize: 13, color: C.green, borderColor: C.green }}>{t("Approvo con commenti")}</button>
+        <button onClick={() => onDecide("changes", note)} disabled={busy} style={{ ...btnGhost, padding: "8px 14px", fontSize: 13, color: C.red, borderColor: C.red }}>{t("Chiedo modifiche")}</button>
       </div>
     </div>
   );

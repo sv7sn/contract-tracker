@@ -359,7 +359,7 @@ export async function addMyDocument(user: User, input: unknown, origin?: string)
   if (!DOC_EXTENSIONS.includes(ext)) bad("Formato non supportato: usa PDF, Word, PowerPoint o immagini");
   if (!SUPPLIER_FILE_PATH_RE.test(filePath)) bad("Percorso del documento non valido");
   const size = Number(i.size);
-  if (!Number.isFinite(size) || size <= 0 || size > MAX_DOC_BYTES) bad(`Il file deve pesare al massimo ${MAX_DOC_BYTES / 1024 / 1024} MB`);
+  if (!Number.isFinite(size) || size <= 0 || size > MAX_DOC_BYTES) throw HttpError.t(400, "Il file deve pesare al massimo {mb} MB", { mb: MAX_DOC_BYTES / 1024 / 1024 });
   const validUntil = i.validUntil ? (/^\d{4}-\d{2}-\d{2}$/.test(i.validUntil) ? i.validUntil : bad("Data di validità non valida")) : null;
   const stale: string[] = [];
   let docId = 0;
@@ -421,7 +421,7 @@ export async function vendorAction(user: User, id: number, action: VendorAction,
   if (!base) throw new HttpError(404, "Fornitore non trovato");
   const reason = str(input?.reason, 1000);
   const link = `${origin}/`;
-  const statusIn = (...s: SupplierStatus[]) => { if (!s.includes(base.status)) throw new HttpError(409, `Azione non possibile nello stato "${base.status}"`); };
+  const statusIn = (...s: SupplierStatus[]) => { if (!s.includes(base.status)) throw HttpError.t(409, "Azione non possibile nello stato \"{status}\"", { status: base.status }); };
   const termsOk = async (code: string | null) => { if (!code || !(await db.query("select 1 from payment_terms where code = $1", [code])).rows.length) bad("Seleziona le condizioni di pagamento prima di approvare"); };
 
   const full = async () => (await loadFull(db, id))!;
@@ -489,12 +489,12 @@ export async function vendorAction(user: User, id: number, action: VendorAction,
     // Controlli di conformità non tutti superati: il Finance conferma di averli valutati.
     const open = f.compliance.filter(c => c.status === "fail" || c.status === "warn" || c.status === "todo");
     if (open.length) {
-      if (input?.complianceAck !== true || str(input?.complianceNote, 1000).length < 5) throw new HttpError(409, `Controlli da valutare: ${open.map(c => c.label).join(", ")}. Conferma di averli verificati e scrivi una nota`, { needsComplianceAck: true });
+      if (input?.complianceAck !== true || str(input?.complianceNote, 1000).length < 5) throw HttpError.t(409, "Controlli da valutare: {checks}. Conferma di averli verificati e scrivi una nota", { checks: open.map(c => c.label).join(", ") }, { needsComplianceAck: true });
       await addEvent(db, id, user.name, "Controlli di conformità valutati", `${open.map(c => `${c.label}: ${c.detail}`).join(" | ")} — Nota: ${str(input?.complianceNote, 1000)}`);
     }
     await createInSap(user, base, origin);
   } else if (action === "approve") {
-    throw new HttpError(409, `Non c'è nulla da approvare nello stato "${base.status}"`);
+    throw HttpError.t(409, "Non c'è nulla da approvare nello stato \"{status}\"", { status: base.status });
   } else if (action === "reject" || action === "request_revision") {
     statusIn("pending", "approved");
     if (base.status === "pending" ? !isBuyerStep(user) : !isFinanceStep(user)) throw new HttpError(403, "Non puoi decidere in questo passaggio");

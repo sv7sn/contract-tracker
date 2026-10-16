@@ -46,7 +46,7 @@ export function buildVendorPayload(s: SupplierForSap, sap: SapSettings, companie
 export function assertReadyForSap(p: SapVendorPayload) {
   if (p.country === "BR") throw new HttpError(422, "I fornitori brasiliani richiedono i dati fiscali locali (LC 116/NCM, ISS, ICMS…): questa parte non è ancora disponibile nel portale");
   if (!p.companyCodes.length || p.companyCodes.some(c => !c.companyCode || !c.purchasingOrg)) throw new HttpError(422, "Configura codice società SAP e organizzazione acquisti delle società selezionate (pagina Configurazione)");
-  if (!p.reconciliationAccount) throw new HttpError(422, `Configura il conto di riconciliazione per il gruppo conti ${p.accountGroup} (pagina Configurazione, parametri SAP)`);
+  if (!p.reconciliationAccount) throw HttpError.t(422, "Configura il conto di riconciliazione per il gruppo conti {group} (pagina Configurazione, parametri SAP)", { group: p.accountGroup });
   if (!p.paymentTerms) throw new HttpError(422, "Mancano le condizioni di pagamento");
 }
 
@@ -63,6 +63,6 @@ export async function sendToSap(p: SapVendorPayload, supplierId: number): Promis
     res = await fetch(endpoint, { method: "POST", signal: AbortSignal.timeout(25000), headers: { "Content-Type": "application/json", ...(process.env.SAP_TOKEN ? { Authorization: `Bearer ${process.env.SAP_TOKEN}` } : {}) }, body: JSON.stringify(p) });
   } catch { throw new HttpError(502, "SAP non raggiungibile: riprova più tardi"); }
   const body = (await res.json().catch(() => ({}))) as { vendorCode?: string; error?: string; message?: string };
-  if (!res.ok || !body.vendorCode) throw new HttpError(502, `SAP ha rifiutato la richiesta: ${body.error ?? body.message ?? `HTTP ${res.status}`}`);
+  if (!res.ok || !body.vendorCode) throw HttpError.t(502, "SAP ha rifiutato la richiesta: {reason}", { reason: body.error ?? body.message ?? `HTTP ${res.status}` });
   return { vendorCode: String(body.vendorCode), mode, response: body };
 }

@@ -2,6 +2,7 @@ import { useContext, useEffect, useState, type CSSProperties, type ReactNode } f
 import { FoldContext } from "./foldContext.ts";
 import type { Role, Urgency } from "../types.ts";
 import { C, colorFor, font, initials, radius, ROLE_COLORS, ROLE_LABELS, sans, shadow, URGENCY_COLORS } from "../theme.ts";
+import { t } from "../i18n/index.ts";
 import { BarChart3, Check, ChevronDown, ClipboardCheck, Flag, Handshake, History, Inbox, Mail, PenLine, Target } from "./icons.tsx";
 
 export function UrgencyDot({ level, size = 8 }: { level: Urgency; size?: number }) {
@@ -15,13 +16,13 @@ const RENEWAL_COLORS: Record<string, { bg: string; color: string }> = {
 /** Etichetta a pillola con un puntino: il significato non dipende dal solo colore perché il testo è sempre presente. */
 export function RenewalBadge({ status }: { status: string }) {
   const s = RENEWAL_COLORS[status] || RENEWAL_COLORS["Non definito"];
-  return <span style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, background: s.bg, color: s.color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: s.color }} />{status || "Non definito"}</span>;
+  return <span style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, background: s.bg, color: s.color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: s.color }} />{status ? t(status) : t("Non definito")}</span>;
 }
 
 /** Giorni alla scadenza in una pillola colorata. */
 export function DaysChip({ days, level, ceased }: { days: number; level: Urgency; ceased?: boolean | string }) {
   const color = URGENCY_COLORS[level];
-  const label = ceased ? (typeof ceased === "string" ? ceased : "Cessato") : days < 0 ? `Scaduto da ${Math.abs(days)} gg` : days === 0 ? "Scade oggi" : `${days} gg`;
+  const label = ceased ? (typeof ceased === "string" ? ceased : t("Cessato")) : days < 0 ? t("Scaduto da {n} gg", { n: Math.abs(days) }) : days === 0 ? t("Scade oggi") : t("{n} gg", { n: days });
   return <span className="tabular" style={{ ...sans, background: `${color}18`, color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{label}</span>;
 }
 
@@ -30,7 +31,7 @@ export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
 }
 
 export function RoleBadge({ role }: { role: Role }) {
-  return <span style={{ ...sans, background: `${ROLE_COLORS[role]}1c`, color: ROLE_COLORS[role], borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 650 }}>{ROLE_LABELS[role]}</span>;
+  return <span style={{ ...sans, background: `${ROLE_COLORS[role]}1c`, color: ROLE_COLORS[role], borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 650 }}>{t(ROLE_LABELS[role])}</span>;
 }
 
 /** Tessera con numero in evidenza e icona: stessa altezza per tutte, il valore non esce mai dal riquadro. */
@@ -67,9 +68,9 @@ export function Fold({ id, title, badge, hint, summary, status, defaultOpen, chi
     window.addEventListener("fold-open", h);
     return () => window.removeEventListener("fold-open", h);
   }, [id]);
-  const tone = status === "done" ? { bar: C.green, head: "#f1faf5", badge: { label: "Fatto", color: C.green, bg: C.greenBg } }
-    : status === "current" ? { bar: C.accent, head: C.accentLight, badge: { label: "Qui adesso", color: C.accent, bg: "#fff" } }
-    : status === "todo" ? { bar: C.border, head: "#fff", badge: { label: "Da fare", color: C.muted, bg: C.grayBg } } : null;
+  const tone = status === "done" ? { bar: C.green, head: "#f1faf5", badge: { label: t("Fatto"), color: C.green, bg: C.greenBg } }
+    : status === "current" ? { bar: C.accent, head: C.accentLight, badge: { label: t("Qui adesso"), color: C.accent, bg: "#fff" } }
+    : status === "todo" ? { bar: C.border, head: "#fff", badge: { label: t("Da fare"), color: C.muted, bg: C.grayBg } } : null;
   const b = badge ?? tone?.badge ?? null;
   return (
     <section id={id} style={{ background: C.card, border: `1px solid ${status === "current" ? C.accent : C.border}`, borderLeft: `5px solid ${tone?.bar ?? C.border}`, borderRadius: radius.lg, boxShadow: status === "current" ? shadow.md : shadow.sm, scrollMarginTop: 130, overflow: "hidden" }}>
@@ -116,7 +117,7 @@ export function AuditTrail({ entries }: { entries: { ts: string; user: string; a
   if (!entries.length) return null;
   return (
     <Card>
-      <CardTitle icon={<History size={16} />}>Storico delle attività</CardTitle>
+      <CardTitle icon={<History size={16} />}>{t("Storico delle attività")}</CardTitle>
       <div style={{ position: "relative", paddingLeft: 18 }}>
         <div style={{ position: "absolute", left: 4, top: 6, bottom: 6, width: 2, background: C.borderLight, borderRadius: 2 }} />
         {[...entries].reverse().map((log, i) => (

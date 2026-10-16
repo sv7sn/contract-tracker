@@ -106,7 +106,7 @@ export async function importBudget(user: User, yearIn: number, label: string, fi
   if (!Number.isInteger(year) || year < 2020 || year > 2100) bad("Anno non valido");
   const multi = parsed.versions.some(v => v.label);
   if (fileName !== "simulazione-master-plan.csv" && (await getPool().query("select 1 from mp_versions where year = $1 and file_name = 'simulazione-master-plan.csv' limit 1", [year])).rows.length)
-    throw new HttpError(409, `Per il ${year} è caricata la simulazione: eliminala (pulsante in alto) prima di caricare il Master Plan vero`);
+    throw HttpError.t(409, "Per il {year} è caricata la simulazione: eliminala (pulsante in alto) prima di caricare il Master Plan vero", { year });
   return inTransaction(async db => {
     const out: BudgetImport = { year, created: [], updated: [], buyersAssigned: 0, buyersMoved: 0, buyersUnmatched: [] };
     for (const pv of parsed.versions) {

@@ -1,4 +1,4 @@
-import { reviewGate } from "./_clm.js";
+import { gateError, reviewGate } from "./_clm.js";
 import { blockerOf, taskSteps } from "./_task-steps.js";
 import type { ContractOutcome, ImportResult, RdaConfig, RdaMeta, Sourcing, SourcingMode, SourcingQuote, SourcingStatus, Task, TaskDetail, TaskDocKind, TaskLine, TaskPo, TaskSummary, User } from "../src/types.ts";
 import { computeSaving } from "./_saving.js";
@@ -80,7 +80,7 @@ async function importPr(db: Queryable, lines: PrLine[], res: ImportResult, force
   const prev = (await db.query("select count(distinct pr)::int as n from rda_lines")).rows[0].n as number;
   const prs = new Map<string, PrLine[]>();
   for (const l of lines) { const a = prs.get(l.pr) ?? []; a.push(l); prs.set(l.pr, a); }
-  if (!force && prev >= 20 && prs.size < prev * 0.4) throw new HttpError(409, `Il file contiene ${prs.size} RDA contro le ${prev} dell'ultimo aggiornamento: potrebbe essere incompleto. Se è corretto, importalo comunque.`, { needsForce: true });
+  if (!force && prev >= 20 && prs.size < prev * 0.4) throw HttpError.t(409, "Il file contiene {count} RDA contro le {prev} dell'ultimo aggiornamento: potrebbe essere incompleto. Se è corretto, importalo comunque.", { count: prs.size, prev }, { needsForce: true });
   res.rows = lines.length; res.prs = prs.size;
   const sla = await loadSla(db);
   // L'elenco è la fotografia completa delle RDA aperte: si sostituisce tutto.
@@ -299,9 +299,11 @@ export async function updateTask(user: User, id: number, input: Row): Promise<Ta
   if (input?.status === "done" && cur.status === "open" && cur.source === "rda" && cur.blocker && input?.force !== true)
     throw new HttpError(409, `Mancano dei passaggi: ${cur.blocker}. Chiudila comunque solo se la RDA è stata annullata o respinta.`, { needsConfirm: true });
   if (input?.status === "done" && cur.status === "open" && cur.sourcingRequired && cur.sourcingStatus !== "ok") {
-    throw new HttpError(409, cur.sourcingStatus === "pending"
-      ? "L'eccezione per questa RDA è in attesa di approvazione del Manager: potrai chiuderla dopo l'approvazione"
-      : `${cur.source === "rda" ? "RDA" : cur.source === "contract" ? "Nuovo contratto" : "Acquisto"} sopra soglia (${fmtEur((await loadRdaSettings(getPool())).sourcingThreshold)}): prima di chiuderla registra il confronto con almeno un altro fornitore, oppure indica che è strategica o single source, o chiedi un'eccezione`, { needsSourcing: true });
+    if (cur.sourcingStatus === "pending") throw new HttpError(409, "L'eccezione per questa RDA è in attesa di approvazione del Manager: potrai chiuderla dopo l'approvazione", { needsSourcing: true });
+    const threshold = fmtEur((await loadRdaSettings(getPool())).sourcingThreshold);
+    throw HttpError.t(409, cur.source === "rda" ? "RDA sopra soglia ({threshold}): prima di chiuderla registra il confronto con almeno un altro fornitore, oppure indica che è strategica o single source, o chiedi un'eccezione"
+      : cur.source === "contract" ? "Nuovo contratto sopra soglia ({threshold}): prima di chiuderla registra il confronto con almeno un altro fornitore, oppure indica che è strategica o single source, o chiedi un'eccezione"
+      : "Acquisto sopra soglia ({threshold}): prima di chiuderla registra il confronto con almeno un altro fornitore, oppure indica che è strategica o single source, o chiedi un'eccezione", { threshold }, { needsSourcing: true });
   }
   if (input?.status === "done" && cur.status === "open") { set("status", "done"); set("done_at", new Date()); set("done_reason", "manual"); set("done_by", user.name); }
   else if (input?.status === "open" && cur.status === "done") {
@@ -345,7 +347,7 @@ export async function saveSourcing(user: User, id: number, input: Row): Promise<
     if (new Set(quotes.map(q => q.supplier.toLowerCase().replace(/[^a-z0-9]/g, ""))).size !== quotes.length) bad("Le offerte devono essere di fornitori diversi");
     const chosen = quotes.find(q => q.chosen)!;
     if (quotes.some(q => q.amount < chosen.amount) && justification.length < 10) bad("Non è stata scelta l'offerta più bassa: spiega il motivo");
-  } else if (justification.length < 10) bad(mode === "exception" ? "Spiega il motivo dell'eccezione" : "Spiega perché la fornitura è " + (mode === "strategic" ? "strategica" : "single source"));
+  } else if (justification.length < 10) bad(mode === "exception" ? "Spiega il motivo dell'eccezione" : mode === "strategic" ? "Spiega perché la fornitura è strategica" : "Spiega perché la fornitura è single source");
   const amount = (v: unknown) => { if (v === undefined || v === null || v === "") return null; const n = Number(v); if (!Number.isFinite(n) || n <= 0) bad("Importi del saving non validi"); return n; };
   const baseline = amount(input?.baseline), finalAmount = amount(input?.finalAmount);
   const now = new Date().toISOString();
@@ -556,7 +558,7 @@ export async function setRenewalOutcome(user: User, id: number, input: Row): Pro
   const outcome = input?.outcome as ContractOutcome;
   if (!OUTCOMES.includes(outcome)) bad("Scegli l'esito del rinnovo");
   const note = str(input?.note, 1000);
-  if (outcome !== "ceased") { const gate = await reviewGate(getPool(), id); if (gate) throw new HttpError(409, gate); }
+  if (outcome !== "ceased") { const gate = await reviewGate(getPool(), id); if (gate) throw gateError(gate); }
   await inTransaction(async db => {
     const old = (await db.query("select * from contracts where id = $1 for update", [t.contractId])).rows[0];
     if (!old) throw new HttpError(404, "Contratto non trovato");
@@ -619,7 +621,7 @@ export async function setTaskLinks(user: User, id: number, input: Row): Promise<
     if (t.source === "contract") bad("Per i rinnovi il contratto si registra con l'esito");
     const cs = String(input.contractStatus), note = str(input?.contractNote, 500);
     if (!["", "not_needed", "negotiating", "signed"].includes(cs)) bad("Stato del contratto non valido");
-    if (cs === "signed") { const gate = await reviewGate(getPool(), id); if (gate) throw new HttpError(409, gate); }
+    if (cs === "signed") { const gate = await reviewGate(getPool(), id); if (gate) throw gateError(gate); }
     if (cs === "signed" && !t.newContractId && !t.documents.some(d => d.kind === "offer" || d.kind === "contract" || d.kind === "addendum")) bad("Allega prima l'offerta accettata o il contratto firmato");
     if (cs === "not_needed" && note.length < 5) bad("Spiega perché non serve un contratto");
     vals.push(cs); sets.push(`contract_status = $${vals.length}`); vals.push(cs === "not_needed" || cs === "negotiating" ? note : ""); sets.push(`contract_note = $${vals.length}`);
@@ -636,7 +638,7 @@ export async function setTaskLinks(user: User, id: number, input: Row): Promise<
   if (newRdas.length) {
     const dup = (await getPool().query("select id, source_key, sourcing, (select count(*)::int from task_documents d where d.task_id = t.id) as docs from tasks t where source = 'rda' and status = 'open' and source_key = any($1)", [newRdas])).rows;
     const busy = dup.find(d => d.sourcing || d.docs > 0);
-    if (busy) throw new HttpError(409, `La RDA ${busy.source_key} ha già un task con confronto o documenti: completa la pratica da quel task`);
+    if (busy) throw HttpError.t(409, "La RDA {pr} ha già un task con confronto o documenti: completa la pratica da quel task", { pr: busy.source_key });
     const other = (await getPool().query("select id from tasks where id <> $1 and source in ('manual','contract') and status = 'open' and rda_numbers && $2::text[]", [id, newRdas])).rows[0];
     if (other) throw new HttpError(409, "Questa RDA è già collegata a un'altra pratica aperta");
     for (const d of dup) await getPool().query("update tasks set status = 'done', done_at = now(), done_reason = 'merged', done_by = $2, meta = meta || jsonb_build_object('mergedInto', $3::int), updated_at = now() where id = $1", [d.id, user.name, id]);
@@ -676,7 +678,7 @@ export async function registerTaskContract(user: User, id: number, input: Row): 
   if (t.status !== "open") bad("La pratica è chiusa");
   if (t.newContractId) throw new HttpError(409, "Il contratto di questa pratica è già stato registrato");
   const gate = await reviewGate(getPool(), id);
-  if (gate) throw new HttpError(409, gate);
+  if (gate) throw gateError(gate);
   const c = (input?.contract ?? {}) as Row;
   const key = (typeof c.noticeDate === "string" && c.noticeDate) || (typeof c.end === "string" ? c.end : "");
   if (!isoDay(key)) bad("Indica la scadenza del contratto");

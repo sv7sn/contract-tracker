@@ -12,7 +12,7 @@ import { InviteLanding } from "./components/InviteLanding.tsx";
 import { LoginScreen } from "./components/LoginScreen.tsx";
 import { BOFormModal, ContractForm } from "./components/Modals.tsx";
 import { AccountMenu } from "./components/AccountMenu.tsx";
-import { getLang, setLang } from "./i18n/index.ts";
+import { getLang, setLang, t } from "./i18n/index.ts";
 import { Dashboard } from "./views/Dashboard.tsx";
 import { ContractList } from "./views/ContractList.tsx";
 import { ContractDetail } from "./views/ContractDetail.tsx";
@@ -79,7 +79,7 @@ export default function App() {
     else if (tk > 0 && (user.role === "manager" || user.role === "buyer")) { setFocus({ taskId: tk }); setView("tasks"); }
     window.history.replaceState(null, "", window.location.pathname);
   };
-  const sessionExpired = () => { resetSession(); showToast("Sessione scaduta: accedi di nuovo"); };
+  const sessionExpired = () => { resetSession(); showToast(t("Sessione scaduta: accedi di nuovo")); };
 
   /** Gestisce gli errori comuni dell'API. Restituisce true se l'errore è stato gestito. */
   const handleApiError = (err: unknown) => {
@@ -91,7 +91,7 @@ export default function App() {
     try {
       if (hasContracts(user)) setData(await api.loadState());
       if (canManageUsers(user)) setUsers(await api.listUsers());
-    } catch (err) { if (!handleApiError(err)) showToast("⚠️ Impossibile caricare i dati"); }
+    } catch (err) { if (!handleApiError(err)) showToast("⚠️ " + t("Impossibile caricare i dati")); }
   };
 
   // All'avvio: sessione esistente? Se l'API non risponde si passa alla modalità demo locale.
@@ -129,7 +129,7 @@ export default function App() {
   const handleLogin = async (email: string, password: string): Promise<string | null> => {
     if (mode === "local") {
       const user = DEMO_USERS.find(u => u.email === email.trim().toLowerCase());
-      if (!user || password !== DEMO_PASSWORD) return "Credenziali non valide";
+      if (!user || password !== DEMO_PASSWORD) return t("Credenziali non valide");
       setCurrentUser(user); setView(homeFor(user, false));
       return null;
     }
@@ -140,10 +140,10 @@ export default function App() {
       setCurrentUser(user); setView(homeFor(user, true)); setSetupRequired(false); applyDeepLink(user);
       await loadAll(user);
       return null;
-    } catch (err) { return err instanceof ApiError ? err.message : "Impossibile contattare il server"; }
+    } catch (err) { return err instanceof ApiError ? err.message : t("Impossibile contattare il server"); }
   };
   const handleLogout = () => { if (mode === "api") api.logout().catch(() => undefined); resetSession(); };
-  const handleResetDemo = () => { clearLocal(); setData(demoState()); showToast("↺ Dati demo ripristinati"); };
+  const handleResetDemo = () => { clearLocal(); setData(demoState()); showToast("↺ " + t("Dati demo ripristinati")); };
 
   // ─── Salvataggio ───────────────────────────────────────────
   // Scrive sul database (nessuna operazione in modalità locale). Se fallisce ricarica lo stato dal server per annullare le modifiche ottimistiche.
@@ -152,7 +152,7 @@ export default function App() {
     try { return { ok: true, contractId: (await api.commit(payload)).contractId }; }
     catch (err) {
       if (handleApiError(err)) return { ok: false };
-      showToast(err instanceof ApiError && err.status === 403 ? "⛔ Operazione non consentita per il tuo ruolo" : "⚠️ Salvataggio non riuscito: dati ricaricati dal server");
+      showToast(err instanceof ApiError && err.status === 403 ? "⛔ " + t("Operazione non consentita per il tuo ruolo") : "⚠️ " + t("Salvataggio non riuscito: dati ricaricati dal server"));
       api.loadState().then(setData).catch(handleApiError);
       return { ok: false };
     }
@@ -173,7 +173,7 @@ export default function App() {
       }
       if (!(await persist({ contract: { ...form, id }, plan, audit })).ok) return;
       setData(s => pushAudit({ ...s, contracts: s.contracts.map(c => c.id === id ? { ...c, ...form, owner: currentUser.role === "buyer" ? c.owner : form.owner } : c), plans: plan ? { ...s.plans, [id]: plan } : s.plans }, id, audit));
-      showToast("💾 Aggiornato");
+      showToast("💾 " + t("Aggiornato"));
       // Con il server si rilegge tutto: nome e collegamento del Business Owner li calcola lui.
       if (mode === "api") void loadAll(currentUser);
     } else {
@@ -184,7 +184,7 @@ export default function App() {
       const newId = res.contractId ?? Math.max(...contracts.map(c => c.id), 0) + 1;
       const owner = currentUser.role === "buyer" ? currentUser.name : form.owner;
       setData(s => pushAudit({ ...s, contracts: [...s.contracts, { ...form, owner, id: newId }], plans: { ...s.plans, [newId]: plan.map(st => ({ ...st, contractId: newId })) } }, newId, audit));
-      showToast("✅ Contratto aggiunto");
+      showToast("✅ " + t("Contratto aggiunto"));
       if (mode === "api") void loadAll(currentUser);
     }
     setShowForm(false); setEditingContract(null);
@@ -200,13 +200,13 @@ export default function App() {
     const c = contracts.find(x => x.id === id);
     if (!c) return;
     if (mode === "api") {
-      try { await portalApi.sendBoNotice(id); if (currentUser) await loadAll(currentUser); showToast(`✉️ Avviso inviato a ${c.boEmail}`); }
-      catch (err) { if (!handleApiError(err)) showToast(`⚠️ ${err instanceof Error ? err.message : "Invio non riuscito"}`); }
+      try { await portalApi.sendBoNotice(id); if (currentUser) await loadAll(currentUser); showToast("✉️ " + t("Avviso inviato a {email}", { email: c.boEmail })); }
+      catch (err) { if (!handleApiError(err)) showToast(`⚠️ ${err instanceof Error ? err.message : t("Invio non riuscito")}`); }
       return;
     }
     const plan = (plans[id] || []).map(s => s.stepId === "bo_notify" ? { ...s, status: "done" as const, completedAt: fmtDate(new Date()), completedBy: "Sistema" } : s.stepId === "bo_response" ? { ...s, status: "pending_bo" as const } : s);
     if (await updatePlan(id, plan, [entry("Notifica BO inviata", `A: ${c.boEmail || "—"}`, "Sistema")]))
-      showToast(c.boEmail ? `✉️ Notifica registrata per ${c.boEmail}` : "⚠️ Nessuna email BO impostata per questo contratto");
+      showToast(c.boEmail ? "✉️ " + t("Notifica registrata per {email}", { email: c.boEmail }) : "⚠️ " + t("Nessuna email BO impostata per questo contratto"));
   };
 
   const handleBOResponse = async (id: number, { decision, notes }: { decision: string; notes: string }) => {
@@ -216,7 +216,7 @@ export default function App() {
     const renewal = RENEWAL_BY_DECISION[decision];
     const updated = renewal ? { ...c, renewal } : c;
     const audit = [entry("Risposta BO ricevuta", `Decisione: ${decision}${notes ? ` · "${notes}"` : ""}`)];
-    if (await updatePlan(id, plan, audit, updated)) showToast("✅ Decisione BO registrata");
+    if (await updatePlan(id, plan, audit, updated)) showToast("✅ " + t("Decisione BO registrata"));
     setBOFormContract(null);
   };
 
@@ -224,23 +224,23 @@ export default function App() {
     if (!currentUser) return;
     const tmpl = stepTemplate(stepId);
     const plan = (plans[id] || []).map(s => s.stepId === stepId ? { ...s, status: "done" as const, completedAt: fmtDate(new Date()), completedBy: currentUser.name } : s);
-    if (await updatePlan(id, plan, [entry(`Attività completata: ${tmpl.label}`, `Da ${currentUser.name}`)])) showToast(`✓ "${tmpl.label}" completata`);
+    if (await updatePlan(id, plan, [entry(`Attività completata: ${tmpl.label}`, `Da ${currentUser.name}`)])) showToast("✓ " + t("\"{step}\" completata", { step: t(tmpl.label) }));
   };
 
   const handleUpdateStepDate = async (id: number, stepId: string, newDate: string, reason: string) => {
     const tmpl = stepTemplate(stepId);
     const plan = (plans[id] || []).map(s => s.stepId === stepId ? { ...s, scheduledDate: newDate, modified: true, modifiedReason: reason } : s);
-    if (await updatePlan(id, plan, [entry(`Data modificata: ${tmpl.label}`, `Nuova data: ${fmtDate(newDate)} · Motivo: ${reason}`)])) showToast("📅 Data aggiornata");
+    if (await updatePlan(id, plan, [entry(`Data modificata: ${tmpl.label}`, `Nuova data: ${fmtDate(newDate)} · Motivo: ${reason}`)])) showToast("📅 " + t("Data aggiornata"));
   };
 
   const handleApplySuggestion = async (id: number, offset: number) => {
     const c = contracts.find(x => x.id === id);
     if (!c) return;
-    if (await updatePlan(id, makePlan(id, keyDate(c), offset), [entry("Piano anticipato", `Anticipo di ${offset} giorni`, "Sistema")])) showToast(`⏩ Piano anticipato di ${offset} giorni`);
+    if (await updatePlan(id, makePlan(id, keyDate(c), offset), [entry("Piano anticipato", `Anticipo di ${offset} giorni`, "Sistema")])) showToast("⏩ " + t("Piano anticipato di {n} giorni", { n: offset }));
   };
 
   const handleDelete = async () => {
-    if (!selected || !window.confirm(`Eliminare definitivamente il contratto con ${selected.supplier}? Verranno eliminati anche piano e storico.`)) return;
+    if (!selected || !window.confirm(t("Eliminare definitivamente il contratto con {supplier}? Verranno eliminati anche piano e storico.", { supplier: selected.supplier }))) return;
     const id = selected.id;
     if (!(await persist({ deleteContractId: id })).ok) return;
     setData(s => {
@@ -249,30 +249,30 @@ export default function App() {
       return { contracts: s.contracts.filter(c => c.id !== id), plans: plansLeft, auditLogs: auditLeft };
     });
     setSelectedId(null); setView("list");
-    showToast("🗑 Contratto eliminato");
+    showToast("🗑 " + t("Contratto eliminato"));
   };
 
   // ─── Gestione utenti (solo manager) ────────────────────────
-  const userError = (err: unknown) => (handleApiError(err) ? "Sessione scaduta" : err instanceof ApiError ? err.message : "Operazione non riuscita");
+  const userError = (err: unknown) => (handleApiError(err) ? t("Sessione scaduta") : err instanceof ApiError ? err.message : t("Operazione non riuscita"));
   const handleCreateUser = async (input: NewUserInput): Promise<string | null> => {
-    try { const u = await api.createUser(input); setUsers(list => [...list, u]); showToast(`✅ Utente ${u.name} creato`); return null; } catch (err) { return userError(err); }
+    try { const u = await api.createUser(input); setUsers(list => [...list, u]); showToast("✅ " + t("Utente {name} creato", { name: u.name })); return null; } catch (err) { return userError(err); }
   };
   const handleUpdateUser = async (id: number, patch: { active?: boolean; password?: string; role?: Role; title?: string; sapUser?: string }): Promise<string | null> => {
     try {
       const u = await api.updateUser({ id, ...patch });
       setUsers(list => list.map(x => x.id === id ? u : x));
-      showToast(patch.password ? "🔑 Password reimpostata" : patch.active !== undefined ? (u.active ? "Utente riattivato" : "Utente disattivato") : "✅ Utente aggiornato");
+      showToast(patch.password ? "🔑 " + t("Password reimpostata") : patch.active !== undefined ? (u.active ? t("Utente riattivato") : t("Utente disattivato")) : "✅ " + t("Utente aggiornato"));
       return null;
     } catch (err) { const m = userError(err); showToast(`⚠️ ${m}`); return m; }
   };
   const handleDeleteUser = async (u: User) => {
-    if (!window.confirm(`Eliminare definitivamente ${u.name} (${u.email})? L'operazione non si può annullare. In alternativa puoi disattivarlo.`)) return;
-    try { await api.deleteUser(u.id); setUsers(list => list.filter(x => x.id !== u.id)); showToast(`🗑 Utente ${u.name} eliminato`); }
+    if (!window.confirm(t("Eliminare definitivamente {name} ({email})? L'operazione non si può annullare. In alternativa puoi disattivarlo.", { name: u.name, email: u.email }))) return;
+    try { await api.deleteUser(u.id); setUsers(list => list.filter(x => x.id !== u.id)); showToast("🗑 " + t("Utente {name} eliminato", { name: u.name })); }
     catch (err) { showToast(`⚠️ ${userError(err)}`); }
   };
   const handlePurge = async () => {
-    if (window.prompt("Verranno eliminati TUTTI i contratti, con piani e storico. Scrivi ELIMINA per confermare.") !== "ELIMINA") return;
-    try { const { deleted } = await api.purge(); setData(EMPTY); setSelectedId(null); showToast(`🗑 ${deleted} contratti eliminati`); } catch (err) { if (!handleApiError(err)) showToast("⚠️ Operazione non riuscita"); }
+    if (window.prompt(t("Verranno eliminati TUTTI i contratti, con piani e storico. Scrivi ELIMINA per confermare.")) !== "ELIMINA") return;
+    try { const { deleted } = await api.purge(); setData(EMPTY); setSelectedId(null); showToast("🗑 " + t("{n} contratti eliminati", { n: deleted })); } catch (err) { if (!handleApiError(err)) showToast("⚠️ " + t("Operazione non riuscita")); }
   };
 
   const openDetail = (c: Contract) => { setSelectedId(c.id); setView("detail"); };
@@ -290,13 +290,13 @@ export default function App() {
 
   if (mode === "loading") return (
     <div style={{ ...sans, minHeight: "100vh", background: C.navy, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, color: "rgba(255,255,255,.7)", fontSize: 13.5 }}>
-      <BrandMark size={52} /><Loader2 className="spin" size={22} /><span>Caricamento…</span>
+      <BrandMark size={52} /><Loader2 className="spin" size={22} /><span>{t("Caricamento…")}</span>
     </div>
   );
 
   const leaveInvite = () => { setInviteToken(null); window.history.replaceState(null, "", window.location.pathname); };
   if (!currentUser && inviteToken && mode === "api") return (
-    <><InviteLanding token={inviteToken} onCancel={leaveInvite} onActivated={user => { leaveInvite(); setCurrentUser(user); setView("supplier"); showToast("Account creato: completa la registrazione"); }} />{toastEl}</>
+    <><InviteLanding token={inviteToken} onCancel={leaveInvite} onActivated={user => { leaveInvite(); setCurrentUser(user); setView("supplier"); showToast(t("Account creato: completa la registrazione")); }} />{toastEl}</>
   );
 
   // Link d'invito aperto da un browser dove è già collegato qualcuno (es. il Manager che prova l'invito): senza questo avviso si vedrebbe l'app normale.
@@ -304,10 +304,10 @@ export default function App() {
     <div className="login-panel" style={{ minHeight: "100vh" }}>
       <div style={{ width: "100%", maxWidth: 430, background: "#fff", borderRadius: 20, padding: 32, boxShadow: "0 24px 60px rgba(16,24,43,.18)", border: `1px solid ${C.border}`, ...sans }}>
         <div style={{ textAlign: "center", marginBottom: 16 }}><BrandMark size={48} /></div>
-        <h1 style={{ ...font, fontSize: 21, margin: "0 0 8px", color: C.text, textAlign: "center" }}>Hai aperto un invito per fornitori</h1>
-        <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6, margin: "0 0 20px", textAlign: "center" }}>In questo browser sei già collegato come <b>{currentUser.name}</b> ({ROLE_LABELS[currentUser.role]}). Per vedere l'invito come lo vede il fornitore devi uscire da questo account, oppure aprire il link in una finestra in incognito.</p>
-        <button onClick={() => { handleLogout(); }} style={{ width: "100%", height: 46, background: C.accent, border: "none", borderRadius: 11, color: "#fff", fontWeight: 650, fontSize: 15, cursor: "pointer", marginBottom: 10 }}>Esci e apri l'invito</button>
-        <button onClick={leaveInvite} style={{ width: "100%", height: 44, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 11, color: C.text, fontWeight: 600, fontSize: 14, cursor: "pointer" }}>Continua come {currentUser.name.split(" ")[0]}</button>
+        <h1 style={{ ...font, fontSize: 21, margin: "0 0 8px", color: C.text, textAlign: "center" }}>{t("Hai aperto un invito per fornitori")}</h1>
+        <p style={{ fontSize: 14, color: C.muted, lineHeight: 1.6, margin: "0 0 20px", textAlign: "center" }}>{t("In questo browser sei già collegato come")} <b>{currentUser.name}</b> ({t(ROLE_LABELS[currentUser.role])}). {t("Per vedere l'invito come lo vede il fornitore devi uscire da questo account, oppure aprire il link in una finestra in incognito.")}</p>
+        <button onClick={() => { handleLogout(); }} style={{ width: "100%", height: 46, background: C.accent, border: "none", borderRadius: 11, color: "#fff", fontWeight: 650, fontSize: 15, cursor: "pointer", marginBottom: 10 }}>{t("Esci e apri l'invito")}</button>
+        <button onClick={leaveInvite} style={{ width: "100%", height: 44, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 11, color: C.text, fontWeight: 600, fontSize: 14, cursor: "pointer" }}>{t("Continua come {name}", { name: currentUser.name.split(" ")[0] })}</button>
       </div>
     </div>
   );
@@ -321,8 +321,8 @@ export default function App() {
       <header className="topbar">
         <div style={{ display: "flex", alignItems: "center", gap: 12, maxWidth: 920, margin: "0 auto" }}>
           <BrandMark size={32} />
-          <div style={{ flex: 1, minWidth: 0 }}><div className="topbar-eyebrow">Portale fornitori</div><div className="topbar-title">{currentUser.name}</div></div>
-          <button onClick={() => setShowAccount(true)} aria-label="Account" style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}><Avatar name={currentUser.name} size={34} /></button>
+          <div style={{ flex: 1, minWidth: 0 }}><div className="topbar-eyebrow">{t("Portale fornitori")}</div><div className="topbar-title">{currentUser.name}</div></div>
+          <button onClick={() => setShowAccount(true)} aria-label={t("Account")} style={{ background: "none", border: "none", cursor: "pointer", padding: 0, display: "flex" }}><Avatar name={currentUser.name} size={34} /></button>
         </div>
       </header>
       <main className="page"><SupplierPortal onSessionExpired={sessionExpired} notify={showToast} /></main>
@@ -339,8 +339,8 @@ export default function App() {
   const activeModule = modules.find(m => m.key === curModule);
   const navItems = activeModule?.pages ?? [];
   const inContracts = curModule === "contracts" && view !== "clauses";
-  const titles: Record<View, string> = { clauses: "Libreria clausole", reviews: "Revisioni", dashboard: "Panoramica", list: "Contratti", planning: currentUser.role === "manager" ? "Piano del team" : "Il mio piano", team: "Vista team", notifiche: "Avvisi di scadenza", bo: "Le mie richieste", users: "Utenti e permessi", vendors: "Fornitori", expiries: "Scadenze documenti", tasks: "Task", kpi: "Indicatori di processo", budget: "Master Plan", spend: "Spesa", requests: "Le mie RDA e i miei contratti", hub: "Home", config: "Configurazione", supplier: "Area fornitore", detail: selected?.supplier ?? "" };
-  const eyebrow = curModule === "hub" ? "Procurement Lab" : activeModule?.label ?? ROLE_LABELS[currentUser.role];
+  const titles: Record<View, string> = { clauses: t("Libreria clausole"), reviews: t("Revisioni"), dashboard: t("Panoramica"), list: t("Contratti"), planning: currentUser.role === "manager" ? t("Piano del team") : t("Il mio piano"), team: t("Vista team"), notifiche: t("Avvisi di scadenza"), bo: t("Le mie richieste"), users: t("Utenti e permessi"), vendors: t("Fornitori"), expiries: t("Scadenze documenti"), tasks: t("Task"), kpi: t("Indicatori di processo"), budget: t("Master Plan"), spend: t("Spesa"), requests: t("Le mie RDA e i miei contratti"), hub: t("Home"), config: t("Configurazione"), supplier: t("Area fornitore"), detail: selected?.supplier ?? "" };
+  const eyebrow = curModule === "hub" ? "Procurement Lab" : activeModule?.label ?? t(ROLE_LABELS[currentUser.role]);
   const activeNav = view === "detail" ? "list" : view;
   const goModule = (m: { pages: { key: View }[] }) => { setView(m.pages[0].key); setShowModules(false); };
   const sideBtn = (label: string, icon: React.ReactNode, on: boolean, click: () => void, sub = false) => (
@@ -359,26 +359,26 @@ export default function App() {
   return (
     <div className="app-shell" style={{ ...sans, color: C.text }}>
       {/* Menu laterale (desktop) */}
-      <aside className="sidebar" aria-label="Menu principale">
+      <aside className="sidebar" aria-label={t("Menu principale")}>
         <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "2px 8px 26px" }}>
           <BrandMark size={38} />
           <div><div style={{ ...font, fontSize: 16, fontWeight: 700, color: "#fff" }}>Procurement Lab</div><div style={{ fontSize: 11, color: "rgba(255,255,255,.45)" }}>Indirect</div></div>
         </div>
         {(hubAvailable || modules.length > 1) && (<>
-          <div style={{ fontSize: 10.5, fontWeight: 650, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.35)", padding: "0 12px 8px" }}>Moduli</div>
-          <nav aria-label="Moduli" style={{ marginBottom: 14 }}>
-            {hubAvailable && sideBtn("Home", <House size={19} />, curModule === "hub", () => setView("hub"))}
+          <div style={{ fontSize: 10.5, fontWeight: 650, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.35)", padding: "0 12px 8px" }}>{t("Moduli")}</div>
+          <nav aria-label={t("Moduli")} style={{ marginBottom: 14 }}>
+            {hubAvailable && sideBtn(t("Home"), <House size={19} />, curModule === "hub", () => setView("hub"))}
             {modules.map(m => sideBtn(m.label, m.icon(19), curModule === m.key, () => goModule(m)))}
           </nav>
         </>)}
         {navItems.length > 1 && (<>
           <div style={{ fontSize: 10.5, fontWeight: 650, letterSpacing: ".1em", textTransform: "uppercase", color: "rgba(255,255,255,.35)", padding: "6px 12px 8px", borderTop: "1px solid rgba(255,255,255,.08)" }}>{activeModule?.label}</div>
-          <nav aria-label="Pagine del modulo">{navItems.map(n => sideBtn(n.label, n.icon, activeNav === n.key, () => setView(n.key), true))}</nav>
+          <nav aria-label={t("Pagine del modulo")}>{navItems.map(n => sideBtn(n.label, n.icon, activeNav === n.key, () => setView(n.key), true))}</nav>
         </>)}
         <div style={{ flex: 1 }} />
         <button onClick={() => setShowAccount(true)} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, background: "rgba(255,255,255,.06)", cursor: "pointer", textAlign: "left", width: "100%" }}>
           <Avatar name={currentUser.name} size={36} />
-          <div style={{ minWidth: 0, flex: 1 }}><div style={{ ...sans, fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.name}</div><div style={{ ...sans, fontSize: 11, color: "rgba(255,255,255,.5)" }}>{ROLE_LABELS[currentUser.role]}</div></div>
+          <div style={{ minWidth: 0, flex: 1 }}><div style={{ ...sans, fontSize: 13, fontWeight: 600, color: "#fff", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{currentUser.name}</div><div style={{ ...sans, fontSize: 11, color: "rgba(255,255,255,.5)" }}>{t(ROLE_LABELS[currentUser.role])}</div></div>
           <Settings size={16} color="rgba(255,255,255,.5)" />
         </button>
       </aside>
@@ -386,7 +386,7 @@ export default function App() {
       <div className="main-col">
         <header className="topbar">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            {view === "detail" && <button className="topbar-back" onClick={() => setView("list")} aria-label="Torna alla lista" style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}><ChevronLeft size={22} /></button>}
+            {view === "detail" && <button className="topbar-back" onClick={() => setView("list")} aria-label={t("Torna alla lista")} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}><ChevronLeft size={22} /></button>}
             <div style={{ flex: 1, minWidth: 0 }}>
               {eyebrow !== titles[view] && <div className="topbar-eyebrow">{eyebrow}</div>}
               <div className="topbar-title">{titles[view]}</div>
@@ -394,14 +394,14 @@ export default function App() {
             {inContracts && hasContracts(currentUser) && currentUser.role !== "bo" && (
               <div className="topbar-search" style={{ position: "relative", width: 300 }}>
                 <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
-                <input value={listSearch} onChange={e => { setListSearch(e.target.value); if (view !== "list") setView("list"); }} placeholder="Cerca fornitore, oggetto, owner…" aria-label="Cerca contratti" style={{ ...iStyle, padding: "9px 12px 9px 36px", borderRadius: 10, background: "#fff" }} />
+                <input value={listSearch} onChange={e => { setListSearch(e.target.value); if (view !== "list") setView("list"); }} placeholder={t("Cerca fornitore, oggetto, owner…")} aria-label={t("Cerca contratti")} style={{ ...iStyle, padding: "9px 12px 9px 36px", borderRadius: 10, background: "#fff" }} />
               </div>
             )}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {inContracts && canCreateContract(currentUser) && (
-                <button onClick={openNew} aria-label="Nuovo contratto" style={{ ...sans, display: "flex", alignItems: "center", gap: 6, background: C.accent, border: "none", borderRadius: 10, color: "#fff", cursor: "pointer", fontSize: 13, padding: "8px 12px", fontWeight: 650, flexShrink: 0, boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={17} /><span className="desktop-label">Nuovo contratto</span></button>
+                <button onClick={openNew} aria-label={t("Nuovo contratto")} style={{ ...sans, display: "flex", alignItems: "center", gap: 6, background: C.accent, border: "none", borderRadius: 10, color: "#fff", cursor: "pointer", fontSize: 13, padding: "8px 12px", fontWeight: 650, flexShrink: 0, boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={17} /><span className="desktop-label">{t("Nuovo contratto")}</span></button>
               )}
-              <button className="mobile-only" onClick={() => setShowAccount(true)} aria-label="Account" style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 0 }}>
+              <button className="mobile-only" onClick={() => setShowAccount(true)} aria-label={t("Account")} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 0 }}>
                 <Avatar name={currentUser.name} size={32} />
               </button>
             </div>
@@ -410,7 +410,7 @@ export default function App() {
 
         {mode === "local" && (
           <div style={{ ...sans, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, background: C.yellowBg, color: C.yellow, fontSize: 12, fontWeight: 600, textAlign: "center", padding: "7px 12px", borderBottom: "1px solid #f3dca0" }}>
-            <AlertTriangle size={14} />Modalità demo: database non raggiungibile, i dati sono salvati solo in questo browser
+            <AlertTriangle size={14} />{t("Modalità demo: database non raggiungibile, i dati sono salvati solo in questo browser")}
           </div>
         )}
 
@@ -437,21 +437,21 @@ export default function App() {
         </main>
       </div>
 
-      {view === "list" && canCreateContract(currentUser) && <button className="fab" onClick={openNew} aria-label="Nuovo contratto"><Plus size={26} /></button>}
+      {view === "list" && canCreateContract(currentUser) && <button className="fab" onClick={openNew} aria-label={t("Nuovo contratto")}><Plus size={26} /></button>}
 
       {view !== "detail" && (
-        <nav className="bottom-nav" aria-label="Navigazione">
-          {hubAvailable && curModule !== "hub" && tabBtn("Home", <House size={19} />, false, () => setView("hub"))}
+        <nav className="bottom-nav" aria-label={t("Navigazione")}>
+          {hubAvailable && curModule !== "hub" && tabBtn(t("Home"), <House size={19} />, false, () => setView("hub"))}
           {curModule === "hub" ? modules.map(m => tabBtn(m.label, m.icon(19), false, () => goModule(m))) : navItems.map(n => tabBtn(n.label, n.icon, activeNav === n.key, () => setView(n.key)))}
-          {(hubAvailable || modules.length > 1) && curModule !== "hub" && tabBtn("Moduli", <LayoutGrid size={19} />, false, () => setShowModules(true))}
+          {(hubAvailable || modules.length > 1) && curModule !== "hub" && tabBtn(t("Moduli"), <LayoutGrid size={19} />, false, () => setShowModules(true))}
         </nav>
       )}
       {showModules && (
-        <div className="sheet-overlay" role="dialog" aria-modal="true" aria-label="Moduli" onClick={e => { if (e.target === e.currentTarget) setShowModules(false); }}>
+        <div className="sheet-overlay" role="dialog" aria-modal="true" aria-label={t("Moduli")} onClick={e => { if (e.target === e.currentTarget) setShowModules(false); }}>
           <div className="sheet" style={{ maxWidth: 420 }}>
-            <div style={{ ...font, fontSize: 17, fontWeight: 700, marginBottom: 12 }}>Vai a</div>
+            <div style={{ ...font, fontSize: 17, fontWeight: 700, marginBottom: 12 }}>{t("Vai a")}</div>
             <div style={{ display: "grid", gap: 8 }}>
-              {hubAvailable && <button onClick={() => { setView("hub"); setShowModules(false); }} style={{ ...sans, display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, border: `1px solid ${C.border}`, background: "#fff", cursor: "pointer", fontSize: 14.5, fontWeight: 600, textAlign: "left" }}><House size={20} />Home</button>}
+              {hubAvailable && <button onClick={() => { setView("hub"); setShowModules(false); }} style={{ ...sans, display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, border: `1px solid ${C.border}`, background: "#fff", cursor: "pointer", fontSize: 14.5, fontWeight: 600, textAlign: "left" }}><House size={20} />{t("Home")}</button>}
               {modules.map(m => <button key={m.key} onClick={() => goModule(m)} style={{ ...sans, display: "flex", alignItems: "center", gap: 12, padding: 12, borderRadius: 12, border: `1px solid ${curModule === m.key ? C.accent : C.border}`, background: curModule === m.key ? C.accentLight : "#fff", cursor: "pointer", fontSize: 14.5, fontWeight: 600, textAlign: "left" }}>{m.icon(20)}{m.label}</button>)}
             </div>
           </div>

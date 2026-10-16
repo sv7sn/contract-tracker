@@ -6,8 +6,9 @@ import { canCreateContract } from "../permissions.ts";
 import { Card, CardTitle, DaysChip, EmptyState, Grid, StatCard } from "../components/ui.tsx";
 import { AlertTriangle, ArrowRight, CalendarClock, FileText, Hourglass, Lightbulb, Plus, Wallet } from "../components/icons.tsx";
 import { ExpiryColumns, RenewalStack, ValueBars } from "../components/charts.tsx";
+import { locale, t } from "../i18n/index.ts";
 
-const greeting = () => { const h = new Date().getHours(); return h < 13 ? "Buongiorno" : h < 18 ? "Buon pomeriggio" : "Buonasera"; };
+const greeting = () => { const h = new Date().getHours(); return h < 13 ? t("Buongiorno") : h < 18 ? t("Buon pomeriggio") : t("Buonasera"); };
 
 export function Dashboard({ contracts, plans, currentUser, onNavigate, onNew }: { contracts: Contract[]; plans: Plans; currentUser: User; onNavigate: (v: View, c?: Contract) => void; onNew: () => void }) {
   const mine = contracts.filter(c => !c.ceased);
@@ -19,7 +20,7 @@ export function Dashboard({ contracts, plans, currentUser, onNavigate, onNew }: 
   const red = mine.filter(c => urgency(c) === "red").length;
   const yellow = mine.filter(c => urgency(c) === "yellow").length;
   const first = currentUser.name.split(" ")[0];
-  const today = NOW.toLocaleDateString("it-IT", { weekday: "long", day: "numeric", month: "long" });
+  const today = NOW.toLocaleDateString(locale(), { weekday: "long", day: "numeric", month: "long" });
 
   return (
     <div style={{ display: "grid", gap: 20, gridTemplateColumns: "minmax(0,1fr)" }}>
@@ -28,32 +29,32 @@ export function Dashboard({ contracts, plans, currentUser, onNavigate, onNew }: 
           <div style={{ ...sans, fontSize: 12.5, color: C.subtle, textTransform: "capitalize", marginBottom: 2 }}>{today}</div>
           <h2 style={{ ...font, margin: 0, fontSize: 24, fontWeight: 700, color: C.text }}>{greeting()}, {first}</h2>
           <p style={{ ...sans, margin: "4px 0 0", fontSize: 14, color: C.muted, maxWidth: 620, lineHeight: 1.5 }}>
-            {mine.length === 0 ? "Non ci sono ancora contratti: creane uno per iniziare."
-              : red > 0 ? <>Hai <b style={{ color: C.red }}>{red} {red === 1 ? "contratto" : "contratti"}</b> che richiedono attenzione entro 30 giorni{pendingBO ? `, e ${pendingBO} in attesa della risposta del Business Owner` : ""}.</>
-              : yellow > 0 ? <>Nessuna scadenza urgente. <b>{yellow}</b> {yellow === 1 ? "contratto scade" : "contratti scadono"} entro 90 giorni.</>
-              : "Nessuna scadenza urgente nei prossimi 90 giorni."}
+            {mine.length === 0 ? t("Non ci sono ancora contratti: creane uno per iniziare.")
+              : red > 0 ? <>{t("Hai")} <b style={{ color: C.red }}>{red === 1 ? t("1 contratto") : t("{n} contratti", { n: red })}</b> {t("che richiedono attenzione entro 30 giorni")}{pendingBO ? t(", e {n} in attesa della risposta del Business Owner", { n: pendingBO }) : ""}.</>
+              : yellow > 0 ? <>{t("Nessuna scadenza urgente.")} <b>{yellow}</b> {yellow === 1 ? t("contratto scade entro 90 giorni.") : t("contratti scadono entro 90 giorni.")}</>
+              : t("Nessuna scadenza urgente nei prossimi 90 giorni.")}
           </p>
         </div>
-        {canCreateContract(currentUser) && <button className="mobile-only" onClick={onNew} style={{ ...sans, display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, fontSize: 13.5, cursor: "pointer", boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={17} />Nuovo contratto</button>}
+        {canCreateContract(currentUser) && <button className="mobile-only" onClick={onNew} style={{ ...sans, display: "flex", alignItems: "center", gap: 8, padding: "10px 16px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, fontSize: 13.5, cursor: "pointer", boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={17} />{t("Nuovo contratto")}</button>}
       </div>
 
       <Grid min={220} gap={14} fill>
-        <StatCard label={isManager ? "Contratti attivi" : "I tuoi contratti"} value={mine.length} color={C.blue} icon={<FileText size={18} />} sub="in portafoglio" />
-        <StatCard label="Valore in euro" value={fmtCompact(totalEUR)} title={fmt(totalEUR)} color={C.accent} icon={<Wallet size={18} />} sub="dei contratti attivi" />
-        <StatCard label="Da gestire subito" value={red} color={C.red} icon={<AlertTriangle size={18} />} sub="scaduti o entro 30 giorni" />
+        <StatCard label={isManager ? t("Contratti attivi") : t("I tuoi contratti")} value={mine.length} color={C.blue} icon={<FileText size={18} />} sub={t("in portafoglio")} />
+        <StatCard label={t("Valore in euro")} value={fmtCompact(totalEUR)} title={fmt(totalEUR)} color={C.accent} icon={<Wallet size={18} />} sub={t("dei contratti attivi")} />
+        <StatCard label={t("Da gestire subito")} value={red} color={C.red} icon={<AlertTriangle size={18} />} sub={t("scaduti o entro 30 giorni")} />
         {isManager
-          ? <StatCard label="In attesa del BO" value={pendingBO} color={C.yellow} icon={<Hourglass size={18} />} sub="decisioni da ricevere" />
-          : <StatCard label="In scadenza" value={yellow} color={C.yellow} icon={<CalendarClock size={18} />} sub="tra 31 e 90 giorni" />}
+          ? <StatCard label={t("In attesa del BO")} value={pendingBO} color={C.yellow} icon={<Hourglass size={18} />} sub={t("decisioni da ricevere")} />
+          : <StatCard label={t("In scadenza")} value={yellow} color={C.yellow} icon={<CalendarClock size={18} />} sub={t("tra 31 e 90 giorni")} />}
       </Grid>
 
       {mine.length === 0 ? (
-        <EmptyState title="Nessun contratto da mostrare" text="Quando inserirai i primi contratti qui vedrai scadenze, stato dei rinnovi e dove si concentra la spesa." action={canCreateContract(currentUser) && <button onClick={onNew} style={{ ...sans, padding: "10px 18px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, cursor: "pointer" }}>Crea il primo contratto</button>} />
+        <EmptyState title={t("Nessun contratto da mostrare")} text={t("Quando inserirai i primi contratti qui vedrai scadenze, stato dei rinnovi e dove si concentra la spesa.")} action={canCreateContract(currentUser) && <button onClick={onNew} style={{ ...sans, padding: "10px 18px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, cursor: "pointer" }}>{t("Crea il primo contratto")}</button>} />
       ) : (<>
         <Grid min={420} gap={14} style={{ alignItems: "stretch" }}>
           <ExpiryColumns contracts={contracts} />
           <Card style={{ padding: 18 }}>
-            <CardTitle icon={<AlertTriangle size={16} />} action={<button onClick={() => onNavigate("list")} style={{ ...sans, display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 12.5, fontWeight: 650 }}>Tutti <ArrowRight size={14} /></button>}>Priorità immediate</CardTitle>
-            {urgent.length === 0 && <p style={{ ...sans, color: C.muted, fontSize: 13, margin: 0 }}>Nessuna urgenza: tutto sotto controllo.</p>}
+            <CardTitle icon={<AlertTriangle size={16} />} action={<button onClick={() => onNavigate("list")} style={{ ...sans, display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 12.5, fontWeight: 650 }}>{t("Tutti")} <ArrowRight size={14} /></button>}>{t("Priorità immediate")}</CardTitle>
+            {urgent.length === 0 && <p style={{ ...sans, color: C.muted, fontSize: 13, margin: 0 }}>{t("Nessuna urgenza: tutto sotto controllo.")}</p>}
             {urgent.map((c, i) => { const days = daysToDeadline(c); const u = urgency(c); return (
               <div key={c.id} onClick={() => onNavigate("detail", c)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") onNavigate("detail", c); }}
                 style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 8px", margin: "0 -8px", borderTop: i ? `1px solid ${C.borderLight}` : "none", cursor: "pointer", borderRadius: 8 }}
@@ -78,10 +79,10 @@ export function Dashboard({ contracts, plans, currentUser, onNavigate, onNew }: 
           <div style={{ display: "flex", alignItems: "center", gap: 14, background: C.yellowBg, border: "1px solid #f3dca0", borderRadius: radius.lg, padding: "14px 18px", boxShadow: shadow.sm, flexWrap: "wrap" }}>
             <span aria-hidden style={{ color: C.yellow, display: "flex" }}><Lightbulb size={22} /></span>
             <div style={{ flex: 1, minWidth: 220 }}>
-              <div style={{ ...sans, fontSize: 13.5, fontWeight: 650, color: C.text }}>{suggestions.length} {suggestions.length === 1 ? "suggerimento" : "suggerimenti"} per bilanciare il carico</div>
-              <div style={{ ...sans, fontSize: 12.5, color: C.muted }}>Alcuni buyer hanno troppe attività nello stesso mese.</div>
+              <div style={{ ...sans, fontSize: 13.5, fontWeight: 650, color: C.text }}>{suggestions.length === 1 ? t("1 suggerimento per bilanciare il carico") : t("{n} suggerimenti per bilanciare il carico", { n: suggestions.length })}</div>
+              <div style={{ ...sans, fontSize: 12.5, color: C.muted }}>{t("Alcuni buyer hanno troppe attività nello stesso mese.")}</div>
             </div>
-            <button onClick={() => onNavigate("team")} style={{ ...sans, padding: "8px 14px", background: C.navy, border: "none", borderRadius: 9, color: "#fff", fontWeight: 650, fontSize: 12.5, cursor: "pointer" }}>Apri la vista team</button>
+            <button onClick={() => onNavigate("team")} style={{ ...sans, padding: "8px 14px", background: C.navy, border: "none", borderRadius: 9, color: "#fff", fontWeight: 650, fontSize: 12.5, cursor: "pointer" }}>{t("Apri la vista team")}</button>
           </div>
         )}
       </>)}
