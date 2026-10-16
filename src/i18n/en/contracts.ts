@@ -389,6 +389,21 @@ const en: Record<string, string> = {
   "Termine disdetta": "Notice deadline",
   "Rinnovato": "Renewed",
   "Sostituito": "Replaced",
-  "Cessato": "Terminated"
+  "Cessato": "Terminated",
+  "{n} attività di rinnovo · {m} mesi con un buyer sovraccarico": "{n} renewal activities · {m} months with an overloaded buyer",
+  "{n} attività di rinnovo · nessun mese sovraccarico": "{n} renewal activities · no overloaded months",
+  "{open} aperte · {late} in ritardo · RDA → PO {d}": "{open} open · {late} overdue · PR → PO {d}",
+  "{p} documentate · {n} aperte senza confronto · {e} eccezioni da approvare": "{p} documented · {n} open without comparison · {e} exceptions to approve",
+  "{l} con qualifica scaduta · {s} onboarding fermi": "{l} with lapsed qualification · {s} onboardings stuck",
+  "{a} attivi · {n} in scadenza entro 90 giorni · {m} scaduti senza esito": "{a} active · {n} expiring within 90 days · {m} expired without outcome",
+  "{n} bozze in revisione · ciclo medio {d}": "{n} drafts in review · average cycle {d}",
+  "Nessun passaggio di rinnovo nei prossimi 12 mesi.": "No renewal steps in the next 12 months.",
+  "Piano del team per mese": "Team plan by month",
+  "Passaggi di rinnovo da fare per buyer e per mese; sotto il numero, i contratti in scadenza (o con termine di disdetta) quel mese. In rosso da {n} attività in su. Tocca una casella per il dettaglio.": "Renewal steps to do by buyer and month; below the number, contracts expiring (or with a notice deadline) that month. Red from {n} activities up. Tap a cell for details.",
+  "{buyer}, {month}: {n} attività, {e} scadenze": "{buyer}, {month}: {n} activities, {e} expiries",
+  "{n} scad.": "{n} exp.",
+  "Totale": "Total",
+  "Da assegnare": "To be assigned",
+  "1 bozza in revisione · ciclo medio {d}": "1 draft in review · average cycle {d}"
 };
 export default en;

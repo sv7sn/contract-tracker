@@ -1,28 +1,22 @@
 import { useMemo, useState } from "react";
 import type { Contract, Plans } from "../types.ts";
-import { C, CHART, colorFor, font, radius, sans, shadow, URGENCY_COLORS } from "../theme.ts";
-import { daysToDeadline, urgency } from "../lib/format.ts";
-import { BO_COLORS, calcWorkload, getSuggestions, planProgress, WORKLOAD_THRESHOLD } from "../lib/plan.ts";
-import { Avatar, Card, DaysChip, Grid } from "../components/ui.tsx";
+import { btnGhost, C, CHART, font, radius, sans, shadow } from "../theme.ts";
+import { fmtDate } from "../lib/format.ts";
+import { calcWorkload, getSuggestions, stepLabel, teamMatrix, WORKLOAD_THRESHOLD } from "../lib/plan.ts";
+import { Avatar, Card, Grid } from "../components/ui.tsx";
 import { ChartCard } from "../components/charts.tsx";
 import { Lightbulb } from "../components/icons.tsx";
 import { t } from "../i18n/index.ts";
 
 const OVERLOAD = "#d03b3b";
 
-export function TeamView({ contracts, plans, onApplySuggestion }: { contracts: Contract[]; plans: Plans; onApplySuggestion: (id: number, offset: number) => void }) {
-  const [selectedBuyer, setSelectedBuyer] = useState("Tutti");
+export function TeamView({ contracts, plans, onApplySuggestion, onOpenContract }: { contracts: Contract[]; plans: Plans; onApplySuggestion: (id: number, offset: number) => void; onOpenContract: (c: Contract) => void }) {
   const [hover, setHover] = useState<number | null>(null);
   const workload = useMemo(() => calcWorkload(contracts, plans), [contracts, plans]);
   const suggestions = useMemo(() => getSuggestions(contracts, plans), [contracts, plans]);
-  const buyers = ["Tutti", ...new Set(contracts.filter(c => !c.ceased).map(c => c.owner).filter(Boolean))];
   const months = Object.entries(workload).slice(0, 12);
   const maxVal = Math.max(4, ...months.map(([, m]) => m.total));
   const max = Math.ceil(maxVal / 4) * 4;
-  const filtered = useMemo(() => {
-    const active = contracts.filter(c => !c.ceased);
-    return selectedBuyer === "Tutti" ? active : active.filter(c => c.owner === selectedBuyer);
-  }, [contracts, selectedBuyer]);
   const H = 150;
   const overloaded = (m: typeof months[number][1]) => Math.max(0, ...Object.values(m.byBuyer)) >= WORKLOAD_THRESHOLD;
 
@@ -86,39 +80,73 @@ export function TeamView({ contracts, plans, onApplySuggestion }: { contracts: C
         </div>
       )}
 
-      <div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-          {buyers.map(b => { const sel = selectedBuyer === b; return (
-            <button key={b} onClick={() => setSelectedBuyer(b)} aria-pressed={sel} style={{ ...sans, display: "flex", alignItems: "center", gap: 8, padding: b === "Tutti" ? "6px 14px" : "4px 12px 4px 5px", borderRadius: 999, border: `1px solid ${sel ? C.navy : C.border}`, background: sel ? C.navy : "#fff", color: sel ? "#fff" : C.muted, cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>{b !== "Tutti" && <Avatar name={b} size={22} />}{b === "Tutti" ? t("Tutti") : b}</button>
-          ); })}
-        </div>
-        <div style={{ ...font, fontSize: 15, fontWeight: 650, color: C.text, marginBottom: 12 }}>{selectedBuyer === "Tutti" ? t("Tutti i contratti") : selectedBuyer} <span style={{ color: C.subtle, fontWeight: 500 }}>({filtered.length})</span></div>
-        <Grid min={340} gap={12}>
-          {filtered.map(c => {
-            const plan = plans[c.id] || [];
-            const prog = planProgress(plan);
-            const u = urgency(c);
-            const bColor = colorFor(c.owner);
-            const boStep = plan.find(s => s.stepId === "bo_response");
-            return (
-              <Card key={c.id} style={{ borderLeft: `4px solid ${URGENCY_COLORS[u]}`, borderRadius: radius.md, padding: 16 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
-                  <div style={{ minWidth: 0 }}><div style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.supplier}</div><div style={{ ...sans, fontSize: 12.5, color: C.muted }}>{c.object}</div></div>
-                  <DaysChip days={daysToDeadline(c)} level={u} />
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "14px 0 6px" }}>
-                  <div style={{ flex: 1, height: 6, background: C.borderLight, borderRadius: 3 }}><div style={{ height: "100%", width: `${prog}%`, background: bColor, borderRadius: 3 }} /></div>
-                  <span className="tabular" style={{ ...sans, fontSize: 12, fontWeight: 650 }}>{prog}%</span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 7, ...sans, fontSize: 12, color: C.muted }}><Avatar name={c.owner || "?"} size={22} />{c.owner}</div>
-                  {boStep?.boDecision && <span style={{ ...sans, fontSize: 11.5, fontWeight: 650, color: BO_COLORS[boStep.boDecision]?.color, background: BO_COLORS[boStep.boDecision]?.bg, borderRadius: 999, padding: "3px 10px" }}>BO: {t(boStep.boDecision)}</span>}
-                </div>
-              </Card>
-            );
-          })}
-        </Grid>
-      </div>
+      <TeamPlan contracts={contracts} plans={plans} onOpenContract={onOpenContract} />
     </div>
+  );
+}
+
+/** Piano del team: buyer per riga, mesi per colonna. Ogni casella conta i passaggi di rinnovo da fare (in rosso oltre la soglia) e i contratti in scadenza; toccandola si vede il dettaglio. */
+function TeamPlan({ contracts, plans, onOpenContract }: { contracts: Contract[]; plans: Plans; onOpenContract: (c: Contract) => void }) {
+  const { months, buyers } = useMemo(() => teamMatrix(contracts, plans), [contracts, plans]);
+  const [sel, setSel] = useState<{ buyer: string; month: string } | null>(null);
+  const cur = sel ? buyers.find(b => b.name === sel.buyer)?.cells[sel.month] : undefined;
+  const monthLabel = (k: string) => months.find(m => m.key === k)?.label ?? k;
+  const total = (k: string) => buyers.reduce((a, b) => a + (b.cells[k]?.steps.length ?? 0), 0);
+  if (!buyers.length) return <Card><div style={{ ...sans, fontSize: 13, color: C.muted }}>{t("Nessun passaggio di rinnovo nei prossimi 12 mesi.")}</div></Card>;
+  const th = { ...sans, fontSize: 11, fontWeight: 650, color: C.subtle, textTransform: "capitalize", padding: "8px 6px", textAlign: "center", whiteSpace: "nowrap" } as const;
+  return (
+    <Card>
+      <div style={{ ...font, fontSize: 15, fontWeight: 650, color: C.text }}>{t("Piano del team per mese")}</div>
+      <div style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "2px 0 12px", lineHeight: 1.5 }}>{t("Passaggi di rinnovo da fare per buyer e per mese; sotto il numero, i contratti in scadenza (o con termine di disdetta) quel mese. In rosso da {n} attività in su. Tocca una casella per il dettaglio.", { n: WORKLOAD_THRESHOLD })}</div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ borderCollapse: "separate", borderSpacing: 3, minWidth: 720, width: "100%" }}>
+          <thead><tr><th style={{ ...th, textAlign: "left" }}>{t("Buyer")}</th>{months.map(m => <th key={m.key} style={th}>{m.label}</th>)}</tr></thead>
+          <tbody>
+            {buyers.map(b => (
+              <tr key={b.name}>
+                <td style={{ ...sans, fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", paddingRight: 8 }}><span style={{ display: "inline-flex", alignItems: "center", gap: 7 }}><Avatar name={b.name} size={22} />{b.name}</span></td>
+                {months.map(m => {
+                  const c = b.cells[m.key]; const n = c?.steps.length ?? 0, e = c?.expiring.length ?? 0;
+                  const over = n >= WORKLOAD_THRESHOLD, on = sel?.buyer === b.name && sel.month === m.key;
+                  return (
+                    <td key={m.key} style={{ padding: 0 }}>
+                      <button type="button" disabled={!n && !e} onClick={() => setSel(on ? null : { buyer: b.name, month: m.key })} aria-pressed={on}
+                        aria-label={t("{buyer}, {month}: {n} attività, {e} scadenze", { buyer: b.name, month: m.label, n, e })}
+                        style={{ all: "unset", boxSizing: "border-box", width: "100%", minWidth: 44, height: 44, borderRadius: 8, cursor: n || e ? "pointer" : "default", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                          background: over ? C.redBg : n ? C.blueBg : C.bg, outline: on ? `2px solid ${C.accent}` : undefined, ...sans }}>
+                        <span className="tabular" style={{ fontSize: 14, fontWeight: 700, color: over ? C.red : n ? C.blue : C.subtle }}>{n || "–"}</span>
+                        {e > 0 && <span style={{ fontSize: 10, color: C.muted }}>{t("{n} scad.", { n: e })}</span>}
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+            <tr><td style={{ ...sans, fontSize: 12, fontWeight: 650, color: C.muted, paddingTop: 4 }}>{t("Totale")}</td>{months.map(m => <td key={m.key} className="tabular" style={{ ...sans, fontSize: 12, fontWeight: 650, color: C.muted, textAlign: "center", paddingTop: 4 }}>{total(m.key) || ""}</td>)}</tr>
+          </tbody>
+        </table>
+      </div>
+      {sel && cur && (
+        <div style={{ marginTop: 14, borderTop: `1px solid ${C.borderLight}`, paddingTop: 12 }}>
+          <div style={{ ...sans, fontSize: 13.5, fontWeight: 650, marginBottom: 8, textTransform: "capitalize" }}>{sel.buyer} · {monthLabel(sel.month)}</div>
+          {[...cur.steps].sort((a, b) => a.date.localeCompare(b.date)).map((x, i) => (
+            <div key={`s${i}`} style={{ ...sans, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "6px 0", borderTop: `1px solid ${C.borderLight}`, fontSize: 13 }}>
+              <span className="tabular" style={{ minWidth: 84, color: C.muted }}>{fmtDate(x.date)}</span>
+              <span style={{ flex: "1 1 180px", fontWeight: 600 }}>{stepLabel(x.stepId, x.contract)}</span>
+              <span style={{ flex: "1 1 200px", color: C.muted }}>{x.contract.supplier} — {x.contract.object}</span>
+              <button onClick={() => onOpenContract(x.contract)} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}>{t("Apri contratto")}</button>
+            </div>
+          ))}
+          {cur.expiring.map(c => (
+            <div key={`e${c.id}`} style={{ ...sans, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", padding: "6px 0", borderTop: `1px solid ${C.borderLight}`, fontSize: 13 }}>
+              <span className="tabular" style={{ minWidth: 84, color: C.red }}>{fmtDate(c.noticeDate || c.end)}</span>
+              <span style={{ flex: "1 1 180px", fontWeight: 600, color: C.red }}>{c.noticeDate ? t("Termine disdetta") : t("Scadenza")}</span>
+              <span style={{ flex: "1 1 200px", color: C.muted }}>{c.supplier} — {c.object}</span>
+              <button onClick={() => onOpenContract(c)} style={{ ...btnGhost, padding: "4px 10px", fontSize: 12 }}>{t("Apri contratto")}</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
   );
 }

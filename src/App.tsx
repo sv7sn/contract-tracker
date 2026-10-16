@@ -26,6 +26,7 @@ import { ConfigView } from "./views/ConfigView.tsx";
 import { ExpiryView } from "./views/ExpiryView.tsx";
 import { TasksView } from "./views/TasksView.tsx";
 import { KpiView } from "./views/KpiView.tsx";
+import { teamSummary } from "./lib/plan.ts";
 import { BudgetView } from "./views/BudgetView.tsx";
 import { SpendView } from "./views/SpendView.tsx";
 import { HubView } from "./views/HubView.tsx";
@@ -430,7 +431,7 @@ export default function App() {
           {view === "expiries" && mode === "api" && <ExpiryView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "budget" && mode === "api" && ["manager", "buyer", "finance", "viewer"].includes(currentUser.role) && <BudgetView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "spend" && mode === "api" && ["manager", "buyer", "finance", "viewer"].includes(currentUser.role) && <SpendView onSessionExpired={sessionExpired} canImport={currentUser.role === "manager" || currentUser.role === "buyer"} />}
-          {view === "kpi" && mode === "api" && currentUser.role === "manager" && <KpiView onSessionExpired={sessionExpired} team={<TeamView contracts={contracts} plans={plans} onApplySuggestion={handleApplySuggestion} />} />}
+          {view === "kpi" && mode === "api" && currentUser.role === "manager" && <KpiView onSessionExpired={sessionExpired} team={<TeamView contracts={contracts} plans={plans} onApplySuggestion={handleApplySuggestion} onOpenContract={openDetail} />} teamSummary={teamSummary(contracts, plans)} />}
           {view === "config" && mode === "api" && currentUser.role === "manager" && <ConfigView notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "detail" && selected && <ContractDetail onPlanChanged={() => { if (currentUser) void loadAll(currentUser); }} contract={selected} contracts={contracts} onOpen={openDetail} auditLog={auditLogs[selected.id] || []} currentUser={currentUser} canOpenDocuments={mode === "api"} onBack={() => setView("list")} onEdit={() => { setEditingContract(selected); setShowForm(true); }} onDelete={handleDelete} />}
         </main>

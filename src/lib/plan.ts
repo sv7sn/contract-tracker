@@ -42,6 +42,38 @@ export function calcWorkload(contracts: Contract[], plans: Plans) {
   return months;
 }
 
+export interface TeamItem { contract: Contract; stepId: string; date: string }
+export interface TeamCell { steps: TeamItem[]; expiring: Contract[] }
+/** Piano del team: per ogni buyer e per ogni mese (dal mese scorso ai prossimi 11) i passaggi di rinnovo da fare e i contratti in scadenza. */
+export function teamMatrix(contracts: Contract[], plans: Plans) {
+  const months: { key: string; label: string }[] = [];
+  for (let i = -1; i < 12; i++) { const d = new Date(NOW.getFullYear(), NOW.getMonth() + i, 1); months.push({ key: monthKey(d), label: fmtMonth(d) }); }
+  const keys = new Set(months.map(m => m.key));
+  const rows = new Map<string, Record<string, TeamCell>>();
+  const cell = (buyer: string, key: string) => {
+    const r = rows.get(buyer) ?? {}; rows.set(buyer, r);
+    return (r[key] ??= { steps: [], expiring: [] });
+  };
+  for (const c of contracts.filter(x => !x.ceased)) {
+    const buyer = c.owner || t("Da assegnare");
+    for (const s of (plans[c.id] || []).filter(x => x.status !== "done" && x.stepId !== "expiry")) {
+      const key = monthKey(new Date(s.scheduledDate));
+      if (keys.has(key)) cell(buyer, key).steps.push({ contract: c, stepId: s.stepId, date: s.scheduledDate });
+    }
+    const due = monthKey(new Date(c.noticeDate || c.end));
+    if (keys.has(due)) cell(buyer, due).expiring.push(c);
+  }
+  const buyers = [...rows.entries()].map(([name, cells]) => ({ name, cells })).sort((a, b) => a.name.localeCompare(b.name));
+  return { months, buyers };
+}
+
+/** Riga di riepilogo del carico del team (prossimi 12 mesi). */
+export function teamSummary(contracts: Contract[], plans: Plans): string {
+  const w = Object.values(calcWorkload(contracts, plans));
+  const total = w.reduce((a, m) => a + m.total, 0), over = w.filter(m => Math.max(0, ...Object.values(m.byBuyer)) >= WORKLOAD_THRESHOLD).length;
+  return over ? t("{n} attività di rinnovo · {m} mesi con un buyer sovraccarico", { n: total, m: over }) : t("{n} attività di rinnovo · nessun mese sovraccarico", { n: total });
+}
+
 export function getSuggestions(contracts: Contract[], plans: Plans) {
   const workload = calcWorkload(contracts, plans);
   return contracts.filter(c => !c.ceased).reduce((acc, c) => {
