@@ -104,3 +104,15 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
 }
 @media (min-width: 960px) { .task-row-d td { height: 72px; box-sizing: border-box; padding-top: 0; padding-bottom: 0; } }
 .one-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+
+/* Menu del profilo: riquadro accanto al pallino su PC, pannello dal basso sul telefono */
+.account-overlay { position: fixed; inset: 0; z-index: 300; background: transparent; }
+.account-menu { position: fixed; width: 320px; max-width: calc(100vw - 24px); max-height: calc(100vh - 32px); overflow-y: auto; background: #fff; border: 1px solid #e6e9f0; border-radius: 16px; padding: 14px; box-shadow: 0 18px 50px rgba(16,24,43,.22); animation: fade-up .15s ease both; box-sizing: border-box; }
+.account-menu-sidebar { left: 16px; bottom: 84px; }
+.account-menu-top { right: 16px; top: 64px; }
+.account-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 8px; border: none; border-radius: 10px; background: none; cursor: pointer; font-size: 14px; font-weight: 550; }
+.account-row:hover:not(:disabled) { background: #f4f6fa; }
+@media (max-width: 959px) {
+  .account-overlay { background: rgba(16,24,43,.45); }
+  .account-menu, .account-menu-sidebar, .account-menu-top { left: 0; right: 0; top: auto; bottom: 0; width: 100%; max-width: none; border-radius: 18px 18px 0 0; padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); }
+}

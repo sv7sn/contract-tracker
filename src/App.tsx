@@ -10,7 +10,8 @@ import { Avatar, BrandMark } from "./components/ui.tsx";
 import { AlertTriangle, CheckCircle2, ChevronLeft, House, LayoutGrid, Loader2, Plus, Search, Settings } from "./components/icons.tsx";
 import { InviteLanding } from "./components/InviteLanding.tsx";
 import { LoginScreen } from "./components/LoginScreen.tsx";
-import { AccountModal, BOFormModal, ContractForm } from "./components/Modals.tsx";
+import { BOFormModal, ContractForm } from "./components/Modals.tsx";
+import { AccountMenu } from "./components/AccountMenu.tsx";
 import { Dashboard } from "./views/Dashboard.tsx";
 import { ContractList } from "./views/ContractList.tsx";
 import { ContractDetail } from "./views/ContractDetail.tsx";
@@ -323,7 +324,7 @@ export default function App() {
       </header>
       <main className="page"><SupplierPortal onSessionExpired={sessionExpired} notify={showToast} /></main>
       </div>
-      {showAccount && <AccountModal user={currentUser} canChangePassword onLogout={handleLogout} onClose={() => setShowAccount(false)} />}
+      {showAccount && <AccountMenu user={currentUser} anchor="top" canChangePassword onLogout={handleLogout} onClose={() => setShowAccount(false)} />}
       {toastEl}
     </div>
   );
@@ -456,7 +457,7 @@ export default function App() {
 
       {showForm && <ContractForm initial={editingContract} currentUser={currentUser} users={users} canUpload={mode === "api"} onSave={handleSave} onClose={() => { setShowForm(false); setEditingContract(null); }} />}
       {boFormContract && <BOFormModal contract={boFormContract} currentUser={currentUser} onSubmit={handleBOResponse} onClose={() => setBOFormContract(null)} />}
-      {showAccount && <AccountModal user={currentUser} canChangePassword={mode === "api"} onLogout={handleLogout} onClose={() => setShowAccount(false)} />}
+      {showAccount && <AccountMenu user={currentUser} anchor="sidebar" canChangePassword={mode === "api"} onAdmin={currentUser.role === "manager" ? () => setView("config") : undefined} onLogout={handleLogout} onClose={() => setShowAccount(false)} />}
       {toastEl}
     </div>
   );
