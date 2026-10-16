@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { User } from "../types.ts";
 import { btnPrimary, C, font, iStyle, sans } from "../theme.ts";
 import { Avatar, Field, RoleBadge } from "./ui.tsx";
-import { CalendarClock, Check, ChevronLeft, ChevronRight, Globe, KeyRound, LogOut, MonitorSmartphone, SlidersHorizontal, X } from "./icons.tsx";
+import { BarChart3, CalendarClock, Check, ChevronLeft, ChevronRight, Globe, KeyRound, LogOut, MonitorSmartphone, SlidersHorizontal, X } from "./icons.tsx";
 import { CoverEditor } from "../views/CoverCard.tsx";
 import { api, ApiError } from "../api.ts";
 import { getLang, setLang, t } from "../i18n/index.ts";
@@ -14,6 +14,8 @@ interface Props {
   anchor: "sidebar" | "top";
   canChangePassword: boolean;
   onAdmin?: () => void;
+  /** Solo Manager: apre gli Indicatori. */
+  onKpi?: () => void;
   /** Dopo il salvataggio di "I miei dati": aggiorna l'utente nell'app. */
   onProfileSaved?: (patch: Pick<User, "title" | "phone">) => void;
   onLogout: () => void;
@@ -21,7 +23,7 @@ interface Props {
 }
 
 // Menu del profilo: impostazioni personali di ogni utente. L'amministrazione dell'azienda resta un modulo a parte (solo Manager).
-export function AccountMenu({ user, anchor, canChangePassword, onAdmin, onProfileSaved, onLogout, onClose }: Props) {
+export function AccountMenu({ user, anchor, canChangePassword, onAdmin, onKpi, onProfileSaved, onLogout, onClose }: Props) {
   const [panel, setPanel] = useState<Panel>("menu");
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   useEffect(() => {
@@ -71,7 +73,9 @@ export function AccountMenu({ user, anchor, canChangePassword, onAdmin, onProfil
               try { await api.revokeSessions(); setNote({ ok: true, text: t("Le sessioni sugli altri dispositivi sono state chiuse") }); }
               catch { setNote({ ok: false, text: t("Operazione non riuscita") }); }
             })}
-            {onAdmin && <>{sep}{row(<SlidersHorizontal size={18} />, t("Amministrazione"), () => { onAdmin(); onClose(); }, { chevron: true })}</>}
+            {(onKpi || onAdmin) && sep}
+            {onKpi && row(<BarChart3 size={18} />, t("Indicatori"), () => { onKpi(); onClose(); }, { chevron: true })}
+            {onAdmin && row(<SlidersHorizontal size={18} />, t("Amministrazione"), () => { onAdmin(); onClose(); }, { chevron: true })}
             {sep}
             {row(<LogOut size={18} />, t("Esci"), onLogout, { danger: true })}
           </div>

@@ -45,9 +45,9 @@ Il Buyer invita un fornitore (Fornitori → Invita fornitore): il fornitore rice
 - **Reminder automatici**: Vercel Cron esegue ogni mattina `/api/portal?op=cron-reminders` (file `vercel.json`); serve la variabile `CRON_SECRET`. Giorni di preavviso, ripetizione e soglia "non risponde" sono configurabili. Senza provider email (`RESEND_API_KEY`, `MAIL_FROM`) i messaggi sono solo registrati.
 - **Controllo AI dei documenti**: predisposto ma spento di default. Con `DOC_AI_PROVIDER=anthropic` e `ANTHROPIC_API_KEY` ogni file caricato (PDF o immagine) riceve un primo controllo su tipo, intestatario, partita IVA e scadenza. Segnala, non approva né rifiuta. Il motore è in `api/_docai.ts` e si può sostituire.
 
-## Moduli, Home e Task
+## Navigazione e Task
 
-L'app è divisa in moduli (menu laterale; su telefono il pulsante *Moduli*): **Contratti**, **Fornitori**, **Task** e **Amministrazione**, più una **Home** con i numeri principali di ciascuno. Ogni ruolo vede solo i moduli che gli competono.
+L'app ha al massimo cinque voci, una pagina ciascuna, uguali nel menu laterale (PC) e nella barra fissa in basso (telefono), con un pallino sui numeri da guardare: per Manager e Buyer **Task**, **Contratti**, **Fornitori**, **Budget** e **Spesa**. Ogni ruolo vede solo le voci che gli competono; all'accesso si arriva sulla prima (per Manager e Buyer i Task). **Indicatori** e **Amministrazione** (solo Manager) si aprono dal menu del profilo.
 
 Il modulo **Task** riunisce, per ogni persona, le RDA da SAP, le attività dei piani di rinnovo dei contratti e i task creati a mano.
 

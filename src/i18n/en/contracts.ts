@@ -404,6 +404,14 @@ const en: Record<string, string> = {
   "{n} scad.": "{n} exp.",
   "Totale": "Total",
   "Da assegnare": "To be assigned",
-  "1 bozza in revisione · ciclo medio {d}": "1 draft in review · average cycle {d}"
+  "1 bozza in revisione · ciclo medio {d}": "1 draft in review · average cycle {d}",
+  "{n} da guardare": "{n} to look at",
+  "Filtro": "Filter",
+  "Mostra tutti": "Show all",
+  "{n} contratti attivi": "{n} active contracts",
+  "Vedi il carico del team": "See team workload",
+  "Nascondi i grafici": "Hide charts",
+  "Mostra i grafici: scadenze, rinnovi, valore": "Show charts: expiries, renewals, value",
+  "In attesa del BO": "Awaiting BO"
 };
 export default en;
