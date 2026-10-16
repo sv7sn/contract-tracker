@@ -18,7 +18,7 @@ assert.equal((await pool.query("select owner_id from contracts where id = $1", [
 let s = (await call(state, cv, "GET")).data; assert.equal(s.contracts.length, 1); ok("vede tutti i contratti");
 r = await call(commit, cv, "POST", { contract: { ...base, id, value: 999 } }); assert([403, 404].includes(r.status)); r = await call(commit, cv, "POST", { contract: { ...base, supplier: "Nuovo" } }); assert.equal(r.status, 403); r = await call(commit, cv, "POST", { deleteContractId: id }); assert([403, 404].includes(r.status)); assert.equal((await pool.query("select value from contracts where id = $1", [id])).rows[0].value, 100); ok("non crea, non modifica, non elimina");
 const P = (c, m, op, body) => call(portal, c, m, body, `?op=${op}`);
-for (const op of ["budget", "spend", "kpis", "categories"]) assert.equal((await P(cv, "GET", op)).status, 200, op); ok("vede Master Plan, spesa, indicatori e categorie");
+for (const op of ["budget", "spend", "categories"]) assert.equal((await P(cv, "GET", op)).status, 200, op); assert.equal((await P(cv, "GET", "kpis")).status, 403); ok("vede Master Plan, spesa e categorie, non gli indicatori");
 for (const op of ["tasks", "vendors", "my-work", "reset-preview", "rfqs"]) assert([401, 403].includes((await P(cv, "GET", op)).status), op); assert.equal((await P(cv, "POST", "budget-import")).status === 200, false); assert.equal((await P(cv, "POST", "reset-run", { areas: ["tasks"], confirm: "ELIMINA" })).status, 403); assert.equal((await P(cv, "POST", "category-save", { name: "X" })).status, 403); ok("niente task, fornitori, pulizia, import né modifiche alle categorie");
 assert.equal((await call(users, cv, "GET")).status, 403); ok("non gestisce utenti");
 

@@ -84,5 +84,5 @@ r = await P(buyer, "POST", "task-outcome", { outcome: "extended", end: day(425),
 // ─── Link nelle email e indicatori
 assert((await notes("review_decided", "buyer@test.it")).every(b => /\/\?task=\d+/.test(b))); ok("l'esito al buyer porta direttamente al task");
 r = await P(admin, "GET", "clm-kpis"); assert.equal(r.status, 200); assert.equal(r.data.funcs.length, 4); const lf = r.data.funcs.find(f => f.func === "legal"); assert(lf.decided >= 2 && lf.pending >= 1 && lf.avgDays !== null); assert(r.data.drafts >= 3 && r.data.avgVersions >= 1); ok("indicatori: decisioni, tempo medio e scadenze per funzione");
-assert.equal((await P(viewer, "GET", "clm-kpis")).status, 200); assert.equal((await P(buyer, "GET", "clm-kpis")).status, 403); assert.equal((await P(legal, "GET", "clm-kpis")).status, 403); ok("gli indicatori li vedono Manager e Controlling/CFO");
+assert.equal((await P(viewer, "GET", "clm-kpis")).status, 403); assert.equal((await P(buyer, "GET", "clm-kpis")).status, 403); assert.equal((await P(legal, "GET", "clm-kpis")).status, 403); ok("gli indicatori li vede solo il Manager");
 console.log(`\n${passed} controlli superati`); await pool.end();

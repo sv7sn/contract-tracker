@@ -402,7 +402,7 @@ export async function acceptDeviation(user: User, taskId: number, input: Row): P
 // ─── Indicatori sul ciclo di revisione ───────────────────────
 /** Tempi e rispetto delle scadenze per funzione: numeri aggregati, senza testi né nomi (li vede anche Controlling/CFO). */
 export async function clmKpis(user: User): Promise<ClmKpis> {
-  if (user.role !== "manager" && user.role !== "viewer") throw new HttpError(403, "Operazione non consentita");
+  if (user.role !== "manager") throw new HttpError(403, "Operazione non consentita");
   const db = getPool(), t0 = today();
   const a = (await db.query(`select count(distinct task_id)::int as drafts, avg(mv)::float as avg_versions from (select task_id, max(version) as mv from contract_drafts where origin = 'internal' group by task_id) x`)).rows[0];
   const latest = `d.version = (select max(version) from contract_drafts where task_id = r.task_id and origin = 'internal')`;

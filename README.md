@@ -15,11 +15,11 @@ ma sono le API a rifiutare comunque le richieste non autorizzate.
 
 | Ruolo | Cosa vede | Cosa può fare |
 |---|---|---|
-| **Manager** | tutto, vista Team, utenti, configurazione, indicatori, registro di sicurezza | amministra utenti e parametri, assegna le pratiche, approva eccezioni e clausole, gestisce le regole di revisione |
+| **Manager** | tutto, utenti, configurazione, indicatori (con il carico del team), registro di sicurezza | amministra utenti e parametri, assegna le pratiche, approva eccezioni e clausole, gestisce le regole di revisione |
 | **Buyer** | le proprie pratiche, contratti e fornitori (anche quelli dei colleghi che sostituisce) | lavora task e RDA, sceglie i fornitori, crea bozze e le condivide col fornitore |
 | **Finance** | fornitori da verificare, budget e spesa | verifica e approva i fornitori |
 | **Business Owner** (richiedente) | le proprie RDA e i propri contratti | risponde sui rinnovi, dà il parere sulle bozze se invitato |
-| **Controlling / CFO** | contratti, budget, spesa e indicatori, in sola lettura | nessuna modifica; non vede le bozze di contratto |
+| **Controlling / CFO** | contratti, budget e spesa, in sola lettura | nessuna modifica; non vede le bozze di contratto |
 | **Legal, Compliance, IT Security** | le bozze a cui sono invitati, la libreria di clausole | commentano, danno il parere, (Legal) approvano clausole e deviazioni |
 | **Fornitore** | la propria scheda, le richieste di offerta e le bozze condivise con lui | compila i dati, risponde alle offerte, commenta le bozze |
 
@@ -59,7 +59,7 @@ Il modulo **Task** riunisce, per ogni persona, le RDA da SAP, le attività dei p
 
 ```
 src/            frontend React
-  views/        una vista per schermata (Dashboard, Contratti, Piano, Team, Utenti, ...)
+  views/        una vista per schermata (Dashboard, Contratti, Task, Indicatori, Utenti, ...)
   components/   login, finestre di dialogo, elementi grafici condivisi
   lib/          formattazione, logica di pianificazione, dati demo (fittizi)
 api/            Vercel Functions (Node.js) su PostgreSQL

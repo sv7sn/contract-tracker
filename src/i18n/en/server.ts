@@ -404,6 +404,7 @@ const en: Record<string, string> = {
   "Il numero di verifiche al giorno deve essere tra 1 e 200": "The number of checks per day must be between 1 and 200",
   "I fornitori più a rischio vanno controllati più spesso: giorni alto ≤ medio ≤ basso": "Higher-risk suppliers must be checked more often: days high ≤ medium ≤ low",
   "Funzione troppo lunga (massimo 80 caratteri)": "Job title too long (maximum 80 characters)",
-  "Numero di telefono non valido": "Invalid phone number"
+  "Numero di telefono non valido": "Invalid phone number",
+  "Gli indicatori sono riservati al Manager": "KPIs are reserved for the Manager"
 };
 export default en;

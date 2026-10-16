@@ -75,6 +75,15 @@ r = await P(admin, "POST", "config-save", { entity: "rda", action: "save", item:
 r = await P(admin, "POST", "config-save", { entity: "rda", action: "save", item: { renewalLeadDays: 365 } }); assert.equal(r.data.config.rda.renewalLeadDays, 365);
 assert((await tasks(admin)).some(x => x.contractId === cB)); ok("anticipo configurabile: con 365 giorni compare anche il rinnovo lontano");
 await call(commitApi, admin, "POST", "", { deleteContractId: cB }); assert(!(await tasks(admin)).some(x => x.contractId === cB)); ok("contratto eliminato: sparisce anche il suo task");
+// Il task di rinnovo non nasce mai dopo l'inizio del piano: se il primo passaggio è stato anticipato, nasce subito.
+await P(admin, "POST", "config-save", { entity: "rda", action: "save", item: { renewalLeadDays: 30 } });
+const cPA = await newContract("Piano Anticipato Srl", day(200));
+await call(commitApi, admin, "POST", "", { contractId: cPA, plan: (await import(B + "_plan-rules.js")).makePlan(cPA, day(200)) });
+assert(!(await tasks(admin)).some(x => x.contractId === cPA), "200 giorni alla scadenza con anticipo 30: ancora nessun task");
+await pool.query("update plan_steps set scheduled_date = $2, modified = true, modified_reason = 'anticipato' where contract_id = $1 and step_id = 'analysis'", [cPA, day(-1)]);
+assert((await tasks(admin)).some(x => x.contractId === cPA)); ok("primo passaggio del piano anticipato: il task di rinnovo nasce subito");
+await call(commitApi, admin, "POST", "", { deleteContractId: cPA });
+await P(admin, "POST", "config-save", { entity: "rda", action: "save", item: { renewalLeadDays: 365 } });
 console.log("Fornitore in anagrafica e PO da SAP");
 const tasksMod = await import(B + "_tasks.js");
 const sup = (await pool.query("insert into suppliers (email, name, industry_code, status, data, sap_code) values ('omega@f.it','Omega S.p.A.','IT01','registered',$1,'123') returning id", [JSON.stringify({ company: { legalName: "Omega S.p.A." } })])).rows[0].id;

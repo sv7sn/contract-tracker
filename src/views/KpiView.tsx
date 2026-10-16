@@ -23,7 +23,7 @@ function Section({ title, text, children }: { title: string; text: string; child
 }
 
 /** Indicatori di processo per il Manager: tempi, rispetto delle regole e colli di bottiglia. */
-export function KpiView({ onSessionExpired }: { onSessionExpired: () => void }) {
+export function KpiView({ onSessionExpired, team }: { onSessionExpired: () => void; team?: React.ReactNode }) {
   const [k, setK] = useState<Kpis | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [clm, setClm] = useState<ClmKpis | null>(null);
@@ -111,6 +111,8 @@ export function KpiView({ onSessionExpired }: { onSessionExpired: () => void }) 
           <StatCard label={t("Scaduti senza esito")} value={c.missedDeadline} sub={t("Contratti scaduti senza rinnovo, proroga o cessazione")} color={c.missedDeadline ? C.red : C.green} icon={<AlertTriangle size={18} />} />
         </Grid>
       </Section>
+
+      {team && <Section title={t("Carico del team")} text={t("Passaggi dei piani di rinnovo per mese e per buyer, con i suggerimenti per anticipare quando un mese è troppo carico.")}>{team}</Section>}
     </div>
   );
 }

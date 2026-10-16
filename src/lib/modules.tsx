@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { User, View } from "../types.ts";
-import { BarChart3, Bell, Inbox, PiggyBank, Wallet, Building2, CalendarClock, CalendarRange, ClipboardCheck, FileText, Scale, BookOpen, LayoutDashboard, ListChecks, ShieldCheck, SlidersHorizontal, Users } from "../components/icons.tsx";
+import { BarChart3, Bell, Inbox, PiggyBank, Wallet, Building2, CalendarClock, ClipboardCheck, FileText, Scale, BookOpen, LayoutDashboard, ListChecks, ShieldCheck, SlidersHorizontal } from "../components/icons.tsx";
 import { t } from "../i18n/index.ts";
 
 export type ModuleKey = "reviews" | "contracts" | "vendors" | "tasks" | "budget" | "spend" | "kpi" | "admin";
@@ -17,8 +17,8 @@ export function modulesFor(user: User, apiMode: boolean): ModuleDef[] {
   const mods: ModuleDef[] = [];
   if (staff || viewer) {
     mods.push({ key: "contracts", label: t("Contratti"), description: t("Scadenze, piani di rinnovo e decisioni dei Business Owner"), icon: s => <FileText size={s} />, pages: [
-      page("dashboard", t("Panoramica"), <LayoutDashboard size={19} />), page("list", t("Contratti"), <FileText size={19} />), page("planning", t("Piano"), <CalendarRange size={19} />),
-      ...(user.role === "manager" ? [page("team", t("Team"), <Users size={19} />)] : []), ...(viewer ? [] : [page("notifiche", t("Avvisi"), <Bell size={19} />)]), ...(apiMode && !viewer ? [page("clauses", t("Clausole"), <BookOpen size={19} />)] : []),
+      page("dashboard", t("Panoramica"), <LayoutDashboard size={19} />), page("list", t("Contratti"), <FileText size={19} />),
+      ...(viewer ? [] : [page("notifiche", t("Avvisi"), <Bell size={19} />)]), ...(apiMode && !viewer ? [page("clauses", t("Clausole"), <BookOpen size={19} />)] : []),
     ] });
   } else if (user.role === "bo") {
     mods.push({ key: "contracts", label: t("Contratti"), description: t("Le tue richieste e i contratti di cui sei responsabile"), icon: s => <FileText size={s} />, pages: [page("bo", t("Richieste"), <ClipboardCheck size={19} />), page("requests", t("Le mie RDA"), <Inbox size={19} />), page("list", t("Contratti"), <FileText size={19} />)] });
@@ -38,7 +38,7 @@ export function modulesFor(user: User, apiMode: boolean): ModuleDef[] {
   if (apiMode && (staff || viewer || user.role === "finance")) {
     mods.push({ key: "spend", label: t("Spesa"), description: t("Spesa reale dai file ordini SAP: fornitori, categorie, funzioni, copertura contrattuale e ordini senza RDA"), icon: s => <Wallet size={s} />, pages: [page("spend", t("Spesa"), <Wallet size={19} />)] });
   }
-  if (apiMode && (user.role === "manager" || viewer)) {
+  if (apiMode && user.role === "manager") {
     mods.push({ key: "kpi", label: t("Indicatori"), description: t("Tempi e rispetto delle regole: RDA, scelta del fornitore, onboarding, qualifica e contratti"), icon: s => <BarChart3 size={s} />, pages: [page("kpi", t("Indicatori"), <BarChart3 size={19} />)] });
   }
   if (apiMode && user.role === "manager") {

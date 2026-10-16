@@ -5,7 +5,7 @@ import { C, font, iStyle, ROLE_LABELS, sans, shadow } from "./theme.ts";
 import { fmtDate, keyDate, tsNow } from "./lib/format.ts";
 import { clearLocal, DEMO_PASSWORD, DEMO_USERS, demoState, loadLocal, saveLocal } from "./lib/demo.ts";
 import { makePlan, RENEWAL_BY_DECISION, reschedulePlan, stepTemplate } from "./lib/plan.ts";
-import { canCreateContract, canManageUsers, canViewTeam } from "./permissions.ts";
+import { canCreateContract, canManageUsers } from "./permissions.ts";
 import { Avatar, BrandMark } from "./components/ui.tsx";
 import { AlertTriangle, CheckCircle2, ChevronLeft, House, LayoutGrid, Loader2, Plus, Search, Settings } from "./components/icons.tsx";
 import { InviteLanding } from "./components/InviteLanding.tsx";
@@ -16,7 +16,6 @@ import { getLang, setLang, t } from "./i18n/index.ts";
 import { Dashboard } from "./views/Dashboard.tsx";
 import { ContractList } from "./views/ContractList.tsx";
 import { ContractDetail } from "./views/ContractDetail.tsx";
-import { PlanningView } from "./views/PlanningView.tsx";
 import { TeamView } from "./views/TeamView.tsx";
 import { BOView } from "./views/BOView.tsx";
 import { AlertsView } from "./views/AlertsView.tsx";
@@ -419,8 +418,6 @@ export default function App() {
         <main className="page">
           {view === "dashboard" && <Dashboard contracts={contracts} plans={plans} currentUser={currentUser} onNew={openNew} onNavigate={(v, c) => { setView(v); if (c) setSelectedId(c.id); }} />}
           {view === "list" && <ContractList contracts={contracts} currentUser={currentUser} search={listSearch} onSearch={setListSearch} onSelect={openDetail} onNew={openNew} />}
-          {view === "planning" && <PlanningView contracts={contracts} plans={plans} auditLogs={auditLogs} currentUser={currentUser} onSendBO={handleSendBO} onCompleteStep={handleCompleteStep} onOpenBOForm={setBOFormContract} onUpdateStepDate={handleUpdateStepDate} />}
-          {view === "team" && canViewTeam(currentUser) && <TeamView contracts={contracts} plans={plans} onApplySuggestion={handleApplySuggestion} />}
           {view === "bo" && currentUser.role === "bo" && <BOView contracts={contracts} plans={plans} currentUser={currentUser} onOpenBOForm={setBOFormContract} />}
           {view === "requests" && mode === "api" && currentUser.role === "bo" && <RequestsView currentUser={currentUser} contracts={contracts} onOpenBOForm={setBOFormContract} onOpenContract={openDetail} onSessionExpired={sessionExpired} />}
           {view === "reviews" && mode === "api" && (REVIEWER_ROLES.includes(currentUser.role) || currentUser.role === "bo") && <ReviewsView currentUser={currentUser} initialOpenId={reviewFocus} onSessionExpired={sessionExpired} />}
@@ -428,12 +425,12 @@ export default function App() {
           {view === "notifiche" && currentUser.role !== "bo" && <AlertsView contracts={contracts} users={users} />}
           {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} onPurge={handlePurge} />}
           {view === "hub" && hubAvailable && <HubView user={currentUser} modules={modules} contracts={contracts} plans={plans} onOpen={(v, f) => { if (f?.contractId) { setSelectedId(f.contractId); setView("detail"); return; } setFocus(f?.taskId || f?.vendorId ? f : null); setView(v); }} />}
-          {view === "tasks" && mode === "api" && (currentUser.role === "manager" || currentUser.role === "buyer") && <TasksView initialOpenId={focus?.taskId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} contracts={contracts} plans={plans} onCompleteStep={handleCompleteStep} onSendBO={handleSendBO} onOpenContract={openDetail} notify={showToast} onSessionExpired={sessionExpired} />}
+          {view === "tasks" && mode === "api" && (currentUser.role === "manager" || currentUser.role === "buyer") && <TasksView onUpdateStepDate={handleUpdateStepDate} initialOpenId={focus?.taskId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} contracts={contracts} plans={plans} onCompleteStep={handleCompleteStep} onSendBO={handleSendBO} onOpenContract={openDetail} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "vendors" && mode === "api" && <VendorsView initialOpenId={focus?.vendorId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "expiries" && mode === "api" && <ExpiryView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "budget" && mode === "api" && ["manager", "buyer", "finance", "viewer"].includes(currentUser.role) && <BudgetView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "spend" && mode === "api" && ["manager", "buyer", "finance", "viewer"].includes(currentUser.role) && <SpendView onSessionExpired={sessionExpired} canImport={currentUser.role === "manager" || currentUser.role === "buyer"} />}
-          {view === "kpi" && mode === "api" && (currentUser.role === "manager" || currentUser.role === "viewer") && <KpiView onSessionExpired={sessionExpired} />}
+          {view === "kpi" && mode === "api" && currentUser.role === "manager" && <KpiView onSessionExpired={sessionExpired} team={<TeamView contracts={contracts} plans={plans} onApplySuggestion={handleApplySuggestion} />} />}
           {view === "config" && mode === "api" && currentUser.role === "manager" && <ConfigView notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "detail" && selected && <ContractDetail onPlanChanged={() => { if (currentUser) void loadAll(currentUser); }} contract={selected} contracts={contracts} onOpen={openDetail} auditLog={auditLogs[selected.id] || []} currentUser={currentUser} canOpenDocuments={mode === "api"} onBack={() => setView("list")} onEdit={() => { setEditingContract(selected); setShowForm(true); }} onDelete={handleDelete} />}
         </main>

@@ -151,6 +151,7 @@ export function ConfigView({ notify, onSessionExpired }: { notify: (m: string) =
             <input id="r-lead" type="number" min={15} max={365} value={lead} onChange={e => setLead(e.target.value)} style={{ ...iStyle, width: 110 }} />
             <button onClick={saveLead} style={{ ...btnGhost, padding: "9px 14px", fontSize: 13 }}>{t("Salva")}</button>
           </div>
+          <div style={{ ...sans, fontSize: 12, color: C.subtle, marginTop: 6, lineHeight: 1.5 }}>{t("Il task nasce comunque al più tardi all'inizio del primo passaggio del piano di rinnovo (analisi spesa).")}</div>
         </Field>
         <Field label={t("Soglia per il confronto con un altro fornitore (importo della RDA o del nuovo contratto)")} htmlFor="r-th">
           <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>

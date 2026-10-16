@@ -289,6 +289,9 @@ const en: Record<string, string> = {
   "Accessi di prova, pulizia dei dati": "Test accounts, data clean-up",
   "Registro delle modifiche": "Change log",
   "Chi ha cambiato cosa e quando": "Who changed what and when",
-  "da completare": "to complete"
+  "da completare": "to complete",
+  "Carico del team": "Team workload",
+  "Passaggi dei piani di rinnovo per mese e per buyer, con i suggerimenti per anticipare quando un mese è troppo carico.": "Renewal plan steps by month and buyer, with suggestions to bring work forward when a month is overloaded.",
+  "Il task nasce comunque al più tardi all'inizio del primo passaggio del piano di rinnovo (analisi spesa).": "In any case the task is created no later than the first step of the renewal plan (spend analysis)."
 };
 export default en;
