@@ -193,6 +193,7 @@ create table if not exists draft_comments (
 );
 create index if not exists draft_comments_draft_idx on draft_comments (draft_id);
 alter table users add column if not exists session_version integer not null default 0;
+alter table users add column if not exists lang text not null default 'it';
 alter table contract_drafts alter column file_path drop not null;
 alter table contract_drafts add column if not exists layout jsonb not null default '{}'::jsonb;
 alter table contract_drafts add column if not exists source jsonb;
@@ -479,8 +480,8 @@ export function cleanPayload(body: unknown): CommitPayload {
 
 // ─── Utenti ──────────────────────────────────────────────────
 /** Solo i campi pubblici: mai l'hash della password. */
-export const publicUser = (u: User): User => ({ id: u.id, email: u.email, name: u.name, role: u.role, title: u.title, active: u.active, sapUser: u.sapUser ?? "" });
-const toUser = (r: Record<string, unknown>): User => ({ id: r.id as number, email: r.email as string, name: r.name as string, role: r.role as Role, title: r.title as string, active: r.active as boolean, sapUser: (r.sap_user as string) ?? "" });
+export const publicUser = (u: User): User => ({ id: u.id, email: u.email, name: u.name, role: u.role, title: u.title, active: u.active, sapUser: u.sapUser ?? "", lang: u.lang ?? "it" });
+const toUser = (r: Record<string, unknown>): User => ({ id: r.id as number, email: r.email as string, name: r.name as string, role: r.role as Role, title: r.title as string, active: r.active as boolean, sapUser: (r.sap_user as string) ?? "", lang: r.lang === "en" ? "en" : "it" });
 
 export async function countUsers(): Promise<number> {
   return (await getPool().query("select count(*)::int as n from users")).rows[0].n;
@@ -569,8 +570,10 @@ export async function deleteUser(actor: User, id: number): Promise<void> {
   const owned = await countOwnedContracts(target);
   const asBo = (await getPool().query("select count(*)::int as n from contracts where lower(bo_email) = lower($1)", [target.email])).rows[0].n;
   if (owned || asBo) {
-    const parts = [owned && `contract owner di ${owned}`, asBo && `Business Owner di ${asBo}`].filter(Boolean).join(" e ");
-    throw new HttpError(409, `${target.name} è ${parts} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)`);
+    const name = target.name;
+    if (owned && asBo) throw HttpError.t(409, "{name} è contract owner di {owned} e Business Owner di {bo} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)", { name, owned, bo: asBo });
+    if (owned) throw HttpError.t(409, "{name} è contract owner di {owned} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)", { name, owned });
+    throw HttpError.t(409, "{name} è Business Owner di {bo} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)", { name, bo: asBo });
   }
   await getPool().query("delete from users where id = $1", [id]);
   await getPool().query("delete from login_attempts where lower(email) = lower($1)", [target.email]);
@@ -587,7 +590,7 @@ export async function updateUser(actor: User, input: unknown): Promise<User> {
   if (target.id === actor.id && (role !== actor.role || !active)) bad("Non puoi cambiare il tuo ruolo né disattivare il tuo account");
   if (role !== target.role && role === "bo") {
     const owned = await countOwnedContracts(target);
-    if (owned > 0) throw new HttpError(409, `${target.name} è contract owner di ${owned} contratti: riassegnali prima di renderlo Business Owner`);
+    if (owned > 0) throw HttpError.t(409, "{name} è contract owner di {owned} contratti: riassegnali prima di renderlo Business Owner", { name: target.name, owned });
   }
   if (target.role === "manager" && target.active && (role !== "manager" || !active)) {
     const { rows } = await getPool().query("select count(*)::int as n from users where role = 'manager' and active and id <> $1", [target.id]);

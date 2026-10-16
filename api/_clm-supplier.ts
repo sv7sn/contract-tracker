@@ -37,7 +37,7 @@ export async function shareDraft(user: User, taskId: number, input: Row, origin:
   const latest = (await db.query("select id from contract_drafts where task_id = $1 and origin = 'internal' order by version desc limit 1", [taskId])).rows[0];
   if (latest.id !== d.id) bad("Si condivide solo l'ultima versione");
   const gate = await reviewGate(db, taskId);
-  if (gate) throw new HttpError(409, `Non si può condividere: ${gate.replace(/^Firma bloccata: /, "")}`);
+  if (gate) throw HttpError.t(409, "Non si può condividere: {reasons}", { reasons: gate.replace(/^Firma bloccata: /, "") });
   const users = await supplierUsers(db, supId as number);
   if (!users.length) bad("Il fornitore non ha ancora un accesso al portale: invitalo prima");
   await db.query("update contract_drafts set shared_at = now(), shared_by = $2 where id = $1", [d.id, user.name]);

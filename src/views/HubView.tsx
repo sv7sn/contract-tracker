@@ -6,6 +6,7 @@ import { daysToDeadline } from "../lib/format.ts";
 import type { ModuleDef } from "../lib/modules.tsx";
 import { Card } from "../components/ui.tsx";
 import { CoverCard } from "./CoverCard.tsx";
+import { locale, t } from "../i18n/index.ts";
 
 interface Props { user: User; modules: ModuleDef[]; contracts: Contract[]; plans: Record<number, PlanStep[]>; onOpen: (view: View, focus?: { taskId?: number; vendorId?: number; contractId?: number }) => void }
 interface Metric { label: string; value: number | string; tone?: "bad" | "warn" | "good" }
@@ -24,11 +25,11 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
       staff ? portalApi.taskSummary() : Promise.reject(),
       vendorStaff ? portalApi.vendors() : Promise.reject(),
       vendorStaff ? portalApi.monitor() : Promise.reject(),
-    ]).then(([t, v, m]) => {
+    ]).then(([tk, v, m]) => {
       if (off) return;
       const mine = user.role === "finance" ? "approved" : "pending";
       setLive({
-        tasks: t.status === "fulfilled" ? t.value : null,
+        tasks: tk.status === "fulfilled" ? tk.value : null,
         vendorsToReview: v.status === "fulfilled" ? v.value.filter(x => x.status === mine).length : null,
         lapsed: v.status === "fulfilled" ? v.value.filter(x => x.qualification === "lapsed").length : null,
         unresponsive: m.status === "fulfilled" ? new Set(m.value.items.filter(i => i.unresponsive).map(i => i.supplierId)).size : null,
@@ -40,20 +41,20 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
   const active = contracts.filter(c => !c.ceased);
   const metrics: Record<string, Metric[]> = {
     contracts: user.role === "bo" ? [] : [
-      { label: "In scadenza entro 30 giorni", value: active.filter(c => daysToDeadline(c) >= 0 && daysToDeadline(c) <= 30).length, tone: "bad" },
-      { label: "In scadenza tra 31 e 90 giorni", value: active.filter(c => daysToDeadline(c) > 30 && daysToDeadline(c) <= 90).length, tone: "warn" },
-      { label: "Contratti attivi", value: active.length },
+      { label: t("In scadenza entro 30 giorni"), value: active.filter(c => daysToDeadline(c) >= 0 && daysToDeadline(c) <= 30).length, tone: "bad" },
+      { label: t("In scadenza tra 31 e 90 giorni"), value: active.filter(c => daysToDeadline(c) > 30 && daysToDeadline(c) <= 90).length, tone: "warn" },
+      { label: t("Contratti attivi"), value: active.length },
     ],
     vendors: [
-      ...(live.vendorsToReview !== null ? [{ label: user.role === "finance" ? "Da registrare in SAP" : "Da verificare", value: live.vendorsToReview, tone: live.vendorsToReview ? "warn" as const : undefined }] : []),
-      ...(live.lapsed !== null ? [{ label: "Con qualifica scaduta", value: live.lapsed, tone: live.lapsed ? "bad" as const : "good" as const }] : []),
-      ...(live.unresponsive !== null ? [{ label: "Fornitori che non rispondono ai reminder", value: live.unresponsive, tone: live.unresponsive ? "bad" as const : "good" as const }] : []),
+      ...(live.vendorsToReview !== null ? [{ label: user.role === "finance" ? t("Da registrare in SAP") : t("Da verificare"), value: live.vendorsToReview, tone: live.vendorsToReview ? "warn" as const : undefined }] : []),
+      ...(live.lapsed !== null ? [{ label: t("Con qualifica scaduta"), value: live.lapsed, tone: live.lapsed ? "bad" as const : "good" as const }] : []),
+      ...(live.unresponsive !== null ? [{ label: t("Fornitori che non rispondono ai reminder"), value: live.unresponsive, tone: live.unresponsive ? "bad" as const : "good" as const }] : []),
     ],
     tasks: live.tasks ? [
-      { label: "Task aperti", value: live.tasks.open }, { label: "In ritardo", value: live.tasks.overdue, tone: live.tasks.overdue ? "bad" : "good" },
-      ...(user.role === "manager" ? [{ label: "Da assegnare", value: live.tasks.unassigned, tone: live.tasks.unassigned ? "warn" as const : undefined }] : []),
-      { label: "Pratiche senza confronto fornitori", value: live.tasks.sourcingMissing, tone: live.tasks.sourcingMissing ? "warn" as const : "good" as const },
-      ...(user.role === "manager" && live.tasks.exceptionsPending ? [{ label: "Eccezioni da approvare", value: live.tasks.exceptionsPending, tone: "warn" as const }] : []),
+      { label: t("Task aperti"), value: live.tasks.open }, { label: t("In ritardo"), value: live.tasks.overdue, tone: live.tasks.overdue ? "bad" : "good" },
+      ...(user.role === "manager" ? [{ label: t("Da assegnare"), value: live.tasks.unassigned, tone: live.tasks.unassigned ? "warn" as const : undefined }] : []),
+      { label: t("Pratiche senza confronto fornitori"), value: live.tasks.sourcingMissing, tone: live.tasks.sourcingMissing ? "warn" as const : "good" as const },
+      ...(user.role === "manager" && live.tasks.exceptionsPending ? [{ label: t("Eccezioni da approvare"), value: live.tasks.exceptionsPending, tone: "warn" as const }] : []),
     ] : [],
     kpi: [],
     budget: [],
@@ -65,10 +66,10 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
   return (
     <div>
       <div style={{ marginBottom: 18 }}>
-        <div style={{ ...font, fontSize: 24, fontWeight: 700, color: C.text }}>{hour < 13 ? "Buongiorno" : hour < 18 ? "Buon pomeriggio" : "Buonasera"}, {first}</div>
-        <div style={{ ...sans, fontSize: 13.5, color: C.muted, marginTop: 2 }}>Scegli un modulo per iniziare.</div>
+        <div style={{ ...font, fontSize: 24, fontWeight: 700, color: C.text }}>{hour < 13 ? t("Buongiorno, {name}", { name: first }) : hour < 18 ? t("Buon pomeriggio, {name}", { name: first }) : t("Buonasera, {name}", { name: first })}</div>
+        <div style={{ ...sans, fontSize: 13.5, color: C.muted, marginTop: 2 }}>{t("Scegli un modulo per iniziare.")}</div>
       </div>
-      {user.acting && user.acting.covering.length > 0 && <Card style={{ marginBottom: 14, background: C.blueBg, borderColor: "#c9dcf5", ...sans, fontSize: 13.5, color: C.blue }}>Stai sostituendo {user.acting.covering.map(c => `${c.name} (fino al ${new Date(c.until).toLocaleDateString("it-IT")})`).join(", ")}: vedi e gestisci anche le sue pratiche.</Card>}
+      {user.acting && user.acting.covering.length > 0 && <Card style={{ marginBottom: 14, background: C.blueBg, borderColor: "#c9dcf5", ...sans, fontSize: 13.5, color: C.blue }}>{t("Stai sostituendo {names}: vedi e gestisci anche le sue pratiche.", { names: user.acting.covering.map(c => t("{name} (fino al {date})", { name: c.name, date: new Date(c.until).toLocaleDateString(locale()) })).join(", ") })}</Card>}
       <div className="hub-tiles" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(168px, 1fr))", gap: 10, marginBottom: 18 }}>
         {modules.map(m => {
           const ms = metrics[m.key] ?? [];

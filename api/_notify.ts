@@ -99,7 +99,9 @@ export interface Mail { to: string; template: Template; lang?: Lang; supplierId?
 
 /** Salva e (se configurato) invia un'email. Un errore di invio non interrompe mai l'operazione che l'ha generata. */
 export async function sendMail(db: Queryable, mail: Mail): Promise<"sent" | "logged" | "failed"> {
-  const { subject, body } = T[mail.template][mail.lang ?? "IT"](mail.vars);
+  // Chi ha scelto l'inglese nel proprio profilo riceve le email in inglese; altrimenti vale la lingua indicata (es. quella di registrazione del fornitore) o l'italiano.
+  const profile = await db.query("select lang from users where lower(email) = lower($1) and active limit 1", [mail.to]).then(r => r.rows[0]?.lang as string | undefined, () => undefined);
+  const { subject, body } = T[mail.template][profile === "en" ? "EN" : mail.lang ?? "IT"](mail.vars);
   const key = process.env.RESEND_API_KEY, from = process.env.MAIL_FROM;
   let status: "sent" | "logged" | "failed" = "logged", error: string | null = null;
   if (key && from) {

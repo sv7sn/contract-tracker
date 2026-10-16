@@ -27,7 +27,7 @@ export async function saveDocType(action: string, item: Row): Promise<void> {
   if (!KEY_RE.test(key)) bad("Codice non valido: usa lettere minuscole, numeri e _ (2-40 caratteri)");
   if (action === "delete") {
     const used = (await getPool().query("select count(*)::int as n from supplier_documents where type = $1", [key])).rows[0].n;
-    if (used > 0) throw new HttpError(409, `Ci sono ${used} documenti caricati di questo tipo: per non chiederlo più togli le regole invece di eliminarlo`);
+    if (used > 0) throw HttpError.t(409, "Ci sono {n} documenti caricati di questo tipo: per non chiederlo più togli le regole invece di eliminarlo", { n: used });
     await getPool().query("delete from doc_types where key = $1", [key]);
     return;
   }

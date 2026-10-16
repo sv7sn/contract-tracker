@@ -8,6 +8,7 @@ import { documentUrl } from "../api.ts";
 import { ObligationsCard } from "./ObligationsCard.tsx";
 import { BoNoticeCard } from "./BoNoticeCard.tsx";
 import { BoMessages } from "./BoMessages.tsx";
+import { t } from "../i18n/index.ts";
 
 const fact = (label: string, value: React.ReactNode) => (
   <div style={{ minWidth: 0 }}><div style={{ ...sans, fontSize: 11, color: "rgba(255,255,255,.55)", fontWeight: 600, marginBottom: 3 }}>{label}</div><div style={{ ...sans, fontSize: 14.5, fontWeight: 650, color: "#fff" }}>{value}</div></div>
@@ -16,21 +17,21 @@ const fact = (label: string, value: React.ReactNode) => (
 export function ContractDetail({ contract, contracts, auditLog, currentUser, canOpenDocuments, onBack, onEdit, onDelete, onOpen, onPlanChanged }: { onPlanChanged?: () => void; contract: Contract; contracts: Contract[]; auditLog: AuditEntry[]; currentUser: User; canOpenDocuments: boolean; onBack: () => void; onEdit: () => void; onDelete: () => void; onOpen: (c: Contract) => void }) {
   const prev = contract.replaces ? contracts.find(c => c.id === contract.replaces) : undefined;
   const next = contract.replacedBy ? contracts.find(c => c.id === contract.replacedBy) : undefined;
-  const link = (c: Contract) => <button onClick={() => onOpen(c)} style={{ ...sans, background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", fontWeight: 650, fontSize: 13.5, textDecoration: "underline" }}>{c.supplier} · scad. {fmtDate(c.end)}</button>;
+  const link = (c: Contract) => <button onClick={() => onOpen(c)} style={{ ...sans, background: "none", border: "none", padding: 0, color: C.blue, cursor: "pointer", fontWeight: 650, fontSize: 13.5, textDecoration: "underline" }}>{c.supplier} · {t("scad. {date}", { date: fmtDate(c.end) })}</button>;
   const u = urgency(contract); const days = daysToDeadline(contract); const endDays = daysToExpiry(contract.end);
   const startMs = new Date(contract.start).getTime(), endMs = new Date(contract.end).getTime();
   const prog = contract.start && endMs > startMs ? Math.min(100, Math.max(0, ((NOW.getTime() - startMs) / (endMs - startMs)) * 100)) : 0;
   const uc = URGENCY_COLORS[u];
-  const rows: [string, React.ReactNode][] = [["Categoria", contract.category || "—"], ["Tipo", contract.type || "—"], ["Paese", contract.country || "—"], ["Contract owner", contract.owner ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><Avatar name={contract.owner} size={22} />{contract.owner}</span> : "—"], ["Business Owner", contract.boName ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><Avatar name={contract.boName} size={22} />{contract.boName}</span> : contract.boEmail || "—"], ["Internal order", contract.internalOrder || "—"], ["Stato del rinnovo", <RenewalBadge status={contract.renewal} />]];
+  const rows: [string, React.ReactNode][] = [[t("Categoria"), contract.category || "—"], [t("Tipo"), contract.type || "—"], [t("Paese"), contract.country || "—"], [t("Contract owner"), contract.owner ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><Avatar name={contract.owner} size={22} />{contract.owner}</span> : "—"], [t("Business Owner"), contract.boName ? <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}><Avatar name={contract.boName} size={22} />{contract.boName}</span> : contract.boEmail || "—"], [t("Internal order"), contract.internalOrder || "—"], [t("Stato del rinnovo"), <RenewalBadge status={contract.renewal} />]];
   const action = (color: string, filled: boolean): React.CSSProperties => ({ ...sans, display: "inline-flex", alignItems: "center", gap: 7, background: filled ? color : "#fff", border: `1px solid ${color}`, borderRadius: 10, color: filled ? "#fff" : color, cursor: "pointer", fontSize: 13, fontWeight: 650, padding: "8px 14px" });
 
   return (
     <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0,1fr)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-        <button onClick={onBack} style={{ ...sans, display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, fontWeight: 650, padding: 0 }}><ArrowLeft size={16} />Tutti i contratti</button>
+        <button onClick={onBack} style={{ ...sans, display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.accent, cursor: "pointer", fontSize: 13, fontWeight: 650, padding: 0 }}><ArrowLeft size={16} />{t("Tutti i contratti")}</button>
         <div style={{ display: "flex", gap: 8 }}>
-          {canDeleteContract(currentUser) && <button onClick={onDelete} style={action(C.red, false)}><Trash2 size={15} />Elimina</button>}
-          {canEditContract(currentUser, contract) && <button onClick={onEdit} style={action(C.navy, true)}><Pencil size={15} />Modifica</button>}
+          {canDeleteContract(currentUser) && <button onClick={onDelete} style={action(C.red, false)}><Trash2 size={15} />{t("Elimina")}</button>}
+          {canEditContract(currentUser, contract) && <button onClick={onEdit} style={action(C.navy, true)}><Pencil size={15} />{t("Modifica")}</button>}
         </div>
       </div>
 
@@ -43,29 +44,29 @@ export function ContractDetail({ contract, contracts, auditLog, currentUser, can
           <DaysChip days={days} level={u} ceased={contract.ceased && (closedLabel(contract) ?? true)} />
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 20, marginTop: 24 }}>
-          {fact("Valore", <span className="tabular" style={{ ...font, fontSize: 26, fontWeight: 700 }}>{fmt(contract.value, contract.currency)}</span>)}
-          {fact("Scadenza", <span className="tabular">{fmtDate(contract.end)}</span>)}
-          {contract.noticeDate && fact(`Disdetta entro${contract.noticeDays ? ` (${contract.noticeDays} gg)` : ""}`, <span className="tabular">{fmtDate(contract.noticeDate)}</span>)}
-          {fact("Inizio", <span className="tabular">{contract.start ? fmtDate(contract.start) : "—"}</span>)}
+          {fact(t("Valore"), <span className="tabular" style={{ ...font, fontSize: 26, fontWeight: 700 }}>{fmt(contract.value, contract.currency)}</span>)}
+          {fact(t("Scadenza"), <span className="tabular">{fmtDate(contract.end)}</span>)}
+          {contract.noticeDate && fact(contract.noticeDays ? t("Disdetta entro ({n} gg)", { n: contract.noticeDays }) : t("Disdetta entro"), <span className="tabular">{fmtDate(contract.noticeDate)}</span>)}
+          {fact(t("Inizio"), <span className="tabular">{contract.start ? fmtDate(contract.start) : "—"}</span>)}
         </div>
       </div>
 
       <Grid min={380}>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0,1fr)" }}>
-          {expiredWithoutOutcome(contract) && <div role="alert" style={{ ...sans, background: C.redBg, color: C.red, borderRadius: radius.lg, padding: 14, fontSize: 13, lineHeight: 1.5 }}><b>Scaduto senza esito.</b> Registra rinnovo, proroga o cessazione dal task di rinnovo (modulo Task).</div>}
+          {expiredWithoutOutcome(contract) && <div role="alert" style={{ ...sans, background: C.redBg, color: C.red, borderRadius: radius.lg, padding: 14, fontSize: 13, lineHeight: 1.5 }}><b>{t("Scaduto senza esito.")}</b> {t("Registra rinnovo, proroga o cessazione dal task di rinnovo (modulo Task).")}</div>}
           {(contract.ceased || prev) && (
             <Card style={{ padding: "6px 18px" }}>
-              {contract.ceased && <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 0", ...sans, fontSize: 13 }}><span style={{ color: C.muted }}>Esito</span><span style={{ fontWeight: 650, textAlign: "right" }}>{closedLabel(contract)}{contract.closedAt ? ` il ${fmtDate(contract.closedAt)}` : ""}{contract.outcomeNote ? <div style={{ fontWeight: 400, color: C.muted, fontSize: 12.5 }}>{contract.outcomeNote}</div> : null}</span></div>}
-              {next && <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 0", borderTop: `1px solid ${C.borderLight}`, ...sans, fontSize: 13 }}><span style={{ color: C.muted }}>Sostituito da</span>{link(next)}</div>}
-              {prev && <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 0", borderTop: contract.ceased ? `1px solid ${C.borderLight}` : "none", ...sans, fontSize: 13 }}><span style={{ color: C.muted }}>Sostituisce</span>{link(prev)}</div>}
+              {contract.ceased && <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 0", ...sans, fontSize: 13 }}><span style={{ color: C.muted }}>{t("Esito")}</span><span style={{ fontWeight: 650, textAlign: "right" }}>{closedLabel(contract)}{contract.closedAt ? " " + t("il {date}", { date: fmtDate(contract.closedAt) }) : ""}{contract.outcomeNote ? <div style={{ fontWeight: 400, color: C.muted, fontSize: 12.5 }}>{contract.outcomeNote}</div> : null}</span></div>}
+              {next && <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 0", borderTop: `1px solid ${C.borderLight}`, ...sans, fontSize: 13 }}><span style={{ color: C.muted }}>{t("Sostituito da")}</span>{link(next)}</div>}
+              {prev && <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 0", borderTop: contract.ceased ? `1px solid ${C.borderLight}` : "none", ...sans, fontSize: 13 }}><span style={{ color: C.muted }}>{t("Sostituisce")}</span>{link(prev)}</div>}
             </Card>
           )}
           {!contract.ceased && (
             <Card>
-              <div style={{ display: "flex", justifyContent: "space-between", ...sans, fontSize: 12, color: C.muted, marginBottom: 8 }}><span>Durata del contratto</span><b className="tabular" style={{ color: C.text }}>{Math.round(prog)}% trascorso</b></div>
+              <div style={{ display: "flex", justifyContent: "space-between", ...sans, fontSize: 12, color: C.muted, marginBottom: 8 }}><span>{t("Durata del contratto")}</span><b className="tabular" style={{ color: C.text }}>{t("{p}% trascorso", { p: Math.round(prog) })}</b></div>
               <div style={{ height: 8, background: C.borderLight, borderRadius: 4 }}><div style={{ height: "100%", width: `${prog}%`, background: uc, borderRadius: 4 }} /></div>
-              <div style={{ ...sans, fontSize: 13, color: C.muted, marginTop: 10 }}>{endDays < 0 ? <b style={{ color: C.red }}>Contratto scaduto da {Math.abs(endDays)} giorni</b> : <span>Il contratto scade tra <b className="tabular">{endDays} giorni</b> ({fmtDate(contract.end)})</span>}
-                {contract.noticeDate && <div style={{ marginTop: 4 }}>{days < 0 ? <b style={{ color: C.red }}>Termine di disdetta passato da {Math.abs(days)} giorni</b> : <span>Ultimo giorno per la disdetta tra <b style={{ color: uc }}>{days} giorni</b> ({fmtDate(contract.noticeDate)})</span>}</div>}</div>
+              <div style={{ ...sans, fontSize: 13, color: C.muted, marginTop: 10 }}>{endDays < 0 ? <b style={{ color: C.red }}>{t("Contratto scaduto da {n} giorni", { n: Math.abs(endDays) })}</b> : <span>{t("Il contratto scade tra")} <b className="tabular">{t("{n} giorni", { n: endDays })}</b> ({fmtDate(contract.end)})</span>}
+                {contract.noticeDate && <div style={{ marginTop: 4 }}>{days < 0 ? <b style={{ color: C.red }}>{t("Termine di disdetta passato da {n} giorni", { n: Math.abs(days) })}</b> : <span>{t("Ultimo giorno per la disdetta tra")} <b style={{ color: uc }}>{t("{n} giorni", { n: days })}</b> ({fmtDate(contract.noticeDate)})</span>}</div>}</div>
             </Card>
           )}
           <Card style={{ padding: "6px 18px" }}>
@@ -79,21 +80,21 @@ export function ContractDetail({ contract, contracts, auditLog, currentUser, can
           {contract.fileName && (contract.filePath && canOpenDocuments ? (
             <Card style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", padding: 14 }}>
               <div aria-hidden style={{ width: 42, height: 42, borderRadius: 12, background: C.greenBg, color: C.green, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><FileText size={21} /></div>
-              <div style={{ flex: "1 1 150px", minWidth: 0 }}><div style={{ ...sans, fontSize: 13.5, fontWeight: 650, overflowWrap: "anywhere" }}>{contract.fileName}</div><div style={{ ...sans, fontSize: 12, color: C.muted }}>Documento del contratto</div></div>
-              <a href={documentUrl(contract.id)} target="_blank" rel="noopener noreferrer" style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: C.green, borderRadius: 9, color: "#fff", fontSize: 12.5, fontWeight: 650, textDecoration: "none" }}><ExternalLink size={14} />Apri</a>
-              <a href={documentUrl(contract.id, true)} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 12.5, fontWeight: 650, textDecoration: "none", background: "#fff" }}><Download size={14} />Scarica</a>
+              <div style={{ flex: "1 1 150px", minWidth: 0 }}><div style={{ ...sans, fontSize: 13.5, fontWeight: 650, overflowWrap: "anywhere" }}>{contract.fileName}</div><div style={{ ...sans, fontSize: 12, color: C.muted }}>{t("Documento del contratto")}</div></div>
+              <a href={documentUrl(contract.id)} target="_blank" rel="noopener noreferrer" style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", background: C.green, borderRadius: 9, color: "#fff", fontSize: 12.5, fontWeight: 650, textDecoration: "none" }}><ExternalLink size={14} />{t("Apri")}</a>
+              <a href={documentUrl(contract.id, true)} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 14px", border: `1px solid ${C.border}`, borderRadius: 9, color: C.text, fontSize: 12.5, fontWeight: 650, textDecoration: "none", background: "#fff" }}><Download size={14} />{t("Scarica")}</a>
             </Card>
           ) : (
             <div style={{ background: C.yellowBg, border: "1px solid #f3dca0", borderRadius: radius.lg, padding: 16, display: "flex", gap: 12 }}>
               <AlertTriangle size={20} color={C.yellow} style={{ flexShrink: 0, marginTop: 1 }} />
               <div><div style={{ ...sans, fontSize: 13.5, fontWeight: 650, color: C.text, overflowWrap: "anywhere" }}>{contract.fileName}</div>
-                <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>{canOpenDocuments ? <>Il documento non è stato salvato (risulta solo il nome del file).{canEditContract(currentUser, contract) && " Usa Modifica per ricaricarlo."}</> : "In modalità demo i documenti non vengono salvati."}</div></div>
+                <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginTop: 3, lineHeight: 1.5 }}>{canOpenDocuments ? <>{t("Il documento non è stato salvato (risulta solo il nome del file).")}{canEditContract(currentUser, contract) && " " + t("Usa Modifica per ricaricarlo.")}</> : t("In modalità demo i documenti non vengono salvati.")}</div></div>
             </div>
           ))}
           {canOpenDocuments && (currentUser.role === "bo" || canEditContract(currentUser, contract)) && contract.boEmail && <BoMessages contractId={contract.id} isBo={currentUser.role === "bo"} />}
           {canOpenDocuments && canEditContract(currentUser, contract) && <BoNoticeCard key={`${contract.id}-${contract.boUserId ?? contract.boEmail}`} contract={contract} onChanged={() => onPlanChanged?.()} />}
           {canOpenDocuments && currentUser.role !== "viewer" && <ObligationsCard key={contract.id} contractId={contract.id} canEdit={canEditContract(currentUser, contract)} />}
-          {contract.notes && <Card style={{ background: C.yellowBg, borderColor: "#f3dca0" }}><div style={{ ...sans, display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: C.yellow, fontWeight: 650, marginBottom: 6 }}><StickyNote size={15} />Note</div><div style={{ ...sans, fontSize: 13.5, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{contract.notes}</div></Card>}
+          {contract.notes && <Card style={{ background: C.yellowBg, borderColor: "#f3dca0" }}><div style={{ ...sans, display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: C.yellow, fontWeight: 650, marginBottom: 6 }}><StickyNote size={15} />{t("Note")}</div><div style={{ ...sans, fontSize: 13.5, whiteSpace: "pre-wrap", lineHeight: 1.55 }}>{contract.notes}</div></Card>}
         </div>
         <AuditTrail entries={auditLog} />
       </Grid>

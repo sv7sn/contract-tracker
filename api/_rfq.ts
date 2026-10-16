@@ -55,7 +55,7 @@ export async function createRfq(user: User, input: Row, origin: string): Promise
   const db = getPool();
   const sups = (await db.query("select id, name, email, data, approved_data, status, lifecycle from suppliers where id = any($1)", [ids])).rows;
   if (sups.length !== ids.length) throw new HttpError(404, "Fornitore non trovato");
-  for (const s of sups) if (s.status !== "registered" || s.lifecycle !== "active") bad(`${s.name}: si invitano solo fornitori registrati e attivi`);
+  for (const s of sups) if (s.status !== "registered" || s.lifecycle !== "active") throw HttpError.t(400, "{name}: si invitano solo fornitori registrati e attivi", { name: s.name });
   if ((await db.query("select 1 from rfqs where task_id = $1 and status = 'open' and deadline >= current_date", [task.id])).rows.length) bad("C'è già una richiesta di offerta aperta su questa pratica");
   const specPath = str(input?.specPath, 300), specName = str(input?.specName, 150);
   if (specPath && (!FILE_PATH_RE.test(specPath) || !specName)) bad("Allegato non valido");

@@ -2,11 +2,12 @@ import type { Contract, MonthLoad, PlanStep, Plans, Suggestion } from "../types.
 import { C } from "../theme.ts";
 import { fmtMonth, monthKey, NOW } from "./format.ts";
 import { PLANNING_STEPS } from "../../api/_plan-rules.ts";
+import { t } from "../i18n/index.ts";
 export { makePlan, PLANNING_STEPS, reschedulePlan } from "../../api/_plan-rules.ts";
 
 export const stepTemplate = (id: string) => PLANNING_STEPS.find(s => s.id === id)!;
 /** Etichetta dell'attività: con il preavviso l'ultima tappa è il termine per la disdetta, non la scadenza. */
-export const stepLabel = (id: string, c?: { noticeDate: string } | null) => id === "expiry" && c?.noticeDate ? "Termine disdetta" : stepTemplate(id).label;
+export const stepLabel = (id: string, c?: { noticeDate: string } | null) => id === "expiry" && c?.noticeDate ? t("Termine disdetta") : t(stepTemplate(id).label);
 
 export const BO_DECISIONS = ["Rinnovare alle stesse condizioni", "Rinnovare con rinegoziazione", "Mettere in gara (RFQ/RFP)", "Prorogare temporaneamente", "Cessare l'attività"];
 export const BO_COLORS: Record<string, { bg: string; color: string }> = {
@@ -48,7 +49,7 @@ export function getSuggestions(contracts: Contract[], plans: Plans) {
     if (!first || first.status === "done") return acc;
     const d = new Date(first.scheduledDate);
     const load = workload[monthKey(d)]?.byBuyer[c.owner] || 0;
-    if (load >= WORKLOAD_THRESHOLD) acc.push({ contractId: c.id, supplier: c.supplier, owner: c.owner, reason: `${c.owner} ha ${load} attività a ${fmtMonth(d)}`, recommendedOffset: 30 });
+    if (load >= WORKLOAD_THRESHOLD) acc.push({ contractId: c.id, supplier: c.supplier, owner: c.owner, reason: t("{owner} ha {n} attività a {month}", { owner: c.owner, n: load, month: fmtMonth(d) }), recommendedOffset: 30 });
     return acc;
   }, [] as Suggestion[]);
 }

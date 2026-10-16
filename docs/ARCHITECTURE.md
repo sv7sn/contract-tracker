@@ -17,6 +17,8 @@ Applicazione web per l'ufficio acquisti (procurement indiretto) che segue una pr
 | **Indicatori** | Tempi e rispetto delle regole: RDA, scelta del fornitore, onboarding, qualifica, revisione dei contratti |
 | **Amministrazione** | Utenti e ruoli, parametri, regole di revisione, registro delle modifiche di configurazione |
 
+Interfaccia in **italiano e inglese**: ogni utente sceglie la lingua dal menu del profilo; le email partono nella lingua di chi le riceve. Restano in italiano i dati inseriti dagli utenti e i testi legali dei modelli e delle clausole (la versione inglese va rivista da Legal).
+
 Fuori ambito (non realizzato): firma elettronica, funzioni AI sui contratti, integrazione SAP in tempo reale.
 
 ## 2. Vista d'insieme
@@ -46,7 +48,8 @@ Fuori ambito (non realizzato): firma elettronica, funzioni AI sui contratti, int
 ## 3. Struttura del codice
 
 ```
-src/        interfaccia (views/, components/, lib/); ~7.300 righe
+src/        interfaccia (views/, components/, lib/); ~8.200 righe
+  i18n/       lingue: italiano (testo nel codice) e inglese (src/i18n/en/*.ts, chiave = testo italiano)
 api/        funzioni e logica; ~7.400 righe. I file con prefisso _ sono moduli, gli altri sono funzioni
   portal.ts   router unico: ?op=<operazione>, con controllo del ruolo per blocco di operazioni
   _db.ts      schema, query, validazioni
@@ -114,8 +117,9 @@ Hosting attuale: Vercel (funzioni in regione `iad1`, Stati Uniti est) e Neon (Po
 ## 8. Test e qualità
 
 - `npm run lint`, `tsc` e la build passano senza errori; la stessa verifica gira in CI (`.github/workflows/ci.yml`).
-- **34 suite di integrazione, oltre 700 controlli**, che chiamano le funzioni reali contro un Postgres vero (`npm run test:api`, vedi `tests/run.sh`). Coprono permessi per ruolo, flussi dei task, fornitori, budget e spesa, CLM, riservatezza.
+- **35 suite di integrazione, oltre 700 controlli**, che chiamano le funzioni reali contro un Postgres vero (`npm run test:api`, vedi `tests/run.sh`). Coprono permessi per ruolo, flussi dei task, fornitori, budget e spesa, CLM, riservatezza.
 - Upload su Blob, email e controlli esterni sono simulati nei test. Cinque suite (budget, purchase, sourcing, spend, tasks) usano export SAP reali che **non** sono nel repository per riservatezza: partono solo se si fornisce la cartella `SAP_SAMPLES`.
+- `npm run test:i18n` controlla che ogni testo dell'interfaccia e ogni messaggio del server abbia la versione inglese (oltre 2.300 testi).
 - `npm audit` sulle dipendenze di produzione: 0 vulnerabilità note.
 - Non ci sono test automatici dell'interfaccia; le schermate sono state verificate a mano su computer e telefono, per ruolo.
 

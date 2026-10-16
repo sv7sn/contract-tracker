@@ -59,6 +59,9 @@ async function access(user: User, taskId: number): Promise<{ owner: boolean; fun
   throw new HttpError(404, "Bozza non trovata");
 }
 
+/** Errore per la firma bloccata: il prefisso si traduce, i motivi restano come li dà reviewGate. */
+export const gateError = (gate: string) => HttpError.t(409, "Firma bloccata: {reasons}", { reasons: gate.replace(/^Firma bloccata: /, "") });
+
 /** Perché non si può ancora firmare (null = via libera). Si applica solo se esiste una bozza: i task senza bozza seguono il flusso di sempre. */
 export async function reviewGate(db: Queryable, taskId: number): Promise<string | null> {
   const d = await latestDraft(db, taskId);
@@ -185,7 +188,7 @@ export async function inviteReviewers(user: User, taskId: number, input: Row, or
     if (func === "requester") {
       userId = Number(f.userId);
       if (!Number.isInteger(userId) || !(await db.query("select 1 from users where id = $1 and active and role = 'bo'", [userId])).rows.length) bad("Scegli il Business Owner richiedente");
-    } else if (!(await recipients(db, func, null)).length) bad(`Non c'è nessun utente con il ruolo ${FUNC_LABEL[func]}: crealo da Utenti`);
+    } else if (!(await recipients(db, func, null)).length) throw HttpError.t(400, "Non c'è nessun utente con il ruolo {role}: crealo da Utenti", { role: FUNC_LABEL[func] });
     const due = typeof f.due === "string" && /^\d{4}-\d{2}-\d{2}$/.test(f.due) ? f.due : dueFor(t.due);
     const had = (await db.query("select 1 from draft_reviews where draft_id = $1 and func = $2", [d.id, func])).rows.length > 0;
     await db.query(`insert into draft_reviews (task_id, draft_id, func, user_id, required, due, invited_by) values ($1,$2,$3,$4,true,$5,$6)

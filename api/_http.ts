@@ -2,6 +2,10 @@ export class HttpError extends Error {
   status: number;
   data?: Record<string, unknown>;
   constructor(status: number, message: string, data?: Record<string, unknown>) { super(message); this.status = status; this.data = data; }
+  /** Messaggio con valori variabili: il testo resta in italiano, ma modello e valori viaggiano a parte così l'interfaccia lo traduce. */
+  static t(status: number, template: string, vars: Record<string, string | number>, data?: Record<string, unknown>) {
+    return new HttpError(status, template.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? String(vars[k]) : m)), { ...data, errorKey: template, errorVars: vars });
+  }
 }
 
 /** Errori del database dovuti a dati non validi (testo al posto di un numero, valore troppo lungo, campo obbligatorio vuoto…): per chi chiama sono richieste sbagliate, non guasti del server. */

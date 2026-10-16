@@ -6,6 +6,7 @@ import { BO_COLORS, calcWorkload, getSuggestions, planProgress, WORKLOAD_THRESHO
 import { Avatar, Card, DaysChip, Grid } from "../components/ui.tsx";
 import { ChartCard } from "../components/charts.tsx";
 import { Lightbulb } from "../components/icons.tsx";
+import { t } from "../i18n/index.ts";
 
 const OVERLOAD = "#d03b3b";
 
@@ -28,12 +29,12 @@ export function TeamView({ contracts, plans, onApplySuggestion }: { contracts: C
   return (
     <div style={{ display: "grid", gap: 18, gridTemplateColumns: "minmax(0,1fr)" }}>
       <ChartCard
-        title="Carico di lavoro del team" subtitle={`Attività di rinnovo ancora da fare, mese per mese. In rosso i mesi in cui almeno un buyer ha ${WORKLOAD_THRESHOLD} o più attività.`}
-        table={{ head: ["Mese", "Attività", "Buyer più carico"], rows: months.map(([, m]) => { const top = Object.entries(m.byBuyer).sort((a, b) => b[1] - a[1])[0]; return [m.label, m.total, top ? `${top[0]} (${top[1]})` : "—"]; }) }}
+        title={t("Carico di lavoro del team")} subtitle={t("Attività di rinnovo ancora da fare, mese per mese. In rosso i mesi in cui almeno un buyer ha {n} o più attività.", { n: WORKLOAD_THRESHOLD })}
+        table={{ head: [t("Mese"), t("Attività"), t("Buyer più carico")], rows: months.map(([, m]) => { const top = Object.entries(m.byBuyer).sort((a, b) => b[1] - a[1])[0]; return [m.label, m.total, top ? `${top[0]} (${top[1]})` : "—"]; }) }}
         legend={
           <div style={{ display: "flex", gap: 18, marginTop: 14, ...sans, fontSize: 12.5, color: C.muted }}>
-            <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span aria-hidden style={{ width: 10, height: 10, borderRadius: 3, background: CHART.blue }} />Carico regolare</span>
-            <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span aria-hidden style={{ width: 10, height: 10, borderRadius: 3, background: OVERLOAD }} />Almeno un buyer sovraccarico</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span aria-hidden style={{ width: 10, height: 10, borderRadius: 3, background: CHART.blue }} />{t("Carico regolare")}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 7 }}><span aria-hidden style={{ width: 10, height: 10, borderRadius: 3, background: OVERLOAD }} />{t("Almeno un buyer sovraccarico")}</span>
           </div>
         }
       >
@@ -48,13 +49,13 @@ export function TeamView({ contracts, plans, onApplySuggestion }: { contracts: C
                   const over = overloaded(m);
                   const people = Object.entries(m.byBuyer).sort((a, b) => b[1] - a[1]);
                   return (
-                    <div key={key} tabIndex={0} role="img" aria-label={`${m.label}: ${m.total} attività${over ? ", un buyer è sovraccarico" : ""}`}
+                    <div key={key} tabIndex={0} role="img" aria-label={over ? t("{month}: {n} attività, un buyer è sovraccarico", { month: m.label, n: m.total }) : t("{month}: {n} attività", { month: m.label, n: m.total })}
                       onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} onFocus={() => setHover(i)} onBlur={() => setHover(null)}
                       style={{ flex: 1, height: "100%", display: "flex", flexDirection: "column", justifyContent: "flex-end", alignItems: "center", position: "relative", outline: "none" }}>
                       {hover === i && (
                         <div role="tooltip" style={{ position: "absolute", bottom: "calc(100% + 8px)", ...(i < 2 ? { left: 0 } : i > 9 ? { right: 0 } : { left: "50%", transform: "translateX(-50%)" }), zIndex: 5, background: C.navy, color: "#fff", borderRadius: 10, padding: "8px 11px", fontSize: 12, lineHeight: 1.45, minWidth: 140, boxShadow: shadow.md, pointerEvents: "none", ...sans }}>
                           <div style={{ fontWeight: 650, textTransform: "capitalize" }}>{m.label}</div>
-                          <div style={{ opacity: .8 }}>{m.total} attività</div>
+                          <div style={{ opacity: .8 }}>{t("{n} attività", { n: m.total })}</div>
                           {people.slice(0, 5).map(([n, c]) => <div key={n} style={{ opacity: .9 }}>• {n}: {c}</div>)}
                         </div>
                       )}
@@ -72,13 +73,13 @@ export function TeamView({ contracts, plans, onApplySuggestion }: { contracts: C
 
       {suggestions.length > 0 && (
         <div style={{ background: C.yellowBg, border: "1px solid #f3dca0", borderRadius: radius.lg, padding: 16 }}>
-          <div style={{ ...font, fontSize: 15, fontWeight: 650, color: C.text, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Lightbulb size={18} color={C.yellow} />{suggestions.length} {suggestions.length === 1 ? "suggerimento" : "suggerimenti"} per bilanciare il carico</div>
+          <div style={{ ...font, fontSize: 15, fontWeight: 650, color: C.text, marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}><Lightbulb size={18} color={C.yellow} />{suggestions.length === 1 ? t("1 suggerimento per bilanciare il carico") : t("{n} suggerimenti per bilanciare il carico", { n: suggestions.length })}</div>
           <Grid min={290} gap={10}>
             {suggestions.map(s => (
               <div key={s.contractId} style={{ background: "#fff", borderRadius: 12, padding: 14, border: `1px solid ${C.border}` }}>
                 <div style={{ ...sans, fontSize: 13.5, fontWeight: 650, marginBottom: 3 }}>{s.supplier}</div>
                 <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginBottom: 12 }}>{s.reason}</div>
-                <button onClick={() => onApplySuggestion(s.contractId, s.recommendedOffset)} style={{ ...sans, padding: "7px 14px", background: C.navy, border: "none", borderRadius: 9, color: "#fff", cursor: "pointer", fontSize: 12.5, fontWeight: 650 }}>Anticipa di {s.recommendedOffset} giorni</button>
+                <button onClick={() => onApplySuggestion(s.contractId, s.recommendedOffset)} style={{ ...sans, padding: "7px 14px", background: C.navy, border: "none", borderRadius: 9, color: "#fff", cursor: "pointer", fontSize: 12.5, fontWeight: 650 }}>{t("Anticipa di {n} giorni", { n: s.recommendedOffset })}</button>
               </div>
             ))}
           </Grid>
@@ -88,10 +89,10 @@ export function TeamView({ contracts, plans, onApplySuggestion }: { contracts: C
       <div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
           {buyers.map(b => { const sel = selectedBuyer === b; return (
-            <button key={b} onClick={() => setSelectedBuyer(b)} aria-pressed={sel} style={{ ...sans, display: "flex", alignItems: "center", gap: 8, padding: b === "Tutti" ? "6px 14px" : "4px 12px 4px 5px", borderRadius: 999, border: `1px solid ${sel ? C.navy : C.border}`, background: sel ? C.navy : "#fff", color: sel ? "#fff" : C.muted, cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>{b !== "Tutti" && <Avatar name={b} size={22} />}{b}</button>
+            <button key={b} onClick={() => setSelectedBuyer(b)} aria-pressed={sel} style={{ ...sans, display: "flex", alignItems: "center", gap: 8, padding: b === "Tutti" ? "6px 14px" : "4px 12px 4px 5px", borderRadius: 999, border: `1px solid ${sel ? C.navy : C.border}`, background: sel ? C.navy : "#fff", color: sel ? "#fff" : C.muted, cursor: "pointer", fontSize: 12.5, fontWeight: 600 }}>{b !== "Tutti" && <Avatar name={b} size={22} />}{b === "Tutti" ? t("Tutti") : b}</button>
           ); })}
         </div>
-        <div style={{ ...font, fontSize: 15, fontWeight: 650, color: C.text, marginBottom: 12 }}>{selectedBuyer === "Tutti" ? "Tutti i contratti" : selectedBuyer} <span style={{ color: C.subtle, fontWeight: 500 }}>({filtered.length})</span></div>
+        <div style={{ ...font, fontSize: 15, fontWeight: 650, color: C.text, marginBottom: 12 }}>{selectedBuyer === "Tutti" ? t("Tutti i contratti") : selectedBuyer} <span style={{ color: C.subtle, fontWeight: 500 }}>({filtered.length})</span></div>
         <Grid min={340} gap={12}>
           {filtered.map(c => {
             const plan = plans[c.id] || [];
@@ -111,7 +112,7 @@ export function TeamView({ contracts, plans, onApplySuggestion }: { contracts: C
                 </div>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7, ...sans, fontSize: 12, color: C.muted }}><Avatar name={c.owner || "?"} size={22} />{c.owner}</div>
-                  {boStep?.boDecision && <span style={{ ...sans, fontSize: 11.5, fontWeight: 650, color: BO_COLORS[boStep.boDecision]?.color, background: BO_COLORS[boStep.boDecision]?.bg, borderRadius: 999, padding: "3px 10px" }}>BO: {boStep.boDecision}</span>}
+                  {boStep?.boDecision && <span style={{ ...sans, fontSize: 11.5, fontWeight: 650, color: BO_COLORS[boStep.boDecision]?.color, background: BO_COLORS[boStep.boDecision]?.bg, borderRadius: 999, padding: "3px 10px" }}>BO: {t(boStep.boDecision)}</span>}
                 </div>
               </Card>
             );

@@ -5,6 +5,7 @@ import { btnGhost, C, iStyle, sans } from "../theme.ts";
 import { Card, CardTitle } from "../components/ui.tsx";
 import { Loader2, Trash2 } from "../components/icons.tsx";
 import { Notice } from "../components/vendorUi.tsx";
+import { t } from "../i18n/index.ts";
 
 const AREAS: { key: ResetArea; label: string; text: string; unit: string }[] = [
   { key: "tasks", label: "Task e pratiche", text: "RDA, rinnovi, acquisti, attività, richieste di offerta e relativi documenti. Le RDA riappaiono al prossimo import SAP finché non svuoti anche i dati SAP.", unit: "task" },
@@ -31,15 +32,15 @@ export function ResetCard({ fail, notify }: { fail: (e: unknown) => string; noti
     try {
       const done = await portalApi.resetRun(picked);
       const total = Object.values(done).reduce((a, b) => a + (b ?? 0), 0);
-      setCounts(await portalApi.resetPreview()); setPicked([]); setConfirm(""); notify(`Dati eliminati: ${total}`);
+      setCounts(await portalApi.resetPreview()); setPicked([]); setConfirm(""); notify(t("Dati eliminati: {n}", { n: total }));
     } catch (e) { setErr(fail(e)); }
     setBusy(false);
   };
 
   return (
     <Card style={{ marginBottom: 14, borderColor: "#f0c9c9" }}>
-      <CardTitle icon={<Trash2 size={16} />}>Pulizia dei dati di prova</CardTitle>
-      <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "0 0 12px", lineHeight: 1.55 }}>Per passare dai test ai dati veri: scegli cosa svuotare. <b>L'eliminazione è definitiva.</b> Non si toccano mai la configurazione (società, codici, documenti richiesti, regole), gli utenti del team e le liste sanzioni. Ogni pulizia resta nel registro modifiche.</p>
+      <CardTitle icon={<Trash2 size={16} />}>{t("Pulizia dei dati di prova")}</CardTitle>
+      <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "0 0 12px", lineHeight: 1.55 }}>{t("Per passare dai test ai dati veri: scegli cosa svuotare.")} <b>{t("L'eliminazione è definitiva.")}</b> {t("Non si toccano mai la configurazione (società, codici, documenti richiesti, regole), gli utenti del team e le liste sanzioni. Ogni pulizia resta nel registro modifiche.")}</p>
       {err && <Notice kind="error">{err}</Notice>}
       {!counts && !err && <div style={{ display: "flex", justifyContent: "center", padding: 14 }}><Loader2 className="spin" size={20} color={C.subtle} /></div>}
       {counts && <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
@@ -48,15 +49,15 @@ export function ResetCard({ fail, notify }: { fail: (e: unknown) => string; noti
           return (
             <label key={a.key} style={{ ...sans, display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 12px", border: `1px solid ${picked.includes(a.key) ? C.red : C.borderLight}`, borderRadius: 12, cursor: disabled ? "default" : "pointer", opacity: disabled ? 0.55 : 1 }}>
               <input type="checkbox" checked={picked.includes(a.key)} disabled={disabled} onChange={() => toggle(a.key)} style={{ width: 17, height: 17, marginTop: 2, accentColor: C.red }} />
-              <span style={{ flex: 1, minWidth: 0 }}><b style={{ fontSize: 13.5 }}>{a.label}</b><span style={{ color: C.muted, fontSize: 12.5, display: "block", lineHeight: 1.5 }}>{a.text}</span></span>
-              <span className="tabular" style={{ fontSize: 12.5, fontWeight: 650, color: counts[a.key] ? C.text : C.subtle, whiteSpace: "nowrap" }}>{counts[a.key]} {a.unit}</span>
+              <span style={{ flex: 1, minWidth: 0 }}><b style={{ fontSize: 13.5 }}>{t(a.label)}</b><span style={{ color: C.muted, fontSize: 12.5, display: "block", lineHeight: 1.5 }}>{t(a.text)}</span></span>
+              <span className="tabular" style={{ fontSize: 12.5, fontWeight: 650, color: counts[a.key] ? C.text : C.subtle, whiteSpace: "nowrap" }}>{counts[a.key]} {t(a.unit)}</span>
             </label>
           );
         })}
       </div>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <input value={confirm} onChange={e => setConfirm(e.target.value)} placeholder="Scrivi ELIMINA per confermare" aria-label="Conferma" style={{ ...iStyle, width: 250 }} />
-        <button onClick={run} disabled={busy || confirm !== "ELIMINA" || picked.length === 0} style={{ ...btnGhost, padding: "9px 16px", color: C.red, borderColor: C.red, display: "inline-flex", alignItems: "center", gap: 6 }}>{busy ? <Loader2 className="spin" size={14} /> : <Trash2 size={14} />}Elimina i dati selezionati</button>
+        <input value={confirm} onChange={e => setConfirm(e.target.value)} placeholder={t("Scrivi ELIMINA per confermare")} aria-label={t("Conferma")} style={{ ...iStyle, width: 250 }} />
+        <button onClick={run} disabled={busy || confirm !== "ELIMINA" || picked.length === 0} style={{ ...btnGhost, padding: "9px 16px", color: C.red, borderColor: C.red, display: "inline-flex", alignItems: "center", gap: 6 }}>{busy ? <Loader2 className="spin" size={14} /> : <Trash2 size={14} />}{t("Elimina i dati selezionati")}</button>
       </div>
     </Card>
   );
