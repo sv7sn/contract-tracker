@@ -327,7 +327,7 @@ export default function App() {
       </header>
       <main className="page"><SupplierPortal onSessionExpired={sessionExpired} notify={showToast} /></main>
       </div>
-      {showAccount && <AccountMenu user={currentUser} anchor="top" canChangePassword onLogout={handleLogout} onClose={() => setShowAccount(false)} />}
+      {showAccount && <AccountMenu user={currentUser} anchor="top" canChangePassword onProfileSaved={patch => setCurrentUser(u => (u ? { ...u, ...patch } : u))} onLogout={handleLogout} onClose={() => setShowAccount(false)} />}
       {toastEl}
     </div>
   );
@@ -462,7 +462,7 @@ export default function App() {
 
       {showForm && <ContractForm initial={editingContract} currentUser={currentUser} users={users} canUpload={mode === "api"} onSave={handleSave} onClose={() => { setShowForm(false); setEditingContract(null); }} />}
       {boFormContract && <BOFormModal contract={boFormContract} currentUser={currentUser} onSubmit={handleBOResponse} onClose={() => setBOFormContract(null)} />}
-      {showAccount && <AccountMenu user={currentUser} anchor="sidebar" canChangePassword={mode === "api"} onAdmin={currentUser.role === "manager" ? () => setView("config") : undefined} onLogout={handleLogout} onClose={() => setShowAccount(false)} />}
+      {showAccount && <AccountMenu user={currentUser} anchor="sidebar" canChangePassword={mode === "api"} onAdmin={currentUser.role === "manager" ? () => setView("config") : undefined} onProfileSaved={patch => setCurrentUser(u => (u ? { ...u, ...patch } : u))} onLogout={handleLogout} onClose={() => setShowAccount(false)} />}
       {toastEl}
     </div>
   );

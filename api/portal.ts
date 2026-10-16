@@ -276,6 +276,16 @@ async function handle(request: Request): Promise<Response> {
       await getPool().query("update users set lang = $1 where id = $2", [lang, u.id]);
       return json({ lang });
     }
+    // ── I miei dati: funzione e telefono (nome, email e ruolo li gestisce il Manager) ──
+    if (op === "my-profile" && method === "POST") {
+      const u = await requireUser(request);
+      const b = (await readJson(request)) as { title?: unknown; phone?: unknown };
+      const title = typeof b.title === "string" ? b.title.trim() : "", phone = typeof b.phone === "string" ? b.phone.trim() : "";
+      if (title.length > 80) throw new HttpError(400, "Funzione troppo lunga (massimo 80 caratteri)");
+      if (phone && !/^[+0-9 ()./-]{5,30}$/.test(phone)) throw new HttpError(400, "Numero di telefono non valido");
+      await getPool().query("update users set title = $1, phone = $2 where id = $3", [title, phone, u.id]);
+      return json({ title, phone });
+    }
     // ── "Esci da tutti i dispositivi": chiude tutte le sessioni dell'utente, tranne questa ──
     if (op === "sessions-revoke" && method === "POST") {
       const u = await requireUser(request);

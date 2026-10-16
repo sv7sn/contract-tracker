@@ -31,4 +31,10 @@ assert.notEqual(mails[0].subject, mails[1].subject); assert.equal(mails[1].subje
 // Messaggi d'errore con valori: testo italiano invariato, modello e valori a parte per la traduzione.
 const res = http.errorResponse(http.HttpError.t(400, "Il file supera {mb} MB", { mb: 25 })); const body = await res.json();
 assert.equal(body.error, "Il file supera 25 MB"); assert.equal(body.errorKey, "Il file supera {mb} MB"); assert.deepEqual(body.errorVars, { mb: 25 }); ok("errore con valori: testo, modello e valori");
+// I miei dati: funzione e telefono, con controlli; nome e ruolo non si toccano da qui.
+assert.equal((await P(buyer, "POST", "my-profile", { title: "Buyer ICT", phone: "+39 02 1234567", name: "Altro", role: "manager" })).status, 200);
+r = await call(me, buyer, "GET", ""); assert.equal(r.data.user.title, "Buyer ICT"); assert.equal(r.data.user.phone, "+39 02 1234567"); assert.equal(r.data.user.name, "Marta Buyer"); assert.equal(r.data.user.role, "buyer");
+assert.equal((await P(buyer, "POST", "my-profile", { title: "x", phone: "chiamami<script>" })).status, 400);
+assert.equal((await P(buyer, "POST", "my-profile", { title: "x".repeat(81), phone: "" })).status, 400);
+assert.equal((await P(null, "POST", "my-profile", { title: "x" })).status, 401); ok("i miei dati: funzione e telefono salvati, nome e ruolo invariati, valori non validi rifiutati");
 console.log("Totale:", passed, "controlli"); await pool.end(); process.exit(0);

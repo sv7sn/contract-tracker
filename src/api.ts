@@ -28,6 +28,7 @@ export const api = {
   login: (email: string, password: string) => post<{ user: User }>("/api/login", { email, password }),
   logout: () => post<{ ok: true }>("/api/logout", {}),
   changePassword: (current: string, next: string) => post<{ ok: true }>("/api/password", { current, next }),
+  saveProfile: (input: { title: string; phone: string }) => post<{ title: string; phone: string }>("/api/portal?op=my-profile", input),
   setLang: (lang: "it" | "en") => post<{ lang: string }>("/api/portal?op=my-lang", { lang }),
   revokeSessions: () => post<{ ok: true }>("/api/portal?op=sessions-revoke", {}),
   loadState: () => request<AppState>("/api/state"),

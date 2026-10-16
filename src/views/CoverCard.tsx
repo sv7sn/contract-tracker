@@ -3,15 +3,14 @@ import type { CoverView, User } from "../types.ts";
 import { portalApi } from "../api.ts";
 import { btnPrimary, C, iStyle, sans } from "../theme.ts";
 import { fmtDate } from "../lib/format.ts";
-import { Card } from "../components/ui.tsx";
-import { CalendarClock, Loader2, Trash2 } from "../components/icons.tsx";
+import { Loader2, Trash2 } from "../components/icons.tsx";
 import { Notice } from "../components/vendorUi.tsx";
 import { t } from "../i18n/index.ts";
 
 const plus = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
 
-/** Assenze e sostituti: nel periodo indicato il sostituto vede e gestisce le pratiche dell'assente. */
-export function CoverCard({ user, defaultOpen = false }: { user: User; defaultOpen?: boolean }) {
+/** Assenze e sostituti: nel periodo indicato il sostituto vede e gestisce le pratiche dell'assente. Usato nel menu del profilo. */
+export function CoverEditor({ user }: { user: User }) {
   const [v, setV] = useState<CoverView | null>(null);
   const [absent, setAbsent] = useState<number>(user.id);
   const [sub, setSub] = useState<number | "">("");
@@ -24,10 +23,7 @@ export function CoverCard({ user, defaultOpen = false }: { user: User; defaultOp
   const run = async (f: () => Promise<CoverView>) => { setBusy(true); setErr(null); try { setV(await f()); } catch (e) { setErr(e instanceof Error ? e.message : t("Operazione non riuscita")); } setBusy(false); };
 
   return (
-    <Card style={{ marginBottom: 18, padding: 0 }}>
-      <details open={defaultOpen || undefined}>
-        <summary style={{ ...sans, cursor: "pointer", padding: "14px 20px", fontSize: 14, fontWeight: 650, display: "flex", alignItems: "center", gap: 8 }}><CalendarClock size={16} />{t("Assenze e sostituzioni")}{v && v.entries.length > 0 ? <span style={{ fontWeight: 500, color: C.muted, fontSize: 12.5 }}>· {v.entries.length === 1 ? t("1 registrata") : t("{n} registrate", { n: v.entries.length })}</span> : null}</summary>
-        <div style={{ padding: "0 20px 16px" }}>
+        <div>
           <p style={{ ...sans, fontSize: 12.5, color: C.muted, margin: "0 0 10px", lineHeight: 1.55 }}>{t("Se ti assenti, indica chi ti sostituisce: nel periodo vedrà e potrà gestire le tue pratiche (task, contratti, fornitori, richieste di offerta). L'accesso finisce da solo alla data indicata.")}</p>
           {err && <Notice kind="error">{err}</Notice>}
           {!v && !err && <Loader2 className="spin" size={18} color={C.subtle} />}
@@ -46,7 +42,5 @@ export function CoverCard({ user, defaultOpen = false }: { user: User; defaultOp
             </div>
           </>}
         </div>
-      </details>
-    </Card>
   );
 }

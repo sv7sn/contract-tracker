@@ -5,7 +5,6 @@ import { C, font, radius, sans } from "../theme.ts";
 import { daysToDeadline } from "../lib/format.ts";
 import type { ModuleDef } from "../lib/modules.tsx";
 import { Card } from "../components/ui.tsx";
-import { CoverCard } from "./CoverCard.tsx";
 import { locale, t } from "../i18n/index.ts";
 
 interface Props { user: User; modules: ModuleDef[]; contracts: Contract[]; plans: Record<number, PlanStep[]>; onOpen: (view: View, focus?: { taskId?: number; vendorId?: number; contractId?: number }) => void }
@@ -85,7 +84,6 @@ export function HubView({ user, modules, contracts, onOpen }: Props) {
             </button>);
         })}
       </div>
-      {(user.role === "manager" || user.role === "buyer") && <CoverCard user={user} />}
     </div>
   );
 }
