@@ -7,7 +7,7 @@ export type View = "dashboard" | "list" | "planning" | "team" | "notifiche" | "b
 
 /** Utente autenticato, come restituito dall'API (mai con la password). */
 export type Lang = "it" | "en";
-export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean; /** Lingua dell'interfaccia e delle email. */ lang?: Lang; /** Codice utente SAP del richiedente (solo Business Owner): collega le RDA aperte in SAP a lui. */ sapUser?: string;
+export interface User { id: number; email: string; name: string; role: Role; title: string; active: boolean; /** Lingua dell'interfaccia e delle email. */ lang?: Lang; /** Telefono di lavoro (facoltativo, dal profilo). */ phone?: string; /** Codice utente SAP del richiedente (solo Business Owner): collega le RDA aperte in SAP a lui. */ sapUser?: string;
   /** Solo buyer: chi sta sostituendo oggi (assenze dei colleghi), calcolato a ogni richiesta. `ids` e `names` includono sempre l'utente stesso. */
   acting?: { ids: number[]; names: string[]; covering: { id: number; name: string; until: string }[] } }
 export interface Contract {

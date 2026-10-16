@@ -194,6 +194,7 @@ create table if not exists draft_comments (
 create index if not exists draft_comments_draft_idx on draft_comments (draft_id);
 alter table users add column if not exists session_version integer not null default 0;
 alter table users add column if not exists lang text not null default 'it';
+alter table users add column if not exists phone text not null default '';
 alter table contract_drafts alter column file_path drop not null;
 alter table contract_drafts add column if not exists layout jsonb not null default '{}'::jsonb;
 alter table contract_drafts add column if not exists source jsonb;
@@ -480,8 +481,8 @@ export function cleanPayload(body: unknown): CommitPayload {
 
 // ─── Utenti ──────────────────────────────────────────────────
 /** Solo i campi pubblici: mai l'hash della password. */
-export const publicUser = (u: User): User => ({ id: u.id, email: u.email, name: u.name, role: u.role, title: u.title, active: u.active, sapUser: u.sapUser ?? "", lang: u.lang ?? "it" });
-const toUser = (r: Record<string, unknown>): User => ({ id: r.id as number, email: r.email as string, name: r.name as string, role: r.role as Role, title: r.title as string, active: r.active as boolean, sapUser: (r.sap_user as string) ?? "", lang: r.lang === "en" ? "en" : "it" });
+export const publicUser = (u: User): User => ({ id: u.id, email: u.email, name: u.name, role: u.role, title: u.title, active: u.active, sapUser: u.sapUser ?? "", lang: u.lang ?? "it", phone: u.phone ?? "" });
+const toUser = (r: Record<string, unknown>): User => ({ id: r.id as number, email: r.email as string, name: r.name as string, role: r.role as Role, title: r.title as string, active: r.active as boolean, sapUser: (r.sap_user as string) ?? "", lang: r.lang === "en" ? "en" : "it", phone: (r.phone as string) ?? "" });
 
 export async function countUsers(): Promise<number> {
   return (await getPool().query("select count(*)::int as n from users")).rows[0].n;

@@ -106,10 +106,10 @@ const en: Record<string, string> = {
   "Email": "Email",
   "Email Business Owner": "Business Owner email",
   "Es. 520100000075": "e.g. 520100000075",
-  "Es. Buyer ICT": "e.g. ICT Buyer",
+  "Es. Buyer ICT": "E.g. ICT Buyer",
   "Es. DANTADI001": "e.g. DANTADI001",
   "Es. Distribuzione carico, periodo festivo...": "e.g. Workload balancing, holiday period...",
-  "Funzione": "Function",
+  "Funzione": "Job title",
   "Inizio": "Start",
   "Internal order (Master Plan)": "Internal order (Master Plan)",
   "Motivazione": "Reason",
@@ -413,6 +413,12 @@ const en: Record<string, string> = {
   "Valuta#verbo": "Rate",
   "Scadenza#task": "Due date",
   "Caricamento non riuscito#file": "Upload failed",
-  "Fornitore scelto#campo": "Chosen supplier"
+  "Fornitore scelto#campo": "Chosen supplier",
+  "I miei dati": "My details",
+  "Le mie assenze": "My absences",
+  "Nome, email e ruolo li modifica il Manager (Amministrazione → Utenti).": "Name, email and role are changed by the Manager (Administration → Users).",
+  "Dati salvati": "Details saved",
+  "Nome": "Name",
+  "Telefono": "Phone"
 };
 export default en;
