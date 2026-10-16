@@ -7,7 +7,7 @@ type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-exp
 export const AREA_LABEL: Record<string, string> = {
   company: "Società", industry: "Codici merceologici", payment_term: "Condizioni di pagamento", sap: "Parametri SAP",
   doc_type: "Documenti di qualifica", reminders: "Reminder documenti", rda: "Regole RDA", pgr: "Gruppi di acquisto",
-  privacy: "Privacy", user: "Utenti", category: "Categorie", rating: "Valutazioni fornitori", reset: "Pulizia dati",
+  privacy: "Privacy", risk: "Verifica periodica fornitori", user: "Utenti", category: "Categorie", rating: "Valutazioni fornitori", reset: "Pulizia dati",
 };
 const FIELD_LABEL: Record<string, string> = {
   name: "Nome", label: "Descrizione", sapCompanyCode: "Società SAP", purchOrg: "Org. acquisti", buyerIds: "Buyer", help: "Istruzioni",
@@ -51,6 +51,7 @@ function pick(cfg: PortalConfig & { privacy?: unknown }, entity: string, item: R
     case "sap": return { subject: "", value: cfg.sap as unknown as Row };
     case "reminders": return { subject: "", value: cfg.reminders as unknown as Row };
     case "privacy": return { subject: "", value: (cfg.privacy ?? null) as Row | null };
+    case "risk": return { subject: "", value: cfg.risk as unknown as Row };
     default: return { subject: key, value: null };
   }
 }

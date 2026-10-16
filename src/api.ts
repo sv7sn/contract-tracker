@@ -139,6 +139,7 @@ export const portalApi = {
   recheckDocument: (id: number) => request<{ supplier: Supplier }>(portal("doc-check", `&id=${id}`), { method: "POST", body: "{}" }).then(r => r.supplier),
   monitor: () => request<MonitorData>(portal("doc-monitor")),
   remind: (supplierId: number, channel: "email" | "phone", note = "") => post<{ sent: number }>(portal("doc-remind"), { supplierId, channel, note }),
+  runRiskChecks: () => post<{ due: number; checked: number; worsened: number; errors: number }>(portal("risk-run"), {}),
   runReminders: () => post<{ suppliers: number; emails: number; items: number; alerts: number }>(portal("reminders-run"), {}),
   tasks: () => request<TaskList>(portal("tasks")),
   taskSummary: () => request<TaskSummary>(portal("task-summary")),
@@ -195,7 +196,7 @@ export const portalApi = {
   deleteObligation: (id: number) => post<{ obligations: Obligation[] }>(portal("obligation-delete", `&id=${id}`), {}).then(r => r.obligations),
   deleteTask: (id: number) => request<{ ok: true }>(portal("task", `&id=${id}`), { method: "DELETE" }),
   config: () => request<{ config: PortalConfig }>(portal("config")).then(r => r.config),
-  saveConfig: (entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders" | "rda" | "pgr" | "privacy", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
+  saveConfig: (entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders" | "rda" | "pgr" | "privacy" | "risk", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
 };
 
 export const demoSapFileUrl = (kind: "pr" | "po") => `/api/portal?op=budget-demo-file&kind=${kind}`;

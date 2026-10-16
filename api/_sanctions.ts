@@ -165,7 +165,7 @@ export async function screenName(db: Queryable, legalName: string): Promise<{ st
 
 /** Dopo ogni aggiornamento ricontrolla tutti i fornitori: una persona o società può entrare in lista in qualunque momento. */
 async function rescreenAll(db: Queryable): Promise<{ rescreened: number; newHits: number }> {
-  const rows = (await db.query("select id, name, data, compliance from suppliers where anonymized_at is null and status <> 'invited'")).rows;
+  const rows = (await db.query("select id, name, data, compliance, status from suppliers where anonymized_at is null and status <> 'invited'")).rows;
   let newHits = 0;
   for (const r of rows) {
     const res = await screenName(db, r.data?.company?.legalName || r.name);
@@ -173,6 +173,8 @@ async function rescreenAll(db: Queryable): Promise<{ rescreened: number; newHits
     if (res.status !== "ok" && res.status !== "todo" && prev !== res.status) {
       newHits++;
       await db.query("insert into supplier_events (supplier_id, actor, action, detail) values ($1,'Sistema','Controllo sanzioni: da verificare',$2)", [r.id, res.detail]);
+      // Avviso ai buyer come per la verifica periodica (import al momento: _risk dipende indirettamente da questo modulo).
+      if (r.status === "registered") await (await import("./_risk.js")).riskAlert(db, r.id, ["Liste sanzioni internazionali"], process.env.APP_URL?.trim().replace(/\/+$/, "") || "", res.detail).catch(err => console.error("Avviso sanzioni non inviato", err));
     }
     await db.query("update suppliers set compliance = $1 where id = $2", [JSON.stringify({ ...(r.compliance ?? {}), sanctions: res, sanctionsAt: new Date().toISOString() }), r.id]);
   }

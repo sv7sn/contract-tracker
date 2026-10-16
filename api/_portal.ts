@@ -12,6 +12,7 @@ import { docConfig, loadCatalog, loadPolicy, saveDocType, savePolicy } from "./_
 import { loadRdaConfig, saveRda } from "./_tasks.js";
 import { loadPrivacy, savePrivacy } from "./_privacy.js";
 import { sanctionsStatus } from "./_sanctions.js";
+import { assessRows, loadRiskPolicy, saveRiskPolicy } from "./_risk.js";
 import { bankKey, complianceChecks, diffData, duplicateIds, findDuplicates, qualificationOf, runExternalChecks, type StoredCompliance } from "./_governance.js";
 
 const bad = (msg: string): never => { throw new HttpError(400, msg); };
@@ -43,11 +44,14 @@ async function vendorSummaries(whereSql: string): Promise<SupplierSummary[]> {
   const docs = ids.length ? (await db.query("select supplier_id, type, valid_until from supplier_documents where supplier_id = any($1)", [ids])).rows : [];
   const cat = await loadCatalog(db);
   const dup = await duplicateIds(db);
-  return rows.map(r => {
-    const { data, ...rest } = mapSupplier(r);
+  const withQual = rows.map(r => {
     const mine = docs.filter(d => d.supplier_id === r.id).map(d => ({ type: d.type, validUntil: d.valid_until ? new Date(d.valid_until).toISOString().slice(0, 10) : null }));
-    const qualification = qualificationOf(r.status, resolveDocTypes(cat.types, cat.rules, data.address?.country, r.industry_code), mine);
-    return { ...rest, qualification, bankChanged: false, country: data.address?.country ?? "", legalName: data.company?.legalName ?? r.name, documentCount: mine.length, duplicate: dup.has(r.id) };
+    return { ...r, mine, qualification: qualificationOf(r.status, resolveDocTypes(cat.types, cat.rules, r.data?.address?.country, r.industry_code), mine) };
+  });
+  const risk = await assessRows(db, withQual);
+  return withQual.map(r => {
+    const { data, ...rest } = mapSupplier(r);
+    return { ...rest, qualification: r.qualification, bankChanged: false, country: data.address?.country ?? "", legalName: data.company?.legalName ?? r.name, documentCount: r.mine.length, duplicate: dup.has(r.id), risk: risk.get(r.id) };
   });
 }
 export const listVendors = (user: User): Promise<SupplierSummary[]> => vendorSummaries(visibleWhere(user));
@@ -82,7 +86,8 @@ async function loadFull(db: Queryable, id: number, forSupplier = false): Promise
   const duplicates = await findDuplicates(db, { id: r.id, name: r.name, data: s.data, confirmed: r.dup_confirmed ?? [] });
   const stored = (r.compliance ?? null) as StoredCompliance | null;
   const compliance = complianceChecks(s.data, stored, duplicates, qualification, missingRequired(resolved, documents).length, s.lifecycle);
-  return { ...s, documents, events, docTypes, qualification, changes, bankChanged, bankLetterAfterChange, duplicates, compliance, complianceCheckedAt: stored?.checkedAt ?? null };
+  const risk = (await assessRows(db, [{ ...r, qualification }])).get(r.id);
+  return { ...s, documents, events, docTypes, qualification, changes, bankChanged, bankLetterAfterChange, duplicates, compliance, complianceCheckedAt: stored?.checkedAt ?? null, risk, riskHistory: stored?.history ?? [] };
 }
 
 export async function getVendor(user: User, id: number): Promise<Supplier> {
@@ -113,7 +118,7 @@ export async function loadConfig(): Promise<PortalConfig> {
   const industryCodes: IndustryCode[] = i.rows.map(r => ({ code: r.code, name: r.name, buyerIds: ib.rows.filter(x => x.industry_code === r.code).map(x => x.user_id) }));
   const paymentTerms: PaymentTerm[] = pt.rows.map(r => ({ code: r.code, label: r.label }));
   const cat = await loadCatalog(db);
-  return { companies, industryCodes, paymentTerms, sap: st.rows[0]?.value as SapSettings, buyers: b.rows, ...docConfig(cat, await loadPolicy(db)), rda: await loadRdaConfig(db), privacy: await loadPrivacy(db), sanctions: await sanctionsStatus(db), externalChecks: { vies: (process.env.VIES_MODE ?? "live") !== "off", openapi: !!process.env.OPENAPI_COMPANY_TOKEN?.trim() } };
+  return { companies, industryCodes, paymentTerms, sap: st.rows[0]?.value as SapSettings, buyers: b.rows, ...docConfig(cat, await loadPolicy(db)), rda: await loadRdaConfig(db), privacy: await loadPrivacy(db), sanctions: await sanctionsStatus(db), risk: await loadRiskPolicy(db), externalChecks: { vies: (process.env.VIES_MODE ?? "live") !== "off", openapi: !!process.env.OPENAPI_COMPANY_TOKEN?.trim() } };
 }
 
 const CODE_RE = /^[A-Za-z0-9_.-]{1,20}$/;
@@ -125,6 +130,7 @@ export async function saveConfig(entity: string, action: string, item: Row): Pro
   if (entity === "doc_type") return saveDocType(action, item);
   if (entity === "reminders") return savePolicy(item);
   if (entity === "privacy") return savePrivacy(item);
+  if (entity === "risk") return saveRiskPolicy(item);
   if (entity === "sap") {
     const cur = (await db.query("select value from settings where key = 'sap'")).rows[0]?.value as SapSettings;
     const rec: Record<string, string> = {};

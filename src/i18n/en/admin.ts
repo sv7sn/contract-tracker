@@ -262,6 +262,17 @@ const en: Record<string, string> = {
   "Accesso bloccato (troppi tentativi)": "Sign-in blocked (too many attempts)",
   "Password cambiata": "Password changed",
   "Password reimpostata dal Manager": "Password reset by the Manager",
-  "Sessioni chiuse": "Sessions closed"
+  "Sessioni chiuse": "Sessions closed",
+  "Verifica periodica salvata": "Periodic check saved",
+  "Verifica eseguita: {checked} fornitori controllati, {worsened} peggiorati (buyer avvisati)": "Check run: {checked} suppliers checked, {worsened} worsened (buyers notified)",
+  "Verifica eseguita: {checked} fornitori controllati su {due} da ricontrollare, nessun peggioramento": "Check run: {checked} of {due} due suppliers checked, no deterioration",
+  "Verifica periodica dei fornitori": "Periodic supplier check",
+  "Ogni notte i fornitori registrati vengono ricontrollati (partita IVA, situazione dell'azienda, liste sanzioni) quando la verifica è scaduta: più spesso quelli a rischio più alto. Se qualcosa peggiora, il buyer di riferimento riceve un'email e la scheda lo segnala. La verifica dell'azienda presso il Registro Imprese costa circa 0,10 € a fornitore.": "Every night registered suppliers are re-checked (VAT number, company status, sanctions lists) when their check is due: higher-risk suppliers more often. If something worsens, the reference buyer gets an email and the supplier record flags it. The company check with the Italian Business Register costs about €0.10 per supplier.",
+  "Verifica periodica automatica attiva": "Automatic periodic check enabled",
+  "Rischio alto: ogni (giorni)": "High risk: every (days)",
+  "Rischio medio: ogni (giorni)": "Medium risk: every (days)",
+  "Rischio basso: ogni (giorni)": "Low risk: every (days)",
+  "Massimo fornitori al giorno": "Maximum suppliers per day",
+  "Esegui ora": "Run now"
 };
 export default en;

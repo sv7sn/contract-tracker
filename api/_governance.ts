@@ -1,4 +1,4 @@
-import type { CheckStatus, ComplianceCheck, DuplicateMatch, FieldChange, Lifecycle, Qualification, ResolvedDocType, SupplierData, SupplierDocument } from "../src/types.ts";
+import type { CheckStatus, ComplianceCheck, RiskCheckEntry, DuplicateMatch, FieldChange, Lifecycle, Qualification, ResolvedDocType, SupplierData, SupplierDocument } from "../src/types.ts";
 import type { Queryable } from "./_db.js";
 import { screenName } from "./_sanctions.js";
 import { checkCompany, type CompanyCheck } from "./_company.js";
@@ -80,7 +80,9 @@ export function qualificationOf(status: string, resolved: ResolvedDocType[], doc
 }
 
 // ─── Controlli di conformità ─────────────────────────────────
-export interface StoredCompliance { checkedAt?: string; vies?: { status: CheckStatus; detail: string }; sanctions?: { status: CheckStatus; detail: string }; company?: CompanyCheck; manualSanctions?: { by: string; at: string; note: string } }
+export interface StoredCompliance { checkedAt?: string; vies?: { status: CheckStatus; detail: string }; sanctions?: { status: CheckStatus; detail: string }; company?: CompanyCheck; manualSanctions?: { by: string; at: string; note: string };
+  /** Ultime verifiche esterne (al massimo 24) e data dell'ultimo peggioramento rilevato. */
+  history?: RiskCheckEntry[]; worsenedAt?: string }
 
 const VIES_CODE = (c: string) => (c === "GR" ? "EL" : c);
 /** Verifica della partita IVA nel sistema europeo VIES. VIES_MODE=off la disattiva, mock serve ai test. */
@@ -127,18 +129,36 @@ async function checkSanctions(db: Queryable, legalName: string, country: string 
   }
 }
 
-/** Esegue i controlli che richiedono servizi esterni e ne salva l'esito sul fornitore. */
-export async function runExternalChecks(db: Queryable, supplierId: number): Promise<void> {
+const SEVERITY: Record<CheckStatus, number> = { ok: 0, na: 0, todo: 0, warn: 1, fail: 2 };
+/** Controlli che sono peggiorati rispetto alla verifica precedente (es. azienda passata da "attiva" a "in liquidazione"). */
+export function worsenedChecks(prev: StoredCompliance | null | undefined, next: StoredCompliance): string[] {
+  const out: string[] = [];
+  const cmp = (label: string, a?: CheckStatus, b?: CheckStatus) => { if (a && b && SEVERITY[b] > SEVERITY[a]) out.push(label); };
+  cmp("Partita IVA (VIES)", prev?.vies?.status, next.vies?.status);
+  cmp("Situazione dell'azienda", prev?.company?.status, next.company?.status);
+  cmp("Liste sanzioni internazionali", prev?.sanctions?.status, next.sanctions?.status);
+  return out;
+}
+
+/** Esegue i controlli che richiedono servizi esterni, ne salva l'esito sul fornitore e lo aggiunge allo storico. Restituisce i controlli peggiorati. */
+export async function runExternalChecks(db: Queryable, supplierId: number, trigger: RiskCheckEntry["trigger"] = "onboarding"): Promise<{ worsened: string[] }> {
   const r = (await db.query("select data, name, compliance from suppliers where id = $1", [supplierId])).rows[0];
-  if (!r) return;
+  if (!r) return { worsened: [] };
   const d: SupplierData = r.data ?? {};
   const legal = d.company?.legalName || r.name;
   const [vies, sanctions, company] = await Promise.all([
     checkVies(d.address?.country, d.company?.vatCode, legal), checkSanctions(db, legal, d.address?.country),
     checkCompany(d.address?.country, d.company?.vatCode, d.company?.fiscalCode, legal),
   ]);
-  const next: StoredCompliance = { ...(r.compliance ?? {}), checkedAt: new Date().toISOString(), vies, sanctions, company };
+  const prev = (r.compliance ?? null) as StoredCompliance | null, at = new Date().toISOString();
+  const next: StoredCompliance = { ...(prev ?? {}), checkedAt: at, vies, sanctions, company };
+  // Alla prima verifica non c'è un confronto: il peggioramento si misura solo rispetto a un controllo già fatto.
+  const worsened = prev?.checkedAt ? worsenedChecks(prev, next) : [];
+  const entry: RiskCheckEntry = { at, trigger, vies: vies.status, company: company.status, sanctions: sanctions.status, worsened };
+  next.history = [entry, ...(prev?.history ?? [])].slice(0, 24);
+  if (worsened.length) next.worsenedAt = at;
   await db.query("update suppliers set compliance = $1 where id = $2", [JSON.stringify(next), supplierId]);
+  return { worsened };
 }
 
 /** Elenco completo dei controlli: quelli salvati (VIES, sanzioni) più quelli calcolati sul momento. */

@@ -6,8 +6,8 @@ import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts
 import { fmt, fmtDate } from "../lib/format.ts";
 import { countryName } from "../supplierRules.ts";
 import { Avatar, AuditTrail, Card, CardTitle, EmptyState, Field, Grid, StatCard } from "../components/ui.tsx";
-import { CheckCircle2, Clock, Copy, FileCheck2, Hourglass, Loader2, Mail, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Users, Ban, AlertTriangle, FileText } from "../components/icons.tsx";
-import { AiResult, VendorFlags, CloseButton, DocLink, KV, Notice, ReasonDialog, StatusBadge, ValidityChip , Portal } from "../components/vendorUi.tsx";
+import { CheckCircle2, Clock, Copy, FileCheck2, Hourglass, Loader2, Mail, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Users, Ban, AlertTriangle, FileText, ShieldAlert } from "../components/icons.tsx";
+import { AiResult, VendorFlags, CloseButton, DocLink, KV, Notice, ReasonDialog, StatusBadge, ValidityChip, Portal, RiskBadge, RiskPanel } from "../components/vendorUi.tsx";
 import { CHECK_STYLE, fmtSize, STATUS_STYLE, supplierTimeline } from "../lib/vendors.ts";
 import { Summary } from "./SupplierPortal.tsx";
 import { locale, t } from "../i18n/index.ts";
@@ -20,7 +20,7 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
   const [vendors, setVendors] = useState<SupplierSummary[] | null>(null);
   const [config, setConfig] = useState<PortalConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<SupplierStatus | "all" | "lapsed" | "flags" | "dups">("all");
+  const [filter, setFilter] = useState<SupplierStatus | "all" | "lapsed" | "flags" | "dups" | "risk_high" | "risk_medium">("all");
   const [search, setSearch] = useState("");
   const [openId, setOpenId] = useState<number | null>(initialOpenId ?? null);
   useEffect(() => { if (initialOpenId) onFocusUsed?.(); }, [initialOpenId, onFocusUsed]);
@@ -54,13 +54,13 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
 
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
-    for (const v of vendors ?? []) { c[v.status] = (c[v.status] ?? 0) + 1; if (v.qualification === "lapsed") c.lapsed = (c.lapsed ?? 0) + 1; }
+    for (const v of vendors ?? []) { c[v.status] = (c[v.status] ?? 0) + 1; if (v.qualification === "lapsed") c.lapsed = (c.lapsed ?? 0) + 1; if (v.risk?.level === "high") c.risk_high = (c.risk_high ?? 0) + 1; }
     return c;
   }, [vendors]);
 
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const match = (v: SupplierSummary) => filter === "all" || (filter === "lapsed" ? v.qualification === "lapsed" : filter === "flags" ? v.lifecycle !== "active" : filter === "dups" ? v.duplicate : v.status === filter);
+    const match = (v: SupplierSummary) => filter === "all" || (filter === "lapsed" ? v.qualification === "lapsed" : filter === "flags" ? v.lifecycle !== "active" : filter === "dups" ? v.duplicate : filter === "risk_high" ? v.risk?.level === "high" : filter === "risk_medium" ? v.risk?.level === "medium" : v.status === filter);
     return (vendors ?? []).filter(v => match(v) && (!q || [v.name, v.legalName, v.email, v.sapCode ?? "", v.referenceBuyerName].some(x => x.toLowerCase().includes(q))))
       .sort((a, b) => (a.status === mine ? -1 : 0) - (b.status === mine ? -1 : 0) || b.updatedAt.localeCompare(a.updatedAt));
   }, [vendors, filter, search, mine]);
@@ -68,13 +68,14 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
   if (error) return <EmptyState icon={<AlertTriangle size={26} />} title={t("Impossibile caricare i fornitori")} text={error} action={<button onClick={reload} style={{ ...btnGhost, padding: "9px 16px" }}>{t("Riprova")}</button>} />;
   if (!vendors || !config) return <div style={{ display: "flex", justifyContent: "center", padding: 60 }}><Loader2 className="spin" size={26} color={C.subtle} /></div>;
 
-  const tiles: { key: SupplierStatus | "lapsed"; label: string; icon: React.ReactNode; color: string; sub: string }[] = [
+  const tiles: { key: SupplierStatus | "lapsed" | "risk_high"; label: string; icon: React.ReactNode; color: string; sub: string }[] = [
     { key: "pending", label: t("Da verificare"), icon: <Hourglass size={18} />, color: C.yellow, sub: t("Passaggio del Buyer") },
     { key: "approved", label: t("In attesa del Finance"), icon: <FileCheck2 size={18} />, color: C.purple, sub: t("Da registrare in SAP") },
     { key: "pending_revision", label: t("Modifiche richieste"), icon: <RotateCcw size={18} />, color: C.red, sub: t("Attesa del fornitore") },
     { key: "registered", label: t("Registrati in SAP"), icon: <CheckCircle2 size={18} />, color: C.green, sub: t("Codice assegnato") },
     { key: "invited", label: t("Inviti aperti"), icon: <Mail size={18} />, color: C.gray, sub: t("Non ancora attivati") },
     { key: "lapsed", label: t("Qualifica scaduta"), icon: <AlertTriangle size={18} />, color: C.red, sub: t("Documenti obbligatori scaduti") },
+    { key: "risk_high", label: t("Rischio alto"), icon: <ShieldAlert size={18} />, color: C.red, sub: t("Fornitori registrati da ricontrollare") },
   ];
 
   return (
@@ -107,7 +108,7 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
         <select value={filter} onChange={e => setFilter(e.target.value as typeof filter)} aria-label={t("Filtra per stato")} style={{ ...iStyle, width: "auto", minWidth: 190 }}>
           <option value="all">{t("Tutti gli stati")}</option>
           {(Object.keys(STATUS_STYLE) as SupplierStatus[]).map(k => <option key={k} value={k}>{t(STATUS_STYLE[k].label)}</option>)}
-          <option value="lapsed">{t("Qualifica scaduta")}</option><option value="flags">{t("Bloccati, disattivati o esclusi")}</option><option value="dups">{t("Possibili doppioni")}</option>
+          <option value="lapsed">{t("Qualifica scaduta")}</option><option value="risk_high">{t("Rischio alto")}</option><option value="risk_medium">{t("Rischio medio")}</option><option value="flags">{t("Bloccati, disattivati o esclusi")}</option><option value="dups">{t("Possibili doppioni")}</option>
         </select>
       </div>
 
@@ -118,7 +119,7 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
       ) : (<>
         <div className="table-wrap desktop-only">
           <table className="data-table">
-            <thead><tr><th>{t("Fornitore")}</th><th>{t("Paese")}</th><th>{t("Società")}</th><th>{t("Stato")}</th><th>{t("Buyer")}</th><th>{t("Voto")}</th><th>{t("Aggiornato")}</th><th aria-label={t("Documenti")} /></tr></thead>
+            <thead><tr><th>{t("Fornitore")}</th><th>{t("Paese")}</th><th>{t("Società")}</th><th>{t("Stato")}</th><th>{t("Rischio")}</th><th>{t("Buyer")}</th><th>{t("Voto")}</th><th>{t("Aggiornato")}</th><th aria-label={t("Documenti")} /></tr></thead>
             <tbody>
               {shown.map(v => (
                 <tr key={v.id} onClick={() => setOpenId(v.id)} tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setOpenId(v.id); }}>
@@ -126,6 +127,7 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
                   <td>{v.country ? t(countryName(v.country)) : "—"}</td>
                   <td style={{ color: C.muted }}>{v.companyCodes.join(", ")}</td>
                   <td><div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}><StatusBadge status={v.status} update={v.isUpdate} /><VendorFlags lifecycle={v.lifecycle} qualification={v.qualification} duplicate={v.duplicate} /></div></td>
+                  <td><RiskBadge risk={v.risk} /></td>
                   <td><div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}><Avatar name={v.referenceBuyerName || "?"} size={24} /><span style={{ color: C.muted }}>{v.referenceBuyerName || "—"}</span></div></td>
                   <td>{ratings[v.id] ? <ScoreBadge value={ratings[v.id].overall} count={ratings[v.id].count} /> : <span style={{ color: C.subtle }}>—</span>}</td>
                   <td className="tabular" style={{ whiteSpace: "nowrap", color: C.muted }}>{fmtDate(v.updatedAt)}</td>
@@ -141,7 +143,7 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
               <Card key={v.id} className="lift" onClick={() => setOpenId(v.id)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setOpenId(v.id); }} style={{ padding: 16, cursor: "pointer", borderRadius: radius.md }}>
                 <div style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text }}>{v.legalName || v.name}</div>
                 <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginBottom: 10, overflowWrap: "anywhere" }}>{v.email}</div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><StatusBadge status={v.status} update={v.isUpdate} /><VendorFlags lifecycle={v.lifecycle} qualification={v.qualification} duplicate={v.duplicate} /><span style={{ ...sans, fontSize: 12, color: C.subtle, marginLeft: "auto" }}>{fmtDate(v.updatedAt)}</span></div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><StatusBadge status={v.status} update={v.isUpdate} />{v.risk && v.risk.level !== "na" && v.risk.level !== "low" && <RiskBadge risk={v.risk} />}<VendorFlags lifecycle={v.lifecycle} qualification={v.qualification} duplicate={v.duplicate} /><span style={{ ...sans, fontSize: 12, color: C.subtle, marginLeft: "auto" }}>{fmtDate(v.updatedAt)}</span></div>
               </Card>
             ))}
           </Grid>
@@ -366,6 +368,13 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
                       <tbody>{s.changes.map(c => <tr key={c.field} style={{ cursor: "default", background: c.bank ? C.redBg : undefined }}><td style={{ fontWeight: 650, color: c.bank ? C.red : C.text }}>{t(c.label)}</td><td style={{ color: C.muted, overflowWrap: "anywhere" }}>{c.before || "—"}</td><td style={{ overflowWrap: "anywhere" }}>{c.after || "—"}</td></tr>)}</tbody>
                     </table>
                   </div>
+                </Card>
+              )}
+
+              {s.risk && s.risk.level !== "na" && (
+                <Card style={{ borderColor: s.risk.level === "high" ? "#f0c9c9" : undefined }}>
+                  <CardTitle icon={<ShieldAlert size={16} />}>{t("Livello di rischio")}</CardTitle>
+                  <RiskPanel risk={s.risk} history={s.riskHistory ?? []} />
                 </Card>
               )}
 

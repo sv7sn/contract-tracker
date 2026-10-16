@@ -400,5 +400,8 @@ const en: Record<string, string> = {
   "Descrivi il rapporto": "Describe the relationship",
   "Dichiarazione obbligatoria": "Declaration required",
   "Devi prendere visione dell'informativa privacy": "You must read the privacy notice",
+  "La frequenza deve essere tra 7 e 730 giorni": "The frequency must be between 7 and 730 days",
+  "Il numero di verifiche al giorno deve essere tra 1 e 200": "The number of checks per day must be between 1 and 200",
+  "I fornitori più a rischio vanno controllati più spesso: giorni alto ≤ medio ≤ basso": "Higher-risk suppliers must be checked more often: days high ≤ medium ≤ low"
 };
 export default en;
