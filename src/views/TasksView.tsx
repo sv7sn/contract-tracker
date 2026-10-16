@@ -319,7 +319,7 @@ function NewTaskDialog({ isManager, buyers, currentUser, fail, onClose, onCreate
         </>)}
         <Field label={i18n.t("Note")} htmlFor="nt-detail"><textarea id="nt-detail" value={f.detail} onChange={e => setF({ ...f, detail: e.target.value })} style={{ ...iStyle, height: 70, resize: "vertical" }} /></Field>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          <Field label={i18n.t("Scadenza")} htmlFor="nt-due"><input id="nt-due" type="date" value={f.due} onChange={e => setF({ ...f, due: e.target.value })} style={iStyle} /></Field>
+          <Field label={i18n.tc("task", "Scadenza")} htmlFor="nt-due"><input id="nt-due" type="date" value={f.due} onChange={e => setF({ ...f, due: e.target.value })} style={iStyle} /></Field>
           <Field label={i18n.t("Priorità")} htmlFor="nt-prio"><select id="nt-prio" value={f.priority} onChange={e => setF({ ...f, priority: e.target.value })} style={iStyle}>{Object.entries(PRIO).map(([k, l]) => <option key={k} value={k}>{i18n.t(l)}</option>)}</select></Field>
         </div>
         {isManager && <Field label={i18n.t("Assegna a")} htmlFor="nt-who"><select id="nt-who" value={f.assigneeId} onChange={e => setF({ ...f, assigneeId: Number(e.target.value) })} style={iStyle}>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></Field>}
@@ -446,7 +446,7 @@ function ChosenSupplier({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown
   return (
     <Card>
       {suggested && t.status === "open" && <button onClick={() => choose(String(suggested.id))} disabled={busy} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5, marginBottom: 8 }}>{i18n.t("Usa il fornitore dell'offerta scelta: {name}", { name: suggested.name })}</button>}
-      <Field label={i18n.t("Fornitore scelto")} htmlFor="chosen-supplier">
+      <Field label={i18n.tc("campo", "Fornitore scelto")} htmlFor="chosen-supplier">
         <select id="chosen-supplier" value={t.chosenSupplierId ?? ""} onChange={e => choose(e.target.value)} disabled={busy || t.status !== "open" || !list} style={iStyle}>
           <option value="">{list ? i18n.t("Scegli un fornitore registrato e qualificato…") : i18n.t("Carico i fornitori…")}</option>
           {missing && <option value={t.chosenSupplierId ?? ""}>{t.chosenSupplierName} {i18n.t("(non più qualificato)")}</option>}
@@ -540,7 +540,7 @@ function TaskSheet({ id, currentUser, people, threshold, isManager, buyers, fail
                           [i18n.t("Assegnato a"), t.assigneeName || i18n.t("Da assegnare")],
                           [i18n.t("Rilasciata il"), t.meta.releaseDate ? <span title={age !== null ? i18n.t("da {n} giorni", { n: age }) : undefined}>{fmtDate(t.meta.releaseDate)}</span> : ""],
                           [i18n.t("Consegna richiesta"), <DeliveryField key="dl" t={t} fail={fail} onSaved={saved} />],
-                          [i18n.t("Scadenza"), t.due ? fmtDate(t.due) : ""],
+                          [i18n.tc("task", "Scadenza"), t.due ? fmtDate(t.due) : ""],
                         ] as [string, ReactNode][] : []),
                         ...(purchase ? [
                           [i18n.t("Importo stimato"), t.meta.value ? fmt(t.meta.value, t.meta.currency ?? "EUR") : ""],
@@ -549,9 +549,9 @@ function TaskSheet({ id, currentUser, people, threshold, isManager, buyers, fail
                           [i18n.t("Fornitore previsto"), t.meta.supplier || "—"],
                           [i18n.t("Priorità"), i18n.t(PRIO[t.priority])],
                           [i18n.t("Assegnato a"), t.assigneeName || i18n.t("Da assegnare")], [i18n.t("Creato da"), t.createdBy],
-                          [i18n.t("Scadenza"), t.due ? fmtDate(t.due) : ""],
+                          [i18n.tc("task", "Scadenza"), t.due ? fmtDate(t.due) : ""],
                         ] as [string, ReactNode][] : []),
-                        ...(!rda && !purchase ? [[renewal ? i18n.t("Da gestire entro") : i18n.t("Scadenza"), t.due ? fmtDate(t.due) : ""], [i18n.t("Assegnato a"), t.assigneeName || i18n.t("Da assegnare")], [i18n.t("Priorità"), i18n.t(PRIO[t.priority])], [i18n.t("Creato da"), t.createdBy]] as [string, string][] : []),
+                        ...(!rda && !purchase ? [[renewal ? i18n.t("Da gestire entro") : i18n.tc("task", "Scadenza"), t.due ? fmtDate(t.due) : ""], [i18n.t("Assegnato a"), t.assigneeName || i18n.t("Da assegnare")], [i18n.t("Priorità"), i18n.t(PRIO[t.priority])], [i18n.t("Creato da"), t.createdBy]] as [string, string][] : []),
                       ]} />
                       {rda && t.lines.length > 1 && <div style={{ marginTop: 8 }}>
                         <div style={{ ...sans, fontSize: 11, color: C.subtle, fontWeight: 600 }}>{i18n.t("Righe della RDA")}</div>
@@ -685,7 +685,7 @@ function SourcingCard({ t, isManager, fail, onSaved }: { t: TaskDetail; isManage
               {quotes.map((q, k) => (
                 <div key={k} style={{ display: "grid", gridTemplateColumns: "auto minmax(0,1fr) 130px auto", gap: 8, alignItems: "center" }}>
                   <input type="radio" name={`chosen-${t.id}`} checked={q.chosen} onChange={() => setQ(k, { chosen: true })} aria-label={i18n.t("Offerta scelta")} style={{ width: 17, height: 17, accentColor: C.accent }} />
-                  <input value={q.supplier} onChange={e => setQ(k, { supplier: e.target.value })} placeholder={k === 0 ? i18n.t("Fornitore scelto") : i18n.t("Fornitore alternativo")} aria-label={i18n.t("Fornitore")} style={iStyle} />
+                  <input value={q.supplier} onChange={e => setQ(k, { supplier: e.target.value })} placeholder={k === 0 ? i18n.tc("campo", "Fornitore scelto") : i18n.t("Fornitore alternativo")} aria-label={i18n.t("Fornitore")} style={iStyle} />
                   <input value={q.amount} onChange={e => setQ(k, { amount: e.target.value })} inputMode="decimal" placeholder={i18n.t("Importo {cur}", { cur })} aria-label={i18n.t("Importo")} style={iStyle} />
                   <button type="button" onClick={() => setQuotes(qs => qs.length > 2 ? qs.filter((_, j) => j !== k) : qs)} disabled={quotes.length <= 2} aria-label={i18n.t("Rimuovi offerta")} style={{ background: "none", border: "none", cursor: quotes.length > 2 ? "pointer" : "default", color: quotes.length > 2 ? C.subtle : "transparent", padding: 4 }}><Trash2 size={15} /></button>
                 </div>

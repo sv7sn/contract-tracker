@@ -4,7 +4,7 @@ import { ApiError, portalApi } from "../api.ts";
 import { C, font, iStyle, radius, sans } from "../theme.ts";
 import { validatePassword } from "../supplierRules.ts";
 import { BrandMark, Field } from "./ui.tsx";
-import { t } from "../i18n/index.ts";
+import { t, tc } from "../i18n/index.ts";
 import { AlertTriangle, Building2, Check, Eye, EyeOff, FileCheck2, Loader2, Lock, ShieldCheck } from "./icons.tsx";
 
 const STEPS = [
@@ -12,7 +12,7 @@ const STEPS = [
   { icon: <Building2 size={20} />, title: "Inserisci i dati dell'azienda", text: "Anagrafica, sede, coordinate bancarie e contatti." },
   { icon: <FileCheck2 size={20} />, title: "Carica i documenti di qualifica", text: "Li potrai aggiornare in autonomia quando scadono." },
 ];
-const RULES: [string, (p: string) => boolean][] = [["Almeno 10 caratteri", p => p.length >= 10], ["Una maiuscola e una minuscola", p => /[a-z]/.test(p) && /[A-Z]/.test(p)], ["Un numero", p => /\d/.test(p)], ["Un simbolo (es. ! ? #)", p => /[^A-Za-z0-9]/.test(p)]];
+const RULES: [string, (p: string) => boolean][] = [["Almeno 12 caratteri", p => p.length >= 12], ["Una maiuscola e una minuscola", p => /[a-z]/.test(p) && /[A-Z]/.test(p)], ["Un numero", p => /\d/.test(p)], ["Un simbolo (es. ! ? #)", p => /[^A-Za-z0-9]/.test(p)]];
 
 /** Pagina di benvenuto aperta dal link d'invito ricevuto via email. */
 export function InviteLanding({ token, onActivated, onCancel }: { token: string; onActivated: (user: User) => void; onCancel: () => void }) {
@@ -41,7 +41,7 @@ export function InviteLanding({ token, onActivated, onCancel }: { token: string;
     <div className="login-shell">
       <div className="login-brand">
         <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 44 }}><BrandMark size={46} /><div style={{ ...font, fontSize: 22, fontWeight: 700 }}>Procurement Lab</div></div>
-        <h1 style={{ ...font, fontSize: 40, lineHeight: 1.12, fontWeight: 750, margin: 0, maxWidth: 520, letterSpacing: "-0.03em" }}>{t("Benvenuto nel portale")} <span style={{ color: "#f0997a" }}>{t("fornitori")}</span>.</h1>
+        <h1 style={{ ...font, fontSize: 40, lineHeight: 1.12, fontWeight: 750, margin: 0, maxWidth: 520, letterSpacing: "-0.03em" }}>{t("Benvenuto nel portale")} <span style={{ color: "#f0997a" }}>{tc("portale", "fornitori")}</span>.</h1>
         <p style={{ ...sans, fontSize: 17, color: "rgba(255,255,255,.72)", marginTop: 18, maxWidth: 480, lineHeight: 1.6 }}>{t("Registrarti richiede pochi minuti. Tieni a portata di mano visura camerale, DURC e coordinate bancarie.")}</p>
         <div style={{ display: "grid", gap: 20, marginTop: 40, maxWidth: 480 }}>
           {STEPS.map(f => (

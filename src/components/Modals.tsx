@@ -7,7 +7,7 @@ import { Field, StepIcon } from "./ui.tsx";
 import { Check, CheckCircle2, FileText, KeyRound, Loader2, Paperclip, Pencil, Plus, Save, Send, UserRound, X, AlertCircle } from "./icons.tsx";
 import { checkDocument, portalApi, uploadDocument } from "../api.ts";
 import { SupplierPicker } from "./vendorUi.tsx";
-import { t } from "../i18n/index.ts";
+import { t, tc } from "../i18n/index.ts";
 
 // ─── Risposta del Business Owner ─────────────────────────────
 export function BOFormModal({ contract, currentUser, onSubmit, onClose }: { contract: Contract; currentUser: User; onSubmit: (id: number, r: { decision: string; notes: string }) => void; onClose: () => void }) {
@@ -135,7 +135,7 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
       if (canUpload) {
         setBusy(true);
         try { filePath = await uploadDocument(attachedFile.file); }
-        catch (err) { setErrors(e => ({ ...e, file: err instanceof Error ? err.message : t("Caricamento non riuscito") })); setBusy(false); return; }
+        catch (err) { setErrors(e => ({ ...e, file: err instanceof Error ? err.message : tc("file", "Caricamento non riuscito") })); setBusy(false); return; }
         setBusy(false);
       }
     }

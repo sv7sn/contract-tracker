@@ -23,6 +23,7 @@ const missing = new Map(), bad = [];
 for (const [dir, re] of patterns) for (const f of files(dir)) {
   const src = fs.readFileSync(f, "utf8");
   for (const m of src.matchAll(re)) { const key = JSON.parse(`"${m[1]}"`); if (!(key in dict)) missing.set(key, path.relative(root, f)); }
+  if (dir.endsWith("src")) for (const m of src.matchAll(new RegExp(String.raw`\btc\(\s*"([^"]+)"\s*,\s*` + STR, "g"))) { const key = JSON.parse(`"${m[2]}"`); if (!(`${key}#${m[1]}` in dict)) missing.set(`${key}#${m[1]}`, path.relative(root, f)); }
   if (dir.endsWith("src")) for (const m of src.matchAll(/\bt\(\s*`/g)) bad.push(`${path.relative(root, f)}: t() con un template literal (usa "..." con {valori})`);
 }
 for (const b of bad) console.error("✗", b);

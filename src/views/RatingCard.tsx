@@ -6,7 +6,7 @@ import { fmt, fmtDate } from "../lib/format.ts";
 import { Card, CardTitle } from "../components/ui.tsx";
 import { Loader2, Star, Trash2 } from "../components/icons.tsx";
 import { Notice } from "../components/vendorUi.tsx";
-import { locale, t } from "../i18n/index.ts";
+import { locale, t, tc } from "../i18n/index.ts";
 
 const CRITERIA: [RatingCriterion, string][] = [["quality", "Qualità"], ["delivery", "Puntualità"], ["service", "Servizio"], ["price", "Prezzo"]];
 const tone = (n: number | null) => (n === null ? C.subtle : n >= 4 ? C.green : n >= 3 ? C.yellow : C.red);
@@ -45,7 +45,7 @@ export function RatingCard({ supplierId, fail, notify }: { supplierId: number; f
 
   return (
     <Card>
-      <CardTitle icon={<Star size={16} />} action={!adding && sc ? <button onClick={() => setAdding(true)} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5 }}>{t("Valuta")}</button> : undefined}>{t("Valutazione")}</CardTitle>
+      <CardTitle icon={<Star size={16} />} action={!adding && sc ? <button onClick={() => setAdding(true)} style={{ ...btnGhost, padding: "6px 12px", fontSize: 12.5 }}>{tc("verbo", "Valuta")}</button> : undefined}>{t("Valutazione")}</CardTitle>
       {err && <Notice kind="error">{err}</Notice>}
       {sc && <>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 10, marginBottom: 12 }}>

@@ -54,7 +54,7 @@ const en: Record<string, string> = {
   "Anagrafica, sede, coordinate bancarie e contatti.": "Company details, address, bank details and contacts.",
   "Carica i documenti di qualifica": "Upload your qualification documents",
   "Li potrai aggiornare in autonomia quando scadono.": "You can update them yourself when they expire.",
-  "Almeno 10 caratteri": "At least 10 characters",
+  "Almeno 12 caratteri": "At least 12 characters",
   "Una maiuscola e una minuscola": "An uppercase and a lowercase letter",
   "Un numero": "A number",
   "Un simbolo (es. ! ? #)": "A symbol (e.g. ! ? #)",
@@ -65,7 +65,6 @@ const en: Record<string, string> = {
   "Le due password non coincidono": "The two passwords do not match",
   "Impossibile contattare il server": "Unable to reach the server",
   "Benvenuto nel portale": "Welcome to the",
-  "fornitori": "supplier portal",
   "Registrarti richiede pochi minuti. Tieni a portata di mano visura camerale, DURC e coordinate bancarie.": "Registering takes just a few minutes. Keep your company registration extract, DURC and bank details at hand.",
   "Invito non valido": "Invalid invitation",
   "Vai all'accesso": "Go to sign-in",
@@ -163,7 +162,7 @@ const en: Record<string, string> = {
   "Indica la data limite di disdetta": "Enter the termination notice deadline",
   "Email non valida": "Invalid email",
   "Documento obbligatorio": "Document required",
-  "Caricamento non riuscito": "Upload failed",
+  "Caricamento non riuscito": "Loading failed",
   "— Seleziona —": "— Select —",
   "Logistica": "Logistics",
   "Materie Prime": "Raw materials",
@@ -409,6 +408,11 @@ const en: Record<string, string> = {
   "Da valutare": "To assess",
   "Non superato": "Failed",
   "Da eseguire": "To run",
-  "Non applicabile": "Not applicable"
+  "Non applicabile": "Not applicable",
+  "fornitori#portale": "supplier portal",
+  "Valuta#verbo": "Rate",
+  "Scadenza#task": "Due date",
+  "Caricamento non riuscito#file": "Upload failed",
+  "Fornitore scelto#campo": "Chosen supplier"
 };
 export default en;

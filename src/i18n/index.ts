@@ -26,5 +26,9 @@ export function fill(s: string, vars?: Record<string, string | number>) {
 export function t(it: string, vars?: Record<string, string | number>): string {
   return fill(lang === "en" ? EN[it] ?? it : it, vars);
 }
+/** Come t(), per parole che in inglese cambiano secondo il contesto ("Valuta" moneta / "Valuta" verbo). Chiave nel dizionario: "testo#contesto". */
+export function tc(context: string, it: string, vars?: Record<string, string | number>): string {
+  return fill(lang === "en" ? EN[`${it}#${context}`] ?? EN[it] ?? it : it, vars);
+}
 /** Formato di date e numeri della lingua corrente. */
 export const locale = () => (lang === "en" ? "en-GB" : "it-IT");
