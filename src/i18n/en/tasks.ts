@@ -309,6 +309,7 @@ const en: Record<string, string> = {
   "Qualità": "Quality",
   "Puntualità": "Punctuality",
   "Servizio": "Service",
-  "Prezzo": "Price"
+  "Prezzo": "Price",
+  "Sposta data": "Move date"
 };
 export default en;

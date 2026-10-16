@@ -5,8 +5,8 @@ import { btnGhost, btnPrimary, C, iStyle, sans } from "../theme.ts";
 import { fmt, fmtDate } from "../lib/format.ts";
 import { stepLabel, stepTemplate } from "../lib/plan.ts";
 import { Card, CardTitle, Field } from "../components/ui.tsx";
-import { ContractForm } from "../components/Modals.tsx";
-import { Check, CheckCircle2, Clock, FileText, Loader2, Send, Trash2, Upload } from "../components/icons.tsx";
+import { ContractForm, StepDateEditor } from "../components/Modals.tsx";
+import { CalendarClock, Check, CheckCircle2, Clock, FileText, Loader2, Send, Trash2, Upload } from "../components/icons.tsx";
 import { DraftSummary } from "./DraftPanel.tsx";
 import { KV, Notice, Portal, SupplierPicker } from "../components/vendorUi.tsx";
 import * as i18n from "../i18n/index.ts";
@@ -37,8 +37,9 @@ function FilePick({ label, file, onFile }: { label: string; file: File | null; o
 const upload = async (f: File) => ({ fileName: f.name, filePath: await uploadDocument(f), size: f.size });
 
 /** Contratto in scadenza e fasi del suo piano di rinnovo. */
-export function RenewalCard({ t, contracts, plan, onCompleteStep, onSendBO, onOpenContract }: { t: TaskDetail; contracts: Contract[]; plan: PlanStep[]; onCompleteStep: (c: number, s: string) => void; onSendBO: (c: number) => void; onOpenContract: (c: Contract) => void }) {
+export function RenewalCard({ t, contracts, plan, onCompleteStep, onSendBO, onUpdateStepDate, onOpenContract }: { t: TaskDetail; contracts: Contract[]; plan: PlanStep[]; onCompleteStep: (c: number, s: string) => void; onSendBO: (c: number) => void; onUpdateStepDate: (c: number, s: string, date: string, reason: string) => void; onOpenContract: (c: Contract) => void }) {
   const c = contracts.find(x => x.id === t.contractId);
+  const [moving, setMoving] = useState<PlanStep | null>(null);
   const small = { ...btnGhost, padding: "5px 10px", fontSize: 12, display: "inline-flex", alignItems: "center", gap: 5 } as const;
   return (
     <Card>
@@ -54,6 +55,8 @@ export function RenewalCard({ t, contracts, plan, onCompleteStep, onSendBO, onOp
                 {done ? <CheckCircle2 size={16} color={C.green} /> : <Clock size={16} color={s.status === "pending_bo" ? C.yellow : C.subtle} />}
                 <span style={{ flex: "1 1 160px", color: done ? C.muted : C.text, fontWeight: done ? 400 : 550 }}>{stepLabel(s.stepId, c)}{s.boDecision ? ` — ${s.boDecision}` : ""}</span>
                 <span className="tabular" style={{ color: C.subtle, fontSize: 12 }}>{fmtDate(s.scheduledDate)}</span>
+                {!done && t.status === "open" && c && s.stepId !== "expiry" && <button onClick={() => setMoving(s)} aria-label={i18n.t("Sposta data")} title={i18n.t("Sposta data")} style={{ ...small, padding: "5px 8px" }}><CalendarClock size={13} /></button>}
+                {s.modified && <span style={{ flexBasis: "100%", paddingLeft: 26, fontSize: 12, color: C.blue }}>{i18n.t("Data spostata: {reason}", { reason: s.modifiedReason ?? "" })}</span>}
                 {!done && t.status === "open" && c && (s.stepId === "bo_notify" ? <button onClick={() => onSendBO(c.id)} style={small}><Send size={13} />{i18n.t("Invia al BO")}</button>
                   : tmpl.actor === "buyer" ? <button onClick={() => onCompleteStep(c.id, s.stepId)} style={small}><Check size={13} />{i18n.t("Fatto")}</button>
                   : s.status === "pending_bo" ? <span style={{ fontSize: 12, color: C.yellow }}>{i18n.t("in attesa del BO")}</span> : null)}
@@ -62,6 +65,7 @@ export function RenewalCard({ t, contracts, plan, onCompleteStep, onSendBO, onOp
           })}
         </div>
       )}
+      {moving && c && <Portal><StepDateEditor step={moving} tmpl={stepTemplate(moving.stepId)} onSave={(d, r) => { onUpdateStepDate(c.id, moving.stepId, d, r); setMoving(null); }} onClose={() => setMoving(null)} /></Portal>}
     </Card>
   );
 }

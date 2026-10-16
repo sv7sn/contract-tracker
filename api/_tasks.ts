@@ -435,7 +435,9 @@ export async function ensureRenewalTasks(db: Queryable): Promise<number> {
       jsonb_build_object('value', c.value, 'currency', c.currency, 'supplier', c.supplier, 'object', c.object, 'keyDate', k.key, 'end', c.end_date, 'noticeDate', c.notice_date), 'Sistema'
     from contracts c cross join lateral (select coalesce(nullif(c.notice_date, ''), c.end_date) as key) k
     left join lateral (select id from users where lower(name) = lower(c.owner) and active and role in ('buyer','manager') order by id limit 1) u on true
-    where c.status = 'active' and not c.ceased and k.key ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' and k.key::date - $1::int <= current_date
+    left join plan_steps a on a.contract_id = c.id and a.step_id = 'analysis' and a.scheduled_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+    -- Il task nasce N giorni prima della data chiave, e comunque non dopo l'inizio del primo passaggio del piano (anche se la data è stata spostata).
+    where c.status = 'active' and not c.ceased and k.key ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' and (k.key::date - $1::int <= current_date or a.scheduled_date::date <= current_date)
       and not exists (select 1 from tasks t where t.source = 'contract' and t.contract_id = c.id and t.status = 'open')
     on conflict do nothing`, [renewalLeadDays]);
   return r.rowCount ?? 0;

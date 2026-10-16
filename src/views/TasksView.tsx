@@ -17,6 +17,7 @@ interface Props {
   initialOpenId?: number; onFocusUsed?: () => void;
   currentUser: User; contracts: Contract[]; plans: Record<number, PlanStep[]>;
   onCompleteStep: (contractId: number, stepId: string) => void; onSendBO: (contractId: number) => void; onOpenContract: (c: Contract) => void;
+  onUpdateStepDate: (contractId: number, stepId: string, date: string, reason: string) => void;
   notify: (m: string) => void; onSessionExpired: () => void;
 }
 
@@ -46,7 +47,7 @@ const rank = (i: Item) => (waitsRda(i) ? 1 : 0);
 const overdue = (it: Item) => it.status !== "done" && !!it.due && daysFrom(it.due) < 0;
 
 /** Task del team: RDA da SAP, task creati a mano e attività dei piani di rinnovo dei contratti. */
-export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, plans, onCompleteStep, onSendBO, onOpenContract, notify, onSessionExpired }: Props) {
+export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, plans, onCompleteStep, onSendBO, onOpenContract, onUpdateStepDate, notify, onSessionExpired }: Props) {
   const [data, setData] = useState<TaskList | null>(null);
   const [buyers, setBuyers] = useState<{ id: number; name: string; active: boolean }[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -227,7 +228,7 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
 
       {creating && <Portal><NewTaskDialog isManager={isManager} buyers={buyers} currentUser={currentUser} fail={fail} onClose={() => setCreating(false)} onCreated={async id => { setCreating(false); notify(i18n.t("Task creato")); await reload(); if (id) setOpenId(id); }} /></Portal>}
       {openId !== null && <Portal><TaskSheet id={openId} currentUser={currentUser} people={people} threshold={threshold} isManager={isManager} buyers={buyers} fail={fail} notify={notify} onClose={() => setOpenId(null)} onChanged={reload}
-        contracts={contracts} plans={plans} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onOpenContract={c => { setOpenId(null); onOpenContract(c); }} /></Portal>}
+        contracts={contracts} plans={plans} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onUpdateStepDate={onUpdateStepDate} onOpenContract={c => { setOpenId(null); onOpenContract(c); }} /></Portal>}
     </div>
   );
 }
@@ -459,8 +460,8 @@ function ChosenSupplier({ t, fail, onSaved }: { t: TaskDetail; fail: (e: unknown
   );
 }
 
-function TaskSheet({ id, currentUser, people, threshold, isManager, buyers, fail, notify, onClose, onChanged, contracts, plans, onCompleteStep, onSendBO, onOpenContract }: { id: number; currentUser: User; people: Map<string, string>; threshold: number; isManager: boolean; buyers: { id: number; name: string }[]; fail: (e: unknown) => string; notify: (m: string) => void; onClose: () => void; onChanged: () => void;
-  contracts: Contract[]; plans: Record<number, PlanStep[]>; onCompleteStep: (contractId: number, stepId: string) => void; onSendBO: (contractId: number) => void; onOpenContract: (c: Contract) => void }) {
+function TaskSheet({ id, currentUser, people, threshold, isManager, buyers, fail, notify, onClose, onChanged, contracts, plans, onCompleteStep, onSendBO, onUpdateStepDate, onOpenContract }: { id: number; currentUser: User; people: Map<string, string>; threshold: number; isManager: boolean; buyers: { id: number; name: string }[]; fail: (e: unknown) => string; notify: (m: string) => void; onClose: () => void; onChanged: () => void;
+  contracts: Contract[]; plans: Record<number, PlanStep[]>; onCompleteStep: (contractId: number, stepId: string) => void; onSendBO: (contractId: number) => void; onUpdateStepDate: Props["onUpdateStepDate"]; onOpenContract: (c: Contract) => void }) {
   const [t, setT] = useState<TaskDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -562,7 +563,7 @@ function TaskSheet({ id, currentUser, people, threshold, isManager, buyers, fail
                   </Fold>);
                 else if (st.key === "bo_notify" || st.key === "bo_response") out.push(
                   <Fold key={id} id={id} title={i18n.t("Avviso e risposta del Business Owner")} status={stateOf("bo_notify", "bo_response")} summary={flow.filter(x => x.key.startsWith("bo_")).map(x => `${i18n.t(x.label)}${x.date ? ` ${fmtDate(x.date)}` : ""}`).join(" · ")} defaultOpen={false}>
-                    <RenewalCard t={t} contracts={contracts} plan={t.contractId ? plans[t.contractId] ?? [] : []} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onOpenContract={onOpenContract} />
+                    <RenewalCard t={t} contracts={contracts} plan={t.contractId ? plans[t.contractId] ?? [] : []} onCompleteStep={onCompleteStep} onSendBO={onSendBO} onUpdateStepDate={onUpdateStepDate} onOpenContract={onOpenContract} />
                   </Fold>);
                 else if (st.key === "outcome") out.push(
                   <Fold key={id} id={id} title={i18n.t("Esito e contratto")} status={stateOf("outcome", "contract")} summary={[i18n.t(detailOf("outcome") ?? ""), detailOf("contract") && i18n.t("contratto {detail}", { detail: i18n.t(detailOf("contract") ?? "") })].filter(Boolean).join(" · ") || undefined} defaultOpen={stateOf("outcome", "contract") === "current"}>

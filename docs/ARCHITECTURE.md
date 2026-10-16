@@ -14,7 +14,7 @@ Applicazione web per l'ufficio acquisti (procurement indiretto) che segue una pr
 | **CLM** | Bozze in versioni, modelli con questionario, libreria di clausole, confronto versioni, revisione delle funzioni (Richiedente, Legal, Compliance, IT Security) con blocco della firma, trattativa con il fornitore, registro delle azioni |
 | **Budget** | Master Plan per internal order: budget, impegnato (da PO SAP), previsto e impegni futuri dei contratti |
 | **Spesa** | Spesa reale dai file ordini SAP: fornitori, categorie, copertura contrattuale, ordini senza RDA |
-| **Indicatori** | Tempi e rispetto delle regole: RDA, scelta del fornitore, onboarding, qualifica, revisione dei contratti |
+| **Indicatori** (solo Manager) | Tempi e rispetto delle regole: RDA, scelta del fornitore, onboarding, qualifica, revisione dei contratti; carico del team per mese |
 | **Amministrazione** | Utenti e ruoli, parametri, regole di revisione, registro delle modifiche di configurazione |
 
 Interfaccia in **italiano e inglese**: ogni utente sceglie la lingua dal menu del profilo; le email partono nella lingua di chi le riceve. Restano in italiano i dati inseriti dagli utenti e i testi legali dei modelli e delle clausole (la versione inglese va rivista da Legal).

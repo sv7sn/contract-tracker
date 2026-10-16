@@ -82,7 +82,7 @@ export function Dashboard({ contracts, plans, currentUser, onNavigate, onNew }: 
               <div style={{ ...sans, fontSize: 13.5, fontWeight: 650, color: C.text }}>{suggestions.length === 1 ? t("1 suggerimento per bilanciare il carico") : t("{n} suggerimenti per bilanciare il carico", { n: suggestions.length })}</div>
               <div style={{ ...sans, fontSize: 12.5, color: C.muted }}>{t("Alcuni buyer hanno troppe attività nello stesso mese.")}</div>
             </div>
-            <button onClick={() => onNavigate("team")} style={{ ...sans, padding: "8px 14px", background: C.navy, border: "none", borderRadius: 9, color: "#fff", fontWeight: 650, fontSize: 12.5, cursor: "pointer" }}>{t("Apri la vista team")}</button>
+            <button onClick={() => onNavigate("kpi")} style={{ ...sans, padding: "8px 14px", background: C.navy, border: "none", borderRadius: 9, color: "#fff", fontWeight: 650, fontSize: 12.5, cursor: "pointer" }}>{t("Apri la vista team")}</button>
           </div>
         )}
       </>)}
