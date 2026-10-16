@@ -3,9 +3,9 @@ import type { Contract, ContractData, NewUserInput, PlanStep, Role, StepTemplate
 import { btnGhost, btnPrimary, C, font, iStyle, ROLE_LABELS, sans, STAFF_ROLES } from "../theme.ts";
 import { fmt, fmtDate } from "../lib/format.ts";
 import { BO_COLORS, BO_DECISIONS } from "../lib/plan.ts";
-import { Avatar, Field, RoleBadge, StepIcon } from "./ui.tsx";
+import { Field, StepIcon } from "./ui.tsx";
 import { Check, CheckCircle2, FileText, KeyRound, Loader2, Paperclip, Pencil, Plus, Save, Send, UserRound, X, AlertCircle } from "./icons.tsx";
-import { api, ApiError, checkDocument, portalApi, uploadDocument } from "../api.ts";
+import { checkDocument, portalApi, uploadDocument } from "../api.ts";
 import { SupplierPicker } from "./vendorUi.tsx";
 
 // ─── Risposta del Business Owner ─────────────────────────────
@@ -206,49 +206,6 @@ export function ContractForm({ initial, currentUser, users, canUpload, onSave, o
           <button onClick={onClose} style={{ ...btnGhost, flex: 1, padding: 12 }}>Annulla</button>
           <button onClick={handleSave} disabled={busy} style={{ ...btnPrimary, flex: 2, padding: 12, opacity: busy ? 0.7 : 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>{busy ? <><Loader2 className="spin" size={16} />Caricamento documento…</> : isNew ? <><Plus size={16} />Aggiungi contratto</> : <><Save size={16} />Salva modifiche</>}</button>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Account: info, cambio password, uscita ──────────────────
-export function AccountModal({ user, canChangePassword, onLogout, onClose }: { user: User; canChangePassword: boolean; onLogout: () => void; onClose: () => void }) {
-  const [current, setCurrent] = useState(""); const [next, setNext] = useState(""); const [again, setAgain] = useState("");
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null); const [busy, setBusy] = useState(false);
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (next !== again) return setMsg({ ok: false, text: "Le due password nuove non coincidono" });
-    if (next.length < 12) return setMsg({ ok: false, text: "La nuova password deve avere almeno 12 caratteri" });
-    setBusy(true); setMsg(null);
-    try { await api.changePassword(current, next); setMsg({ ok: true, text: "Password aggiornata" }); setCurrent(""); setNext(""); setAgain(""); }
-    catch (err) { setMsg({ ok: false, text: err instanceof ApiError ? err.message : "Operazione non riuscita" }); }
-    setBusy(false);
-  };
-  return (
-    <div className="dialog-overlay" role="dialog" aria-modal="true" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="dialog">
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
-          <Avatar name={user.name} size={52} />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ ...font, fontSize: 17, fontWeight: 700, color: C.navy }}>{user.name}</div>
-            <div style={{ ...sans, fontSize: 12, color: C.muted, overflow: "hidden", textOverflow: "ellipsis" }}>{user.email}</div>
-            <div style={{ marginTop: 4 }}><RoleBadge role={user.role} /></div>
-          </div>
-          <button onClick={onClose} aria-label="Chiudi" style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: C.muted, alignSelf: "flex-start" }}>×</button>
-        </div>
-        {canChangePassword && (
-          <form onSubmit={submit} style={{ borderTop: `1px solid ${C.borderLight}`, paddingTop: 16, marginBottom: 12 }}>
-            <div style={{ ...sans, fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Cambia password</div>
-            <input type="text" autoComplete="username" value={user.email} readOnly hidden />
-            <Field label="Password attuale" htmlFor="pw-cur"><input id="pw-cur" type="password" autoComplete="current-password" required value={current} onChange={e => setCurrent(e.target.value)} style={iStyle} /></Field>
-            <Field label="Nuova password (min. 12 caratteri)" htmlFor="pw-new"><input id="pw-new" type="password" autoComplete="new-password" required value={next} onChange={e => setNext(e.target.value)} style={iStyle} /></Field>
-            <Field label="Ripeti nuova password" htmlFor="pw-again"><input id="pw-again" type="password" autoComplete="new-password" required value={again} onChange={e => setAgain(e.target.value)} style={iStyle} /></Field>
-            {msg && <div role="alert" style={{ ...sans, fontSize: 12, marginBottom: 10, color: msg.ok ? C.green : C.red }}>{msg.text}</div>}
-            <button type="submit" disabled={busy} style={{ ...btnPrimary, width: "100%", background: C.navy, opacity: busy ? 0.7 : 1 }}>Aggiorna password</button>
-          </form>
-        )}
-        {canChangePassword && <button type="button" onClick={async () => { try { await api.revokeSessions(); setMsg({ ok: true, text: "Le altre sessioni sono state chiuse" }); } catch { setMsg({ ok: false, text: "Operazione non riuscita" }); } }} style={{ ...btnGhost, width: "100%", marginBottom: 8 }}>Esci da tutti gli altri dispositivi</button>}
-        <button onClick={onLogout} style={{ ...btnGhost, width: "100%", color: C.red, borderColor: C.red }}>Esci</button>
       </div>
     </div>
   );
