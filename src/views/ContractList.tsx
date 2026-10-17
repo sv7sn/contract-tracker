@@ -34,7 +34,13 @@ export function ContractList({ contracts, plans, currentUser, search, onSearch, 
   return (
     <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0,1fr)" }}>
       {!showArchive && <ContractSummary contracts={contracts} plans={plans} currentUser={currentUser} filter={filter} onFilter={setFilter} onOpenKpi={onOpenKpi} />}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
+      <div className="mobile-only" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+        <span className="desktop-only-flex" style={{ gap: 12, alignItems: "center" }}>{onOpenClauses && <button onClick={onOpenClauses} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 10, padding: "7px 12px", fontSize: 13, fontWeight: 600, color: C.text, cursor: "pointer" }}><BookOpen size={15} />{t("Libreria clausole")}</button>}
+        <select value={sort} onChange={e => setSort(e.target.value)} aria-label={t("Ordina")} style={{ ...iStyle, flex: 1, width: "auto", padding: "8px 10px", fontSize: 13, color: C.muted }}>
+          <option value="expiry">{t("Ordina per scadenza")}</option><option value="value">{t("Ordina per valore")}</option><option value="supplier">{t("Ordina per fornitore")}</option>
+        </select></span>
+      </div>
+      <div className="sticky-filters" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
         <div role="tablist" style={{ display: "flex", gap: 2, background: "#e9ecf2", borderRadius: 12, padding: 3 }}>
           <button role="tab" aria-selected={!showArchive} onClick={() => setShowArchive(false)} style={seg(!showArchive)}><FileText size={15} />{t("Attivi")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => !c.ceased).length}</span></button>
           <button role="tab" aria-selected={showArchive} onClick={() => setShowArchive(true)} style={seg(showArchive)}><Archive size={15} />{t("Storico")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => c.ceased).length}</span></button>

@@ -100,7 +100,7 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
         ))}
       </Grid>
 
-      <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
+      <div className="sticky-filters" style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         <div style={{ position: "relative", flex: "1 1 240px", maxWidth: 420 }}>
           <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Cerca per nome, email, codice SAP…")} aria-label={t("Cerca fornitori")} style={{ ...iStyle, paddingLeft: 36 }} />
