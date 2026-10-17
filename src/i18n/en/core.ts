@@ -419,6 +419,9 @@ const en: Record<string, string> = {
   "Nome, email e ruolo li modifica il Manager (Amministrazione → Utenti).": "Name, email and role are changed by the Manager (Administration → Users).",
   "Dati salvati": "Details saved",
   "Nome": "Name",
-  "Telefono": "Phone"
+  "Telefono": "Phone",
+  "Filtri": "Filters",
+  "Attesa BO": "Awaiting BO",
+  "Da gestire": "To handle"
 };
 export default en;

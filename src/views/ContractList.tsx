@@ -1,11 +1,11 @@
 import { useMemo, useState } from "react";
 import type { Contract, Plans, User } from "../types.ts";
-import { ContractSummary, type ContractFilter } from "./Dashboard.tsx";
+import { ContractCharts, ContractSummary, type ContractFilter } from "./Dashboard.tsx";
 import { C, iStyle, radius, sans, shadow, URGENCY_COLORS } from "../theme.ts";
 import { closedLabel, daysToDeadline, expiredWithoutOutcome, fmt, fmtDate, urgency } from "../lib/format.ts";
 import { canCreateContract, canViewTeam } from "../permissions.ts";
 import { Avatar, Card, DaysChip, EmptyState, Grid, RenewalBadge } from "../components/ui.tsx";
-import { Archive, BookOpen, FileText, LayoutGrid, Paperclip, Plus, Rows3, Search, X } from "../components/icons.tsx";
+import { Archive, BookOpen, FileText, LayoutGrid, Paperclip, Plus, Rows3, Search, SlidersHorizontal, X } from "../components/icons.tsx";
 import { t } from "../i18n/index.ts";
 
 const VIEW_KEY = "contract-tracker:list-view";
@@ -16,6 +16,7 @@ interface Props { contracts: Contract[]; plans: Plans; currentUser: User; search
 export function ContractList({ contracts, plans, currentUser, search, onSearch, onSelect, onNew, onOpenClauses, onOpenKpi }: Props) {
   const [filter, setFilter] = useState<ContractFilter>("Tutti"); const [showArchive, setShowArchive] = useState(false); const [sort, setSort] = useState("expiry");
   const [layout, setLayout] = useState<"cards" | "table">(readView);
+  const [showTools, setShowTools] = useState(false);
   const setLayoutSaved = (l: "cards" | "table") => { setLayout(l); try { localStorage.setItem(VIEW_KEY, l); } catch { /* ignore */ } };
   const showOwner = canViewTeam(currentUser);
 
@@ -33,40 +34,42 @@ export function ContractList({ contracts, plans, currentUser, search, onSearch, 
 
   return (
     <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0,1fr)" }}>
-      {!showArchive && <ContractSummary contracts={contracts} plans={plans} currentUser={currentUser} filter={filter} onFilter={setFilter} onOpenKpi={onOpenKpi} />}
-      <div className="mobile-only" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <span className="desktop-only-flex" style={{ gap: 12, alignItems: "center" }}>{onOpenClauses && <button onClick={onOpenClauses} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 10, padding: "7px 12px", fontSize: 13, fontWeight: 600, color: C.text, cursor: "pointer" }}><BookOpen size={15} />{t("Libreria clausole")}</button>}
-        <select value={sort} onChange={e => setSort(e.target.value)} aria-label={t("Ordina")} style={{ ...iStyle, flex: 1, width: "auto", padding: "8px 10px", fontSize: 13, color: C.muted }}>
-          <option value="expiry">{t("Ordina per scadenza")}</option><option value="value">{t("Ordina per valore")}</option><option value="supplier">{t("Ordina per fornitore")}</option>
-        </select></span>
-      </div>
-      <div className="sticky-filters" style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
-        <div role="tablist" style={{ display: "flex", gap: 2, background: "#e9ecf2", borderRadius: 12, padding: 3 }}>
-          <button role="tab" aria-selected={!showArchive} onClick={() => setShowArchive(false)} style={seg(!showArchive)}><FileText size={15} />{t("Attivi")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => !c.ceased).length}</span></button>
-          <button role="tab" aria-selected={showArchive} onClick={() => setShowArchive(true)} style={seg(showArchive)}><Archive size={15} />{t("Storico")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => c.ceased).length}</span></button>
-        </div>
-        <div style={{ position: "relative", flex: "1 1 220px", minWidth: 200 }} className="mobile-only">
-          <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
-          <input value={search} onChange={e => onSearch(e.target.value)} placeholder={t("Cerca fornitore, oggetto, owner…")} aria-label={t("Cerca")} style={{ ...iStyle, padding: "10px 12px 10px 36px" }} />
-        </div>
-        <div style={{ flex: 1 }} />
-        {onOpenClauses && <button onClick={onOpenClauses} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 10, padding: "7px 12px", fontSize: 13, fontWeight: 600, color: C.text, cursor: "pointer" }}><BookOpen size={15} />{t("Libreria clausole")}</button>}
-        <select value={sort} onChange={e => setSort(e.target.value)} aria-label={t("Ordina")} style={{ ...iStyle, width: "auto", padding: "8px 10px", fontSize: 13, color: C.muted }}>
+      {/* Parte alta della pagina: resta ferma, sotto scorrono solo i contratti. */}
+      <div className="sticky-filters list-head" style={{ display: "grid", gap: 10, gridTemplateColumns: "minmax(0,1fr)" }}>
+        {!showArchive && <ContractSummary contracts={contracts} plans={plans} filter={filter} onFilter={setFilter} />}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+          <div role="tablist" className="desktop-only-flex" style={{ gap: 2, background: "#e9ecf2", borderRadius: 12, padding: 3 }}>
+            <button role="tab" aria-selected={!showArchive} onClick={() => setShowArchive(false)} style={seg(!showArchive)}><FileText size={15} />{t("Attivi")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => !c.ceased).length}</span></button>
+            <button role="tab" aria-selected={showArchive} onClick={() => setShowArchive(true)} style={seg(showArchive)}><Archive size={15} />{t("Storico")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => c.ceased).length}</span></button>
+          </div>
+          <div style={{ position: "relative", flex: "1 1 160px", minWidth: 0 }} className="mobile-only">
+            <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+            <input value={search} onChange={e => onSearch(e.target.value)} placeholder={t("Cerca fornitore, oggetto, owner…")} aria-label={t("Cerca")} style={{ ...iStyle, padding: "10px 12px 10px 36px" }} />
+          </div>
+          <button className="mobile-only" onClick={() => setShowTools(o => !o)} aria-expanded={showTools} aria-label={t("Filtri")} style={{ background: "#fff", border: `1px solid ${showTools ? C.accent : C.border}`, borderRadius: 10, width: 42, height: 42, display: "inline-flex", alignItems: "center", justifyContent: "center", color: showTools ? C.accent : C.muted, cursor: "pointer", padding: 0 }}><SlidersHorizontal size={18} /></button>
+          <div style={{ flex: 1 }} className="desktop-only" />
+          <div className={`head-filters${showTools ? " open" : ""}`} style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <div role="tablist" className="mobile-only" style={{ display: "flex", width: "100%", gap: 2, background: "#e9ecf2", borderRadius: 12, padding: 3 }}>
+              <button role="tab" aria-selected={!showArchive} onClick={() => setShowArchive(false)} style={seg(!showArchive)}><FileText size={15} />{t("Attivi")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => !c.ceased).length}</span></button>
+              <button role="tab" aria-selected={showArchive} onClick={() => setShowArchive(true)} style={seg(showArchive)}><Archive size={15} />{t("Storico")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => c.ceased).length}</span></button>
+            </div>
+            {onOpenClauses && <button onClick={onOpenClauses} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 10, padding: "7px 12px", fontSize: 13, fontWeight: 600, color: C.text, cursor: "pointer" }}><BookOpen size={15} />{t("Libreria clausole")}</button>}
+            <select value={sort} onChange={e => setSort(e.target.value)} aria-label={t("Ordina")} style={{ ...iStyle, width: "auto", padding: "8px 10px", fontSize: 13, color: C.muted }}>
           <option value="expiry">{t("Ordina per scadenza")}</option><option value="value">{t("Ordina per valore")}</option><option value="supplier">{t("Ordina per fornitore")}</option>
         </select>
-        <div className="desktop-only-flex" role="group" aria-label={t("Vista")} style={{ gap: 2, background: "#e9ecf2", borderRadius: 10, padding: 3 }}>
-          <button onClick={() => setLayoutSaved("table")} aria-pressed={layout === "table"} title={t("Tabella")} aria-label={t("Vista tabella")} style={iconBtn(layout === "table")}><Rows3 size={16} /></button>
-          <button onClick={() => setLayoutSaved("cards")} aria-pressed={layout === "cards"} title={t("Schede")} aria-label={t("Vista a schede")} style={iconBtn(layout === "cards")}><LayoutGrid size={16} /></button>
+          </div>
+          <div className="desktop-only-flex" role="group" aria-label={t("Vista")} style={{ gap: 2, background: "#e9ecf2", borderRadius: 10, padding: 3 }}>
+            <button onClick={() => setLayoutSaved("table")} aria-pressed={layout === "table"} title={t("Tabella")} aria-label={t("Vista tabella")} style={iconBtn(layout === "table")}><Rows3 size={16} /></button>
+            <button onClick={() => setLayoutSaved("cards")} aria-pressed={layout === "cards"} title={t("Schede")} aria-label={t("Vista a schede")} style={iconBtn(layout === "cards")}><LayoutGrid size={16} /></button>
+          </div>
         </div>
+        {!showArchive && filter !== "Tutti" && (
+          <div style={{ ...sans, display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.muted }}>
+            {t("Filtro")}: <b style={{ color: C.text }}>{t(filter)}</b>
+            <button onClick={() => setFilter("Tutti")} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 4, background: "none", border: `1px solid ${C.border}`, borderRadius: 999, padding: "3px 10px", cursor: "pointer", fontSize: 12, color: C.muted }}><X size={12} />{t("Mostra tutti")}</button>
+          </div>
+        )}
       </div>
-
-      {!showArchive && filter !== "Tutti" && (
-        <div style={{ ...sans, display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.muted }}>
-          {t("Filtro")}: <b style={{ color: C.text }}>{t(filter)}</b>
-          <button onClick={() => setFilter("Tutti")} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 4, background: "none", border: `1px solid ${C.border}`, borderRadius: 999, padding: "3px 10px", cursor: "pointer", fontSize: 12, color: C.muted }}><X size={12} />{t("Mostra tutti")}</button>
-        </div>
-      )}
-
       {filtered.length === 0 ? (
         contracts.length === 0 ? (
           <EmptyState title={t("Nessun contratto ancora")} text={t("Aggiungi il primo contratto con il suo documento: da quel momento ne seguiamo scadenze e rinnovi.")} action={canCreateContract(currentUser) && <button onClick={onNew} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, cursor: "pointer" }}><Plus size={17} />{t("Crea il primo contratto")}</button>} />
@@ -125,6 +128,7 @@ export function ContractList({ contracts, plans, currentUser, search, onSearch, 
           </Grid>
         </div>
       </>)}
+      {!showArchive && <ContractCharts contracts={contracts} plans={plans} currentUser={currentUser} onOpenKpi={onOpenKpi} />}
     </div>
   );
 }

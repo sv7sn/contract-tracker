@@ -8,7 +8,7 @@ import { fmt, fmtDate, isoDate, NOW } from "../lib/format.ts";
 import { stepTemplate } from "../lib/plan.ts";
 import { taskSteps } from "../taskSteps.ts";
 import { Avatar, Card, CardTitle, EmptyState, Field, Fold } from "../components/ui.tsx";
-import { AlertTriangle, Check, CheckCircle2, FileText, Loader2, Paperclip, Plus, RotateCcw, Scale, Search, Send, Trash2, Upload } from "../components/icons.tsx";
+import { AlertTriangle, Check, CheckCircle2, FileText, Loader2, Paperclip, Plus, RotateCcw, Scale, Search, Send, Trash2, Upload, SlidersHorizontal } from "../components/icons.tsx";
 import { CloseButton, KV, Notice, Portal, SupplierPicker } from "../components/vendorUi.tsx";
 import { RfqCard } from "./RfqCard.tsx";
 import * as i18n from "../i18n/index.ts";
@@ -48,6 +48,7 @@ const overdue = (it: Item) => it.status !== "done" && !!it.due && daysFrom(it.du
 
 /** Task del team: RDA da SAP, task creati a mano e attività dei piani di rinnovo dei contratti. */
 export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, plans, onCompleteStep, onSendBO, onOpenContract, onUpdateStepDate, notify, onSessionExpired }: Props) {
+  const [showFilters, setShowFilters] = useState(false);
   const [data, setData] = useState<TaskList | null>(null);
   const [buyers, setBuyers] = useState<{ id: number; name: string; active: boolean }[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -151,43 +152,42 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
   ];
   const showWho = isManager && who === "all";
 
+  const filtered = status !== "open" || (isManager && who !== "all");
   return (
     <div>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
-        <div className="desktop-only">
-          <div style={{ ...font, fontSize: 18, fontWeight: 700, color: C.text }}>{i18n.t("Task")}</div>
-          <div style={{ ...sans, fontSize: 12, color: C.muted }}>{isManager ? i18n.t("Tutto il team") : i18n.t("I tuoi task")} · {i18n.t("RDA da SAP, contratti e attività manuali")}</div>
-        </div>
-        <button className="desktop-only-flex" onClick={() => setCreating(true)} style={{ ...btnPrimary, alignItems: "center", gap: 7, padding: "9px 16px", fontSize: 13 }}><Plus size={16} />{i18n.t("Nuovo task")}</button>
-      </div>
-
-      <div style={{ ...sans, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", fontSize: 12.5, color: C.muted, marginBottom: 10 }}>
-        <span style={{ flex: "1 1 240px", minWidth: 0 }}>{i18n.t("SAP · RDA aggiornate {pr} · ordini {po}", { pr: fmtAt(data.sapUpdatedAt.pr), po: fmtAt(data.sapUpdatedAt.po) })}</span>
-        <input ref={input} type="file" multiple hidden accept=".xls,.xml,.xlsx" onChange={e => doImport(e.target.files)} />
-        <button onClick={() => input.current?.click()} disabled={importing} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", color: C.text, fontSize: 12.5 }}>{importing ? <Loader2 className="spin" size={14} /> : <Upload size={14} />}{i18n.t("Importa file SAP")}</button>
-      </div>
       {stale !== null && stale >= 2 && <Notice kind="warn">{i18n.t("L'elenco delle RDA non è aggiornato da {n} giorni.", { n: stale })} {i18n.t("Carica i due file che SAP invia ogni mattina (RDA aperte e ordini degli ultimi 7 giorni): i task si creano e si chiudono da soli.")}</Notice>}
-
-      <div style={{ display: "flex", gap: 8, marginBottom: 10, overflowX: "auto", paddingBottom: 2 }}>
-        {pills.map(pl => { const on = quick === pl.key; return (
-          <button key={pl.key} onClick={() => setQuick(on ? null : pl.key)} aria-pressed={on} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0, padding: "7px 14px", borderRadius: 12, border: `1px solid ${on ? pl.color : C.border}`, background: on ? `${pl.color}14` : "#fff", cursor: "pointer", fontSize: 13, color: C.text }}>
+      {/* Parte alta della pagina: resta ferma, sotto scorrono solo i task. Sul telefono è compatta (filtri in un pulsante, importazione come icona). */}
+      <div className="sticky-filters list-head">
+        <div className="desktop-only-flex" style={{ justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
+  <div style={{ ...sans, fontSize: 12.5, color: C.muted }}>{isManager ? i18n.t("Tutto il team") : i18n.t("I tuoi task")} · {i18n.t("RDA da SAP, contratti e attività manuali")}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <span style={{ ...sans, fontSize: 12, color: C.muted }}>{i18n.t("SAP · RDA aggiornate {pr} · ordini {po}", { pr: fmtAt(data.sapUpdatedAt.pr), po: fmtAt(data.sapUpdatedAt.po) })}</span>
+            <button onClick={() => input.current?.click()} disabled={importing} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", color: C.text, fontSize: 12.5 }}>{importing ? <Loader2 className="spin" size={14} /> : <Upload size={14} />}{i18n.t("Importa file SAP")}</button>
+            <button className="desktop-only-flex" onClick={() => setCreating(true)} style={{ ...btnPrimary, alignItems: "center", gap: 7, padding: "9px 16px", fontSize: 13 }}><Plus size={16} />{i18n.t("Nuovo task")}</button>
+          </div>
+        </div>
+        <input ref={input} type="file" multiple hidden accept=".xls,.xml,.xlsx" onChange={e => doImport(e.target.files)} />
+        <div className="chip-row" style={{ display: "flex", gap: 8, marginBottom: 8, overflowX: "auto", paddingBottom: 2 }}>
+          {pills.map(pl => { const on = quick === pl.key; return (
+          <button key={pl.key} onClick={() => setQuick(on ? null : pl.key)} aria-pressed={on} className="count-pill" style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0, padding: "7px 14px", borderRadius: 12, border: `1px solid ${on ? pl.color : C.border}`, background: on ? `${pl.color}14` : "#fff", cursor: "pointer", fontSize: 13, color: C.text }}>
             <b className="tabular" style={{ ...font, fontSize: 17, color: pl.value ? pl.color : C.subtle }}>{pl.value}</b>{pl.label}</button>); })}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8, marginBottom: 6, maxWidth: 760 }}>
-        <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label={i18n.t("Stato")} style={iStyle}><option value="open">{i18n.t("Aperti")}</option><option value="done">{i18n.t("Chiusi di recente")}</option><option value="archive">{i18n.t("Archivio (tutti i chiusi)")}</option><option value="all">{i18n.t("Tutti")}</option></select>
-        {isManager && <select value={who} onChange={e => setWho(e.target.value)} aria-label={i18n.t("Assegnatario")} style={iStyle}><option value="all">{i18n.t("Tutto il team")}</option><option value="none">{i18n.t("Da assegnare")}</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
-      </div>
-
-      <div className="sticky-filters" style={{ marginBottom: 8 }}>
-        <div style={{ display: "flex", gap: 8, marginBottom: 8, overflowX: "auto", paddingBottom: 2 }}>
+        </div>
+        <div className="chip-row" style={{ display: "flex", gap: 8, marginBottom: 8, overflowX: "auto", paddingBottom: 2 }}>
           {([["all", "Tutti"], ["rda", "RDA"], ["contract", "Rinnovi"], ["manual", "Manuali e acquisti"]] as [Origin, string][]).map(([k, l]) => (
             <button key={k} onClick={() => setOrigin(k)} aria-pressed={origin === k} style={{ ...sans, flexShrink: 0, padding: "5px 13px", borderRadius: 999, border: `1px solid ${origin === k ? C.accent : C.border}`, background: origin === k ? C.accentLight : "#fff", color: origin === k ? C.accent : C.muted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{i18n.t(l)}</button>
           ))}
         </div>
-        <div style={{ position: "relative", maxWidth: 760 }}>
-          <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={i18n.t("Cerca task, RDA, fornitore…")} aria-label={i18n.t("Cerca")} style={{ ...iStyle, paddingLeft: 36 }} />
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <div style={{ position: "relative", flex: "1 1 220px", maxWidth: 420 }}>
+            <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={i18n.t("Cerca task, RDA, fornitore…")} aria-label={i18n.t("Cerca")} style={{ ...iStyle, paddingLeft: 36 }} />
+          </div>
+          <button className="mobile-only" onClick={() => setShowFilters(f => !f)} aria-expanded={showFilters} aria-label={i18n.t("Filtri")} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 42, height: 42, padding: 0, borderColor: filtered ? C.accent : C.border, color: filtered ? C.accent : C.muted }}><SlidersHorizontal size={18} /></button>
+          <button className="mobile-only" onClick={() => input.current?.click()} disabled={importing} aria-label={i18n.t("Importa file SAP")} title={i18n.t("Importa file SAP")} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 42, height: 42, padding: 0, color: C.muted }}>{importing ? <Loader2 className="spin" size={17} /> : <Upload size={17} />}</button>
+          <div className={`head-filters${showFilters ? " open" : ""}`} style={{ gap: 8, flex: "1 1 320px" }}>
+  <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label={i18n.t("Stato")} style={{ ...iStyle, flex: 1 }}><option value="open">{i18n.t("Aperti")}</option><option value="done">{i18n.t("Chiusi di recente")}</option><option value="archive">{i18n.t("Archivio (tutti i chiusi)")}</option><option value="all">{i18n.t("Tutti")}</option></select>
+  {isManager && <select value={who} onChange={e => setWho(e.target.value)} aria-label={i18n.t("Assegnatario")} style={{ ...iStyle, flex: 1 }}><option value="all">{i18n.t("Tutto il team")}</option><option value="none">{i18n.t("Da assegnare")}</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
+          </div>
         </div>
       </div>
 
