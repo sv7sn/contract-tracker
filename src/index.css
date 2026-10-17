@@ -130,7 +130,8 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
 /* Telefono: la barra in basso è ferma come in un'app. L'app è ancorata allo schermo (position: fixed) e scorre solo il contenuto,
    così la barra non sparisce quando il browser mostra o nasconde le sue barre o quando si chiude la tastiera. */
 @media (max-width: 959px) {
-  .app-shell.has-tabbar { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
+  /* Altezza = parte visibile dello schermo (dvh). Niente 100vh: su Safari iPhone è più alto dell'area visibile e la barra finiva sotto quella del browser. */
+  .app-shell.has-tabbar { position: fixed; top: 0; left: 0; right: 0; bottom: auto; min-height: 0; height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
   .app-shell.has-tabbar .main-col { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
   .app-shell.has-tabbar .page { padding-bottom: 96px; }
   .app-shell.has-tabbar .bottom-nav { position: relative; flex-shrink: 0; z-index: 20; }
