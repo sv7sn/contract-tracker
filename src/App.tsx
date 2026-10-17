@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AppState, AuditEntry, CommitPayload, Contract, ContractData, NewUserInput, PlanStep, Role, User, View } from "./types.ts";
 import { api, ApiError, portalApi } from "./api.ts";
 import { C, font, iStyle, ROLE_LABELS, sans, shadow } from "./theme.ts";
-import { fmtDate, keyDate, tsNow, urgency } from "./lib/format.ts";
+import { fmtDate, keyDate, tsNow } from "./lib/format.ts";
 import { clearLocal, DEMO_PASSWORD, DEMO_USERS, demoState, loadLocal, saveLocal } from "./lib/demo.ts";
 import { makePlan, RENEWAL_BY_DECISION, reschedulePlan, stepTemplate } from "./lib/plan.ts";
 import { canCreateContract, canManageUsers } from "./permissions.ts";
@@ -58,7 +58,6 @@ export default function App() {
   const [boFormContract, setBOFormContract] = useState<Contract | null>(null);
   const [showAccount, setShowAccount] = useState(false);
   const [listSearch, setListSearch] = useState("");
-  const [badges, setBadges] = useState<{ tasks?: number; vendors?: number }>({});
   const [reviewFocus, setReviewFocus] = useState<number | null>(null);
   const [inviteToken, setInviteToken] = useState<string | null>(() => new URLSearchParams(window.location.search).get("invite"));
 
@@ -286,19 +285,9 @@ export default function App() {
     </div>
   );
 
-  // Pallini sulla barra: task in ritardo e fornitori da verificare (o da registrare, per il Finance). Si aggiornano cambiando pagina.
-  const badgeRole = currentUser?.role;
-  useEffect(() => {
-    if (mode !== "api" || !badgeRole || !["manager", "buyer", "finance"].includes(badgeRole)) return;
-    let off = false;
-    const staff = badgeRole === "manager" || badgeRole === "buyer";
-    Promise.allSettled([staff ? portalApi.taskSummary() : Promise.reject(), portalApi.vendors()]).then(([tk, v]) => {
-      if (off) return;
-      const mine = badgeRole === "finance" ? "approved" : "pending";
-      setBadges({ tasks: tk.status === "fulfilled" ? tk.value.overdue : undefined, vendors: v.status === "fulfilled" ? v.value.filter(x => x.status === mine).length : undefined });
-    });
-    return () => { off = true; };
-  }, [mode, badgeRole, view]);
+  // Sul telefono scorre solo il contenuto (la barra in basso resta ferma): cambiando pagina si riparte dall'alto.
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }); }, [view]);
 
   if (mode === "loading") return (
     <div style={{ ...sans, minHeight: "100vh", background: C.navy, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, color: "rgba(255,255,255,.7)", fontSize: 13.5 }}>
@@ -352,18 +341,15 @@ export default function App() {
   const inContracts = view === "list" || view === "detail";
   const titles: Record<View, string> = { clauses: t("Libreria clausole"), reviews: t("Revisioni"), dashboard: t("Contratti"), list: t("Contratti"), planning: t("Contratti"), team: t("Contratti"), notifiche: t("Contratti"), bo: t("Le mie richieste"), users: t("Utenti e permessi"), vendors: t("Fornitori"), expiries: t("Scadenze documenti"), tasks: t("Task"), kpi: t("Indicatori di processo"), budget: t("Master Plan"), spend: t("Spesa"), requests: t("Le mie RDA e i miei contratti"), hub: t("Task"), config: t("Configurazione"), supplier: t("Area fornitore"), detail: selected?.supplier ?? "" };
   const eyebrow = view === "config" || view === "users" ? t("Amministrazione") : view === "kpi" ? t("Indicatori") : view === "detail" ? t("Contratti") : view === "clauses" && activeTab === "list" ? t("Contratti") : "";
-  const urgentContracts = contracts.filter(c => !c.ceased && urgency(c) === "red").length;
-  const badgeOf = (b?: string) => (b === "tasks" ? badges.tasks : b === "vendors" ? badges.vendors : b === "contracts" && currentUser.role !== "bo" ? urgentContracts : undefined) || 0;
-  const dot = (n: number, side: boolean) => n > 0 && <span className="tabular" aria-label={t("{n} da guardare", { n })} style={{ ...sans, position: side ? "static" : "absolute", top: -4, right: -9, marginLeft: side ? "auto" : 0, minWidth: 18, height: 18, padding: "0 5px", boxSizing: "border-box", borderRadius: 9, background: C.red, color: "#fff", fontSize: 10.5, fontWeight: 700, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{n > 99 ? "99+" : n}</span>;
-  const sideBtn = (key: string, label: string, icon: React.ReactNode, on: boolean, click: () => void, badge = 0) => (
+  const sideBtn = (key: string, label: string, icon: React.ReactNode, on: boolean, click: () => void) => (
     <button key={key} onClick={click} aria-current={on ? "page" : undefined} style={{ ...sans, position: "relative", display: "flex", alignItems: "center", gap: 12, width: "100%", padding: "10px 12px", marginBottom: 3, border: "none", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: on ? 650 : 500, background: on ? "rgba(255,255,255,.1)" : "transparent", color: on ? "#fff" : "rgba(255,255,255,.66)", textAlign: "left" }}>
       {on && <span aria-hidden style={{ position: "absolute", left: -14, top: 8, bottom: 8, width: 4, borderRadius: "0 4px 4px 0", background: C.accent }} />}
-      <span style={{ display: "flex", color: on ? "#fff" : "rgba(255,255,255,.55)" }}>{icon}</span>{label}{dot(badge, true)}
+      <span style={{ display: "flex", color: on ? "#fff" : "rgba(255,255,255,.55)" }}>{icon}</span>{label}
     </button>
   );
-  const tabBtn = (key: string, label: string, icon: React.ReactNode, on: boolean, click: () => void, badge = 0) => (
+  const tabBtn = (key: string, label: string, icon: React.ReactNode, on: boolean, click: () => void) => (
     <button key={key} onClick={click} aria-current={on ? "page" : undefined} style={{ flex: "1 1 0", minWidth: 0, background: "none", border: "none", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 3, color: on ? C.accent : C.subtle, padding: "2px 0" }}>
-      <span style={{ position: "relative", display: "flex" }}>{icon}{dot(badge, false)}</span>
+      <span style={{ display: "flex" }}>{icon}</span>
       <span style={{ ...sans, fontSize: 10.5, color: on ? C.accent : C.muted, fontWeight: on ? 650 : 500, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</span>
     </button>
   );
@@ -375,14 +361,14 @@ export default function App() {
   );
 
   return (
-    <div className="app-shell" style={{ ...sans, color: C.text }}>
+    <div className={`app-shell${tabs.length > 1 ? " has-tabbar" : ""}`} style={{ ...sans, color: C.text }}>
       {/* Menu laterale (desktop) */}
       <aside className="sidebar" aria-label={t("Menu principale")}>
         <div style={{ display: "flex", alignItems: "center", gap: 11, padding: "2px 8px 26px" }}>
           <BrandMark size={38} />
           <div><div style={{ ...font, fontSize: 16, fontWeight: 700, color: "#fff" }}>Procurement Lab</div><div style={{ fontSize: 11, color: "rgba(255,255,255,.45)" }}>Indirect</div></div>
         </div>
-        {tabs.length > 1 && <nav aria-label={t("Menu principale")}>{tabs.map(x => sideBtn(x.key, x.label, x.icon(19), activeTab === x.key, () => setView(x.key), badgeOf(x.badge)))}</nav>}
+        {tabs.length > 1 && <nav aria-label={t("Menu principale")}>{tabs.map(x => sideBtn(x.key, x.label, x.icon(19), activeTab === x.key, () => setView(x.key)))}</nav>}
         <div style={{ flex: 1 }} />
         <button onClick={() => setShowAccount(true)} style={{ display: "flex", alignItems: "center", gap: 10, padding: 10, border: "1px solid rgba(255,255,255,.08)", borderRadius: 12, background: "rgba(255,255,255,.06)", cursor: "pointer", textAlign: "left", width: "100%" }}>
           <Avatar name={currentUser.name} size={36} />
@@ -391,7 +377,7 @@ export default function App() {
         </button>
       </aside>
 
-      <div className="main-col">
+      <div className="main-col" ref={scrollRef}>
         <header className="topbar">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {(view === "detail" || (view === "clauses" && activeTab === "list")) && <button className="topbar-back" onClick={() => setView("list")} aria-label={t("Torna alla lista")} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, display: "flex", flexShrink: 0 }}><ChevronLeft size={22} /></button>}
@@ -446,7 +432,7 @@ export default function App() {
 
       {tabs.length > 1 && (
         <nav className="bottom-nav" aria-label={t("Navigazione")}>
-          {tabs.map(x => tabBtn(x.key, x.label, x.icon(21), activeTab === x.key, () => setView(x.key), badgeOf(x.badge)))}
+          {tabs.map(x => tabBtn(x.key, x.label, x.icon(21), activeTab === x.key, () => setView(x.key)))}
         </nav>
       )}
 

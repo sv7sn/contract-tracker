@@ -166,7 +166,7 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
         <input ref={input} type="file" multiple hidden accept=".xls,.xml,.xlsx" onChange={e => doImport(e.target.files)} />
         <button onClick={() => input.current?.click()} disabled={importing} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", color: C.text, fontSize: 12.5 }}>{importing ? <Loader2 className="spin" size={14} /> : <Upload size={14} />}{i18n.t("Importa file SAP")}</button>
       </div>
-      {(stale === null || stale >= 2) && <Notice kind="warn">{stale === null ? i18n.t("Non è ancora stato importato nessun elenco di RDA.") : i18n.t("L'elenco delle RDA non è aggiornato da {n} giorni.", { n: stale })} {i18n.t("Carica i due file che SAP invia ogni mattina (RDA aperte e ordini degli ultimi 7 giorni): i task si creano e si chiudono da soli.")}</Notice>}
+      {stale !== null && stale >= 2 && <Notice kind="warn">{i18n.t("L'elenco delle RDA non è aggiornato da {n} giorni.", { n: stale })} {i18n.t("Carica i due file che SAP invia ogni mattina (RDA aperte e ordini degli ultimi 7 giorni): i task si creano e si chiudono da soli.")}</Notice>}
 
       <div style={{ display: "flex", gap: 8, marginBottom: 10, overflowX: "auto", paddingBottom: 2 }}>
         {pills.map(pl => { const on = quick === pl.key; return (
