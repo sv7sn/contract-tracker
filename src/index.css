@@ -126,3 +126,12 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
   .stat-card .stat-value { font-size: 21px !important; }
   .stat-card .stat-sub { font-size: 11px !important; line-height: 1.3; }
 }
+
+/* Telefono: la barra in basso è ferma come in un'app. Scorre solo il contenuto, così la barra non sparisce
+   quando il browser mostra o nasconde le sue barre arrivando in fondo alla pagina. */
+@media (max-width: 959px) {
+  .app-shell.has-tabbar { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+  .app-shell.has-tabbar .main-col { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-y: contain; }
+  .app-shell.has-tabbar .page { padding-bottom: 96px; }
+  .app-shell.has-tabbar .bottom-nav { position: relative; flex-shrink: 0; z-index: 20; }
+}

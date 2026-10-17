@@ -4,18 +4,18 @@ import { Inbox, PiggyBank, Wallet, Building2, ClipboardCheck, FileText, Scale, B
 import { t } from "../i18n/index.ts";
 
 /** Una voce della navigazione: una pagina sola, uguale nella barra laterale (PC) e nella barra in basso (telefono). */
-export interface NavTab { key: View; label: string; icon: (size: number) => ReactNode; badge?: "tasks" | "contracts" | "vendors" }
+export interface NavTab { key: View; label: string; icon: (size: number) => ReactNode }
 
 /**
  * Voci per ruolo. Al massimo cinque, così sul telefono stanno tutte nella barra fissa in basso.
  * Indicatori e Amministrazione (solo Manager) si aprono dal menu del profilo. In modalità demo (senza server) c'è solo Contratti.
  */
 export function navTabsFor(user: User, apiMode: boolean): NavTab[] {
-  const tab = (key: View, label: string, icon: NavTab["icon"], badge?: NavTab["badge"]): NavTab => ({ key, label, icon, badge });
-  const contracts = tab("list", t("Contratti"), s => <FileText size={s} />, "contracts");
+  const tab = (key: View, label: string, icon: NavTab["icon"]): NavTab => ({ key, label, icon });
+  const contracts = tab("list", t("Contratti"), s => <FileText size={s} />);
   if (!apiMode) return [contracts];
-  const tasks = tab("tasks", t("Task"), s => <ListChecks size={s} />, "tasks");
-  const vendors = tab("vendors", t("Fornitori"), s => <Building2 size={s} />, "vendors");
+  const tasks = tab("tasks", t("Task"), s => <ListChecks size={s} />);
+  const vendors = tab("vendors", t("Fornitori"), s => <Building2 size={s} />);
   const budget = tab("budget", t("Budget"), s => <PiggyBank size={s} />);
   const spend = tab("spend", t("Spesa"), s => <Wallet size={s} />);
   switch (user.role) {
