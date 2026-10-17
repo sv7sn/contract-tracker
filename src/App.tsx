@@ -288,6 +288,18 @@ export default function App() {
   // Sul telefono scorre solo il contenuto (la barra in basso resta ferma): cambiando pagina si riparte dall'alto.
   const scrollRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => { scrollRef.current?.scrollTo({ top: 0 }); }, [view]);
+  // Altezza dell'intestazione: i filtri "fissi" delle liste si fermano subito sotto.
+  useEffect(() => {
+    const el = scrollRef.current?.querySelector(".topbar");
+    if (!el) return;
+    const set = () => document.documentElement.style.setProperty("--topbar-h", `${(el as HTMLElement).offsetHeight}px`);
+    set(); const ro = new ResizeObserver(set); ro.observe(el); return () => ro.disconnect();
+  }, [view, currentUser]);
+  // Dopo la tastiera il browser del telefono a volte lascia la pagina spostata: la riportiamo a posto.
+  useEffect(() => {
+    const fix = () => { if (window.innerWidth < 960) setTimeout(() => window.scrollTo(0, 0), 50); };
+    window.addEventListener("focusout", fix); return () => window.removeEventListener("focusout", fix);
+  }, []);
 
   if (mode === "loading") return (
     <div style={{ ...sans, minHeight: "100vh", background: C.navy, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16, color: "rgba(255,255,255,.7)", fontSize: 13.5 }}>

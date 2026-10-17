@@ -174,18 +174,21 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
             <b className="tabular" style={{ ...font, fontSize: 17, color: pl.value ? pl.color : C.subtle }}>{pl.value}</b>{pl.label}</button>); })}
       </div>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 10, overflowX: "auto", paddingBottom: 2 }}>
-        {([["all", "Tutti"], ["rda", "RDA"], ["contract", "Rinnovi"], ["manual", "Manuali e acquisti"]] as [Origin, string][]).map(([k, l]) => (
-          <button key={k} onClick={() => setOrigin(k)} aria-pressed={origin === k} style={{ ...sans, flexShrink: 0, padding: "5px 13px", borderRadius: 999, border: `1px solid ${origin === k ? C.accent : C.border}`, background: origin === k ? C.accentLight : "#fff", color: origin === k ? C.accent : C.muted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{i18n.t(l)}</button>
-        ))}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8, marginBottom: 6, maxWidth: 760 }}>
+        <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label={i18n.t("Stato")} style={iStyle}><option value="open">{i18n.t("Aperti")}</option><option value="done">{i18n.t("Chiusi di recente")}</option><option value="archive">{i18n.t("Archivio (tutti i chiusi)")}</option><option value="all">{i18n.t("Tutti")}</option></select>
+        {isManager && <select value={who} onChange={e => setWho(e.target.value)} aria-label={i18n.t("Assegnatario")} style={iStyle}><option value="all">{i18n.t("Tutto il team")}</option><option value="none">{i18n.t("Da assegnare")}</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 8, marginBottom: 14, maxWidth: 760 }}>
-        <div style={{ position: "relative", gridColumn: "1 / -1" }}>
+
+      <div className="sticky-filters" style={{ marginBottom: 8 }}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 8, overflowX: "auto", paddingBottom: 2 }}>
+          {([["all", "Tutti"], ["rda", "RDA"], ["contract", "Rinnovi"], ["manual", "Manuali e acquisti"]] as [Origin, string][]).map(([k, l]) => (
+            <button key={k} onClick={() => setOrigin(k)} aria-pressed={origin === k} style={{ ...sans, flexShrink: 0, padding: "5px 13px", borderRadius: 999, border: `1px solid ${origin === k ? C.accent : C.border}`, background: origin === k ? C.accentLight : "#fff", color: origin === k ? C.accent : C.muted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{i18n.t(l)}</button>
+          ))}
+        </div>
+        <div style={{ position: "relative", maxWidth: 760 }}>
           <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder={i18n.t("Cerca task, RDA, fornitore…")} aria-label={i18n.t("Cerca")} style={{ ...iStyle, paddingLeft: 36 }} />
         </div>
-        <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label={i18n.t("Stato")} style={iStyle}><option value="open">{i18n.t("Aperti")}</option><option value="done">{i18n.t("Chiusi di recente")}</option><option value="archive">{i18n.t("Archivio (tutti i chiusi)")}</option><option value="all">{i18n.t("Tutti")}</option></select>
-        {isManager && <select value={who} onChange={e => setWho(e.target.value)} aria-label={i18n.t("Assegnatario")} style={iStyle}><option value="all">{i18n.t("Tutto il team")}</option><option value="none">{i18n.t("Da assegnare")}</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
       </div>
 
       {shown.length === 0 ? (
