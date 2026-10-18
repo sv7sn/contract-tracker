@@ -54,6 +54,12 @@ export function Grid({ min = 320, gap = 14, children, style, fill = false }: { m
   return <div className="auto-grid" style={{ display: "grid", gridTemplateColumns: `repeat(${fill ? "auto-fit" : "auto-fill"}, minmax(min(100%, ${min}px), 1fr))`, gap, alignItems: fill ? "stretch" : "start", ...style }}>{children}</div>;
 }
 
+/** Pulsante quadrato accanto alla ricerca nelle liste del telefono (Filtri, Nuovo): uguale in Task, Contratti e Fornitori. */
+export function HeadButton({ onClick, label, active, primary, disabled, children }: { onClick: () => void; label: string; active?: boolean; primary?: boolean; disabled?: boolean; children: ReactNode }) {
+  return <button className="mobile-only" onClick={onClick} disabled={disabled} aria-label={label} title={label} aria-expanded={primary ? undefined : !!active}
+    style={{ flexShrink: 0, background: primary ? C.accent : "#fff", border: primary ? "none" : `1px solid ${active ? C.accent : C.border}`, borderRadius: 10, width: 42, height: 42, display: "inline-flex", alignItems: "center", justifyContent: "center", color: primary ? "#fff" : active ? C.accent : C.muted, cursor: "pointer", padding: 0 }}>{children}</button>;
+}
+
 export function Card({ children, style, onClick, ...rest }: { children: ReactNode; style?: CSSProperties; onClick?: () => void } & Omit<React.HTMLAttributes<HTMLDivElement>, "style" | "onClick">) {
   const inFold = useContext(FoldContext);
   return <div onClick={onClick} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: radius.lg, padding: 18, boxShadow: shadow.sm, ...(inFold ? { background: "transparent", border: "none", boxShadow: "none", padding: "2px 2px 2px" } : {}), ...style }} {...rest}>{children}</div>;
