@@ -146,6 +146,9 @@ html, body { overscroll-behavior-y: none; -webkit-tap-highlight-color: transpare
 @media (max-width: 959px) {
   .head-filters { display: none; flex-basis: 100% !important; }
   .head-filters.open { display: flex; }
+  /* Stesse distanze nelle tre intestazioni: numeri, ricerca, filtri. */
+  .list-head { row-gap: 0 !important; }
+  .list-head > .head-filters.open { margin-top: 8px; }
   .count-pill { padding: 5px 11px !important; gap: 6px !important; font-size: 12.5px !important; }
   .count-pill b { font-size: 15px !important; }
   .chip-row { margin-bottom: 6px !important; scrollbar-width: none; }

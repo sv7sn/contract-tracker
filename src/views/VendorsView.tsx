@@ -5,18 +5,18 @@ import { ApiError, portalApi, vendorExportUrl } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmt, fmtDate } from "../lib/format.ts";
 import { countryName } from "../supplierRules.ts";
-import { Avatar, AuditTrail, Card, CardTitle, EmptyState, Field, Grid, StatCard } from "../components/ui.tsx";
-import { CheckCircle2, Clock, Copy, FileCheck2, Hourglass, Loader2, Mail, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Users, Ban, AlertTriangle, FileText, ShieldAlert, SlidersHorizontal } from "../components/icons.tsx";
+import { Avatar, AuditTrail, Card, CardTitle, EmptyState, Field, Grid, HeadButton, StatCard } from "../components/ui.tsx";
+import { CheckCircle2, Clock, Copy, FileCheck2, Hourglass, Loader2, Mail, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Users, Ban, AlertTriangle, FileText, ShieldAlert, SlidersHorizontal, CalendarClock } from "../components/icons.tsx";
 import { AiResult, VendorFlags, CloseButton, DocLink, KV, Notice, ReasonDialog, StatusBadge, ValidityChip, Portal, RiskBadge, RiskPanel } from "../components/vendorUi.tsx";
 import { CHECK_STYLE, fmtSize, STATUS_STYLE, supplierTimeline } from "../lib/vendors.ts";
 import { Summary } from "./SupplierPortal.tsx";
 import { locale, t } from "../i18n/index.ts";
 
-interface Props { initialOpenId?: number; onFocusUsed?: () => void; currentUser: User; notify: (m: string) => void; onSessionExpired: () => void }
+interface Props { initialOpenId?: number; onFocusUsed?: () => void; currentUser: User; notify: (m: string) => void; onSessionExpired: () => void; onOpenExpiries?: () => void }
 
 const copyText = async (t: string) => { try { await navigator.clipboard.writeText(t); return true; } catch { return false; } };
 
-export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, onSessionExpired }: Props) {
+export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, onSessionExpired, onOpenExpiries }: Props) {
   const [showTools, setShowTools] = useState(false);
   const [vendors, setVendors] = useState<SupplierSummary[] | null>(null);
   const [config, setConfig] = useState<PortalConfig | null>(null);
@@ -112,14 +112,15 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
           <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
           <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Cerca per nome, email, codice SAP…")} aria-label={t("Cerca fornitori")} style={{ ...iStyle, paddingLeft: 36 }} />
         </div>
-        <button className="mobile-only" onClick={() => setShowTools(o => !o)} aria-expanded={showTools} aria-label={t("Filtri")} style={{ background: "#fff", border: `1px solid ${showTools || filter !== "all" ? C.accent : C.border}`, borderRadius: 10, width: 42, height: 42, display: "inline-flex", alignItems: "center", justifyContent: "center", color: showTools || filter !== "all" ? C.accent : C.muted, cursor: "pointer", padding: 0 }}><SlidersHorizontal size={18} /></button>
-        {canInvite && <button className="mobile-only" onClick={() => setInviting(true)} aria-label={t("Invita fornitore")} style={{ background: C.accent, border: "none", borderRadius: 10, width: 42, height: 42, display: "inline-flex", alignItems: "center", justifyContent: "center", color: "#fff", cursor: "pointer", padding: 0 }}><Plus size={19} /></button>}
+        <HeadButton onClick={() => setShowTools(o => !o)} label={t("Filtri")} active={showTools || filter !== "all"}><SlidersHorizontal size={18} /></HeadButton>
+        {canInvite && <HeadButton primary onClick={() => setInviting(true)} label={t("Invita fornitore")}><Plus size={19} /></HeadButton>}
         <div className={`head-filters${showTools ? " open" : ""}`} style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
         <select value={filter} onChange={e => setFilter(e.target.value as typeof filter)} aria-label={t("Filtra per stato")} style={{ ...iStyle, width: "auto", minWidth: 190, flex: 1 }}>
           <option value="all">{t("Tutti gli stati")}</option>
           {(Object.keys(STATUS_STYLE) as SupplierStatus[]).map(k => <option key={k} value={k}>{t(STATUS_STYLE[k].label)}</option>)}
           <option value="lapsed">{t("Qualifica scaduta")}</option><option value="risk_high">{t("Rischio alto")}</option><option value="risk_medium">{t("Rischio medio")}</option><option value="flags">{t("Bloccati, disattivati o esclusi")}</option><option value="dups">{t("Possibili doppioni")}</option>
         </select>
+        {onOpenExpiries && <button className="mobile-only" onClick={onOpenExpiries} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", fontSize: 13, color: C.text }}><CalendarClock size={15} />{t("Scadenze documenti")}</button>}
         {currentUser.role === "manager" && <button className="mobile-only" onClick={makeDemo} disabled={demoBusy} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", fontSize: 13 }}>{demoBusy ? <Loader2 className="spin" size={15} /> : <Plus size={15} />}{t("Fornitore di prova")}</button>}
         </div>
       </div>

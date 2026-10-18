@@ -421,6 +421,7 @@ const en: Record<string, string> = {
   "Nome": "Name",
   "Telefono": "Phone",
   "Filtri": "Filters",
+  "Tutte le origini": "All sources",
   "Attesa BO": "Awaiting BO",
   "Da gestire": "To handle"
 };

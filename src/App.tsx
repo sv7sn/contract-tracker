@@ -405,7 +405,7 @@ export default function App() {
             )}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {inContracts && canCreateContract(currentUser) && (
-                <button onClick={openNew} aria-label={t("Nuovo contratto")} style={{ ...sans, display: "flex", alignItems: "center", gap: 6, background: C.accent, border: "none", borderRadius: 10, color: "#fff", cursor: "pointer", fontSize: 13, padding: "8px 12px", fontWeight: 650, flexShrink: 0, boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={17} /><span className="desktop-label">{t("Nuovo contratto")}</span></button>
+                <button className="desktop-only-flex" onClick={openNew} aria-label={t("Nuovo contratto")} style={{ ...sans, alignItems: "center", gap: 6, background: C.accent, border: "none", borderRadius: 10, color: "#fff", cursor: "pointer", fontSize: 13, padding: "8px 12px", fontWeight: 650, flexShrink: 0, boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={17} /><span className="desktop-label">{t("Nuovo contratto")}</span></button>
               )}
               <button className="mobile-only" onClick={() => setShowAccount(true)} aria-label={t("Account")} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 0 }}>
                 <Avatar name={currentUser.name} size={32} />
@@ -429,8 +429,8 @@ export default function App() {
           {(view === "config" || view === "users") && currentUser.role === "manager" && mode === "api" && subTabs([["config", t("Configurazione")], ["users", t("Utenti")]])}
           {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} onPurge={handlePurge} />}
           {view === "tasks" && mode === "api" && (currentUser.role === "manager" || currentUser.role === "buyer") && <TasksView onUpdateStepDate={handleUpdateStepDate} initialOpenId={focus?.taskId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} contracts={contracts} plans={plans} onCompleteStep={handleCompleteStep} onSendBO={handleSendBO} onOpenContract={openDetail} notify={showToast} onSessionExpired={sessionExpired} />}
-          {(view === "vendors" || view === "expiries") && mode === "api" && subTabs([["vendors", t("Fornitori")], ["expiries", t("Scadenze documenti")]])}
-          {view === "vendors" && mode === "api" && <VendorsView initialOpenId={focus?.vendorId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
+          {(view === "vendors" || view === "expiries") && mode === "api" && <div className={view === "vendors" ? "desktop-only" : undefined}>{subTabs([["vendors", t("Fornitori")], ["expiries", t("Scadenze documenti")]])}</div>}
+          {view === "vendors" && mode === "api" && <VendorsView onOpenExpiries={() => setView("expiries")} initialOpenId={focus?.vendorId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "expiries" && mode === "api" && <ExpiryView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "budget" && mode === "api" && ["manager", "buyer", "finance", "viewer"].includes(currentUser.role) && <BudgetView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "spend" && mode === "api" && ["manager", "buyer", "finance", "viewer"].includes(currentUser.role) && <SpendView onSessionExpired={sessionExpired} canImport={currentUser.role === "manager" || currentUser.role === "buyer"} />}
@@ -440,7 +440,6 @@ export default function App() {
         </main>
       </div>
 
-      {view === "list" && canCreateContract(currentUser) && <button className="fab" onClick={openNew} aria-label={t("Nuovo contratto")}><Plus size={26} /></button>}
 
       {tabs.length > 1 && (
         <nav className="bottom-nav" aria-label={t("Navigazione")}>

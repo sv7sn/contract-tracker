@@ -7,7 +7,7 @@ import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts
 import { fmt, fmtDate, isoDate, NOW } from "../lib/format.ts";
 import { stepTemplate } from "../lib/plan.ts";
 import { taskSteps } from "../taskSteps.ts";
-import { Avatar, Card, CardTitle, EmptyState, Field, Fold } from "../components/ui.tsx";
+import { Avatar, Card, CardTitle, EmptyState, Field, Fold, HeadButton } from "../components/ui.tsx";
 import { AlertTriangle, Check, CheckCircle2, FileText, Loader2, Paperclip, Plus, RotateCcw, Scale, Search, Send, Trash2, Upload, SlidersHorizontal } from "../components/icons.tsx";
 import { CloseButton, KV, Notice, Portal, SupplierPicker } from "../components/vendorUi.tsx";
 import { RfqCard } from "./RfqCard.tsx";
@@ -152,7 +152,7 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
   ];
   const showWho = isManager && who === "all";
 
-  const filtered = status !== "open" || (isManager && who !== "all");
+  const filtered = status !== "open" || origin !== "all" || (isManager && who !== "all");
   return (
     <div>
       {stale !== null && stale >= 2 && <Notice kind="warn">{i18n.t("L'elenco delle RDA non è aggiornato da {n} giorni.", { n: stale })} {i18n.t("Carica i due file che SAP invia ogni mattina (RDA aperte e ordini degli ultimi 7 giorni): i task si creano e si chiudono da soli.")}</Notice>}
@@ -172,21 +172,23 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
           <button key={pl.key} onClick={() => setQuick(on ? null : pl.key)} aria-pressed={on} className="count-pill" style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0, padding: "7px 14px", borderRadius: 12, border: `1px solid ${on ? pl.color : C.border}`, background: on ? `${pl.color}14` : "#fff", cursor: "pointer", fontSize: 13, color: C.text }}>
             <b className="tabular" style={{ ...font, fontSize: 17, color: pl.value ? pl.color : C.subtle }}>{pl.value}</b>{pl.label}</button>); })}
         </div>
-        <div className="chip-row" style={{ display: "flex", gap: 8, marginBottom: 8, overflowX: "auto", paddingBottom: 2 }}>
+        <div className="desktop-only"><div className="chip-row" style={{ display: "flex", gap: 8, marginBottom: 8, overflowX: "auto", paddingBottom: 2 }}>
           {([["all", "Tutti"], ["rda", "RDA"], ["contract", "Rinnovi"], ["manual", "Manuali e acquisti"]] as [Origin, string][]).map(([k, l]) => (
             <button key={k} onClick={() => setOrigin(k)} aria-pressed={origin === k} style={{ ...sans, flexShrink: 0, padding: "5px 13px", borderRadius: 999, border: `1px solid ${origin === k ? C.accent : C.border}`, background: origin === k ? C.accentLight : "#fff", color: origin === k ? C.accent : C.muted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{i18n.t(l)}</button>
           ))}
-        </div>
+        </div></div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ position: "relative", flex: "1 1 220px", maxWidth: 420 }}>
             <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder={i18n.t("Cerca task, RDA, fornitore…")} aria-label={i18n.t("Cerca")} style={{ ...iStyle, paddingLeft: 36 }} />
           </div>
-          <button className="mobile-only" onClick={() => setShowFilters(f => !f)} aria-expanded={showFilters} aria-label={i18n.t("Filtri")} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 42, height: 42, padding: 0, borderColor: filtered ? C.accent : C.border, color: filtered ? C.accent : C.muted }}><SlidersHorizontal size={18} /></button>
-          <button className="mobile-only" onClick={() => input.current?.click()} disabled={importing} aria-label={i18n.t("Importa file SAP")} title={i18n.t("Importa file SAP")} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", justifyContent: "center", width: 42, height: 42, padding: 0, color: C.muted }}>{importing ? <Loader2 className="spin" size={17} /> : <Upload size={17} />}</button>
-          <div className={`head-filters${showFilters ? " open" : ""}`} style={{ gap: 8, flex: "1 1 320px" }}>
-  <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label={i18n.t("Stato")} style={{ ...iStyle, flex: 1 }}><option value="open">{i18n.t("Aperti")}</option><option value="done">{i18n.t("Chiusi di recente")}</option><option value="archive">{i18n.t("Archivio (tutti i chiusi)")}</option><option value="all">{i18n.t("Tutti")}</option></select>
-  {isManager && <select value={who} onChange={e => setWho(e.target.value)} aria-label={i18n.t("Assegnatario")} style={{ ...iStyle, flex: 1 }}><option value="all">{i18n.t("Tutto il team")}</option><option value="none">{i18n.t("Da assegnare")}</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
+          <HeadButton onClick={() => setShowFilters(f => !f)} label={i18n.t("Filtri")} active={showFilters || filtered}><SlidersHorizontal size={18} /></HeadButton>
+          <HeadButton primary onClick={() => setCreating(true)} label={i18n.t("Nuovo task")}><Plus size={19} /></HeadButton>
+          <div className={`head-filters${showFilters ? " open" : ""}`} style={{ gap: 8, flex: "1 1 320px", flexWrap: "wrap" }}>
+  <select className="mobile-only" value={origin} onChange={e => setOrigin(e.target.value as Origin)} aria-label={i18n.t("Origine")} style={{ ...iStyle, flex: "1 1 100%" }}>{([["all", "Tutti"], ["rda", "RDA"], ["contract", "Rinnovi"], ["manual", "Manuali e acquisti"]] as [Origin, string][]).map(([k, l]) => <option key={k} value={k}>{k === "all" ? i18n.t("Tutte le origini") : i18n.t(l)}</option>)}</select>
+  <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label={i18n.t("Stato")} style={{ ...iStyle, flex: "1 1 140px" }}><option value="open">{i18n.t("Aperti")}</option><option value="done">{i18n.t("Chiusi di recente")}</option><option value="archive">{i18n.t("Archivio (tutti i chiusi)")}</option><option value="all">{i18n.t("Tutti")}</option></select>
+  {isManager && <select value={who} onChange={e => setWho(e.target.value)} aria-label={i18n.t("Assegnatario")} style={{ ...iStyle, flex: "1 1 140px" }}><option value="all">{i18n.t("Tutto il team")}</option><option value="none">{i18n.t("Da assegnare")}</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
+  <button className="mobile-only" onClick={() => input.current?.click()} disabled={importing} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", fontSize: 13, color: C.text }}>{importing ? <Loader2 className="spin" size={15} /> : <Upload size={15} />}{i18n.t("Importa file SAP")}</button>
           </div>
         </div>
       </div>
@@ -227,7 +229,6 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
           ))}
         </div>
       </>)}
-      <button className="fab" onClick={() => setCreating(true)} aria-label={i18n.t("Nuovo task")}><Plus size={26} /></button>
 
       {creating && <Portal><NewTaskDialog isManager={isManager} buyers={buyers} currentUser={currentUser} fail={fail} onClose={() => setCreating(false)} onCreated={async id => { setCreating(false); notify(i18n.t("Task creato")); await reload(); if (id) setOpenId(id); }} /></Portal>}
       {openId !== null && <Portal><TaskSheet id={openId} currentUser={currentUser} people={people} threshold={threshold} isManager={isManager} buyers={buyers} fail={fail} notify={notify} onClose={() => setOpenId(null)} onChanged={reload}

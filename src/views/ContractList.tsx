@@ -4,7 +4,7 @@ import { ContractCharts, ContractSummary, type ContractFilter } from "./Dashboar
 import { C, iStyle, radius, sans, shadow, URGENCY_COLORS } from "../theme.ts";
 import { closedLabel, daysToDeadline, expiredWithoutOutcome, fmt, fmtDate, urgency } from "../lib/format.ts";
 import { canCreateContract, canViewTeam } from "../permissions.ts";
-import { Avatar, Card, DaysChip, EmptyState, Grid, RenewalBadge } from "../components/ui.tsx";
+import { Avatar, Card, DaysChip, EmptyState, Grid, HeadButton, RenewalBadge } from "../components/ui.tsx";
 import { Archive, BookOpen, FileText, LayoutGrid, Paperclip, Plus, Rows3, Search, SlidersHorizontal, X } from "../components/icons.tsx";
 import { t } from "../i18n/index.ts";
 
@@ -33,22 +33,23 @@ export function ContractList({ contracts, plans, currentUser, search, onSearch, 
   const iconBtn = (active: boolean): React.CSSProperties => ({ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 30, border: "none", borderRadius: 8, background: active ? "#fff" : "transparent", color: active ? C.text : C.subtle, cursor: "pointer", boxShadow: active ? shadow.sm : "none" });
 
   return (
-    <div style={{ display: "grid", gap: 14, gridTemplateColumns: "minmax(0,1fr)" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr)" }}>
       {/* Parte alta della pagina: resta ferma, sotto scorrono solo i contratti. */}
       <div className="sticky-filters list-head" style={{ display: "grid", gap: 10, gridTemplateColumns: "minmax(0,1fr)" }}>
         {!showArchive && <ContractSummary contracts={contracts} plans={plans} filter={filter} onFilter={setFilter} />}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
           <div role="tablist" className="desktop-only-flex" style={{ gap: 2, background: "#e9ecf2", borderRadius: 12, padding: 3 }}>
             <button role="tab" aria-selected={!showArchive} onClick={() => setShowArchive(false)} style={seg(!showArchive)}><FileText size={15} />{t("Attivi")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => !c.ceased).length}</span></button>
             <button role="tab" aria-selected={showArchive} onClick={() => setShowArchive(true)} style={seg(showArchive)}><Archive size={15} />{t("Storico")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => c.ceased).length}</span></button>
           </div>
           <div style={{ position: "relative", flex: "1 1 160px", minWidth: 0 }} className="mobile-only">
             <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
-            <input value={search} onChange={e => onSearch(e.target.value)} placeholder={t("Cerca fornitore, oggetto, owner…")} aria-label={t("Cerca")} style={{ ...iStyle, padding: "10px 12px 10px 36px" }} />
+            <input value={search} onChange={e => onSearch(e.target.value)} placeholder={t("Cerca fornitore, oggetto, owner…")} aria-label={t("Cerca")} style={{ ...iStyle, paddingLeft: 36 }} />
           </div>
-          <button className="mobile-only" onClick={() => setShowTools(o => !o)} aria-expanded={showTools} aria-label={t("Filtri")} style={{ background: "#fff", border: `1px solid ${showTools ? C.accent : C.border}`, borderRadius: 10, width: 42, height: 42, display: "inline-flex", alignItems: "center", justifyContent: "center", color: showTools ? C.accent : C.muted, cursor: "pointer", padding: 0 }}><SlidersHorizontal size={18} /></button>
+          <HeadButton onClick={() => setShowTools(o => !o)} label={t("Filtri")} active={showTools || showArchive || sort !== "expiry"}><SlidersHorizontal size={18} /></HeadButton>
+          {canCreateContract(currentUser) && <HeadButton primary onClick={onNew} label={t("Nuovo contratto")}><Plus size={19} /></HeadButton>}
           <div style={{ flex: 1 }} className="desktop-only" />
-          <div className={`head-filters${showTools ? " open" : ""}`} style={{ gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <div className={`head-filters${showTools ? " open" : ""}`} style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <div role="tablist" className="mobile-only" style={{ display: "flex", width: "100%", gap: 2, background: "#e9ecf2", borderRadius: 12, padding: 3 }}>
               <button role="tab" aria-selected={!showArchive} onClick={() => setShowArchive(false)} style={seg(!showArchive)}><FileText size={15} />{t("Attivi")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => !c.ceased).length}</span></button>
               <button role="tab" aria-selected={showArchive} onClick={() => setShowArchive(true)} style={seg(showArchive)}><Archive size={15} />{t("Storico")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => c.ceased).length}</span></button>
