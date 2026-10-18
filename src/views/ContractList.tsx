@@ -102,8 +102,30 @@ export function ContractList({ contracts, plans, currentUser, search, onSearch, 
           </div>
         )}
 
-        {/* Schede: telefono, oppure scelta esplicita su desktop */}
-        <div className={layout === "table" ? "mobile-only" : undefined}>
+        {/* Telefono: righe compatte di due righe, come i task */}
+        <div className="mobile-only" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }}>
+          {filtered.map(c => {
+            const days = daysToDeadline(c); const u = urgency(c); const late = !c.ceased && days < 0;
+            const status = c.ceased ? closedLabel(c) : expiredWithoutOutcome(c) ? t("Scaduto senza esito") : c.renewal && c.renewal !== "Non definito" ? t(c.renewal) : null;
+            const rel = c.ceased || expiredWithoutOutcome(c) ? "" : days < 0 ? t("scaduto da {n} gg", { n: -days }) : days === 0 ? t("scade oggi") : t("tra {n} gg", { n: days });
+            return (
+              <Card key={c.id} className="task-row" onClick={() => onSelect(c)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") onSelect(c); }}
+                style={{ padding: "0 13px", cursor: "pointer", borderRadius: radius.md, borderLeft: `4px solid ${URGENCY_COLORS[u]}`, display: "flex", alignItems: "center", gap: 10, boxSizing: "border-box", opacity: c.ceased ? 0.7 : 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="one-line" style={{ ...sans, fontSize: 14, color: C.text }}><b style={{ fontWeight: 650 }}>{c.supplier}</b> <span style={{ color: C.muted }}>{c.object}</span></div>
+                  <div className="one-line" style={{ ...sans, display: "flex", gap: 6, alignItems: "center", marginTop: 5, fontSize: 12.5, color: C.muted }}>
+                    {status && <span style={{ ...sans, background: late || expiredWithoutOutcome(c) ? C.redBg : C.grayBg, color: late || expiredWithoutOutcome(c) ? C.red : C.gray, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}>{status}</span>}
+                    <span className="tabular one-line" style={{ color: u === "green" || c.ceased ? C.muted : URGENCY_COLORS[u], fontWeight: u === "red" && !c.ceased ? 650 : 400 }}>{[fmtDate(c.end), rel, fmt(c.value, c.currency)].filter(Boolean).join(" · ")}</span>
+                  </div>
+                </div>
+                {showOwner && <span title={c.owner}><Avatar name={c.owner || "?"} size={24} /></span>}
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* Schede: solo su desktop, se scelte */}
+        {layout === "cards" && <div className="desktop-only">
           <Grid min={340} gap={12}>
             {filtered.map(c => {
               const days = daysToDeadline(c); const u = urgency(c);
@@ -126,7 +148,7 @@ export function ContractList({ contracts, plans, currentUser, search, onSearch, 
               );
             })}
           </Grid>
-        </div>
+        </div>}
       </>)}
       {!showArchive && <ContractCharts contracts={contracts} plans={plans} currentUser={currentUser} onOpenKpi={onOpenKpi} />}
     </div>
