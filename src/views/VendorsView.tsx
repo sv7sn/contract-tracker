@@ -149,16 +149,18 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
             </tbody>
           </table>
         </div>
-        <div className="mobile-only">
-          <Grid min={320} gap={12}>
-            {shown.map(v => (
-              <Card key={v.id} className="lift" onClick={() => setOpenId(v.id)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setOpenId(v.id); }} style={{ padding: 16, cursor: "pointer", borderRadius: radius.md }}>
-                <div style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text }}>{v.legalName || v.name}</div>
-                <div style={{ ...sans, fontSize: 12.5, color: C.muted, marginBottom: 10, overflowWrap: "anywhere" }}>{v.email}</div>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}><StatusBadge status={v.status} update={v.isUpdate} />{v.risk && v.risk.level !== "na" && v.risk.level !== "low" && <RiskBadge risk={v.risk} />}<VendorFlags lifecycle={v.lifecycle} qualification={v.qualification} duplicate={v.duplicate} /><span style={{ ...sans, fontSize: 12, color: C.subtle, marginLeft: "auto" }}>{fmtDate(v.updatedAt)}</span></div>
-              </Card>
-            ))}
-          </Grid>
+        {/* Telefono: righe compatte di due righe, come i task */}
+        <div className="mobile-only" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }}>
+          {shown.map(v => (
+            <Card key={v.id} className="task-row" onClick={() => setOpenId(v.id)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") setOpenId(v.id); }}
+              style={{ padding: "0 13px", cursor: "pointer", borderRadius: radius.md, borderLeft: v.status === mine ? `4px solid ${C.accent}` : undefined, display: "flex", alignItems: "center", gap: 10, boxSizing: "border-box" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="one-line" style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text }}>{v.legalName || v.name}</div>
+                <div className="one-line" style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 5 }}><StatusBadge status={v.status} update={v.isUpdate} />{v.risk && v.risk.level !== "na" && v.risk.level !== "low" && <RiskBadge risk={v.risk} />}<VendorFlags lifecycle={v.lifecycle} qualification={v.qualification} duplicate={v.duplicate} /></div>
+              </div>
+              {v.referenceBuyerName && <span title={v.referenceBuyerName}><Avatar name={v.referenceBuyerName} size={24} /></span>}
+            </Card>
+          ))}
         </div>
       </>)}
 
