@@ -7,8 +7,10 @@ import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts
 import { fmt, fmtDate, isoDate, NOW } from "../lib/format.ts";
 import { stepTemplate } from "../lib/plan.ts";
 import { taskSteps } from "../taskSteps.ts";
-import { Avatar, Card, CardTitle, EmptyState, Field, Fold, HeadButton } from "../components/ui.tsx";
-import { AlertTriangle, Check, CheckCircle2, FileText, Loader2, Paperclip, Plus, RotateCcw, Scale, Search, Send, Trash2, Upload, SlidersHorizontal } from "../components/icons.tsx";
+import { Avatar, Card, CardTitle, EmptyState, Field, Fold } from "../components/ui.tsx";
+import { ListHeader } from "../components/ListHeader.tsx";
+import { filterButton, filterSelect } from "../components/listHeaderStyles.ts";
+import { AlertTriangle, Check, CheckCircle2, FileText, Loader2, Paperclip, Plus, RotateCcw, Scale, Send, Trash2, Upload } from "../components/icons.tsx";
 import { CloseButton, KV, Notice, Portal, SupplierPicker } from "../components/vendorUi.tsx";
 import { RfqCard } from "./RfqCard.tsx";
 import * as i18n from "../i18n/index.ts";
@@ -48,7 +50,6 @@ const overdue = (it: Item) => it.status !== "done" && !!it.due && daysFrom(it.du
 
 /** Task del team: RDA da SAP, task creati a mano e attività dei piani di rinnovo dei contratti. */
 export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, plans, onCompleteStep, onSendBO, onOpenContract, onUpdateStepDate, notify, onSessionExpired }: Props) {
-  const [showFilters, setShowFilters] = useState(false);
   const [data, setData] = useState<TaskList | null>(null);
   const [buyers, setBuyers] = useState<{ id: number; name: string; active: boolean }[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -156,42 +157,16 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
   return (
     <div>
       {stale !== null && stale >= 2 && <Notice kind="warn">{i18n.t("L'elenco delle RDA non è aggiornato da {n} giorni.", { n: stale })} {i18n.t("Carica i due file che SAP invia ogni mattina (RDA aperte e ordini degli ultimi 7 giorni): i task si creano e si chiudono da soli.")}</Notice>}
-      {/* Parte alta della pagina: resta ferma, sotto scorrono solo i task. Sul telefono è compatta (filtri in un pulsante, importazione come icona). */}
-      <div className="sticky-filters list-head">
-        <div className="desktop-only-flex" style={{ justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10, flexWrap: "wrap" }}>
-  <div style={{ ...sans, fontSize: 12.5, color: C.muted }}>{isManager ? i18n.t("Tutto il team") : i18n.t("I tuoi task")} · {i18n.t("RDA da SAP, contratti e attività manuali")}</div>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span style={{ ...sans, fontSize: 12, color: C.muted }}>{i18n.t("SAP · RDA aggiornate {pr} · ordini {po}", { pr: fmtAt(data.sapUpdatedAt.pr), po: fmtAt(data.sapUpdatedAt.po) })}</span>
-            <button onClick={() => input.current?.click()} disabled={importing} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 6, padding: "6px 12px", color: C.text, fontSize: 12.5 }}>{importing ? <Loader2 className="spin" size={14} /> : <Upload size={14} />}{i18n.t("Importa file SAP")}</button>
-            <button className="desktop-only-flex" onClick={() => setCreating(true)} style={{ ...btnPrimary, alignItems: "center", gap: 7, padding: "9px 16px", fontSize: 13 }}><Plus size={16} />{i18n.t("Nuovo task")}</button>
-          </div>
-        </div>
-        <input ref={input} type="file" multiple hidden accept=".xls,.xml,.xlsx" onChange={e => doImport(e.target.files)} />
-        <div className="chip-row" style={{ display: "flex", gap: 8, marginBottom: 8, overflowX: "auto", paddingBottom: 2 }}>
-          {pills.map(pl => { const on = quick === pl.key; return (
-          <button key={pl.key} onClick={() => setQuick(on ? null : pl.key)} aria-pressed={on} className="count-pill" style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0, padding: "7px 14px", borderRadius: 12, border: `1px solid ${on ? pl.color : C.border}`, background: on ? `${pl.color}14` : "#fff", cursor: "pointer", fontSize: 13, color: C.text }}>
-            <b className="tabular" style={{ ...font, fontSize: 17, color: pl.value ? pl.color : C.subtle }}>{pl.value}</b>{pl.label}</button>); })}
-        </div>
-        <div className="desktop-only"><div className="chip-row" style={{ display: "flex", gap: 8, marginBottom: 8, overflowX: "auto", paddingBottom: 2 }}>
-          {([["all", "Tutti"], ["rda", "RDA"], ["contract", "Rinnovi"], ["manual", "Manuali e acquisti"]] as [Origin, string][]).map(([k, l]) => (
-            <button key={k} onClick={() => setOrigin(k)} aria-pressed={origin === k} style={{ ...sans, flexShrink: 0, padding: "5px 13px", borderRadius: 999, border: `1px solid ${origin === k ? C.accent : C.border}`, background: origin === k ? C.accentLight : "#fff", color: origin === k ? C.accent : C.muted, fontSize: 12.5, fontWeight: 600, cursor: "pointer" }}>{i18n.t(l)}</button>
-          ))}
-        </div></div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ position: "relative", flex: "1 1 220px", maxWidth: 420 }}>
-            <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder={i18n.t("Cerca task, RDA, fornitore…")} aria-label={i18n.t("Cerca")} style={{ ...iStyle, paddingLeft: 36 }} />
-          </div>
-          <HeadButton onClick={() => setShowFilters(f => !f)} label={i18n.t("Filtri")} active={showFilters || filtered}><SlidersHorizontal size={18} /></HeadButton>
-          <HeadButton primary onClick={() => setCreating(true)} label={i18n.t("Nuovo task")}><Plus size={19} /></HeadButton>
-          <div className={`head-filters${showFilters ? " open" : ""}`} style={{ gap: 8, flex: "1 1 320px", flexWrap: "wrap" }}>
-  <select className="mobile-only" value={origin} onChange={e => setOrigin(e.target.value as Origin)} aria-label={i18n.t("Origine")} style={{ ...iStyle, flex: "1 1 100%" }}>{([["all", "Tutti"], ["rda", "RDA"], ["contract", "Rinnovi"], ["manual", "Manuali e acquisti"]] as [Origin, string][]).map(([k, l]) => <option key={k} value={k}>{k === "all" ? i18n.t("Tutte le origini") : i18n.t(l)}</option>)}</select>
-  <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label={i18n.t("Stato")} style={{ ...iStyle, flex: "1 1 140px" }}><option value="open">{i18n.t("Aperti")}</option><option value="done">{i18n.t("Chiusi di recente")}</option><option value="archive">{i18n.t("Archivio (tutti i chiusi)")}</option><option value="all">{i18n.t("Tutti")}</option></select>
-  {isManager && <select value={who} onChange={e => setWho(e.target.value)} aria-label={i18n.t("Assegnatario")} style={{ ...iStyle, flex: "1 1 140px" }}><option value="all">{i18n.t("Tutto il team")}</option><option value="none">{i18n.t("Da assegnare")}</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
-  <button className="mobile-only" onClick={() => input.current?.click()} disabled={importing} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", fontSize: 13, color: C.text }}>{importing ? <Loader2 className="spin" size={15} /> : <Upload size={15} />}{i18n.t("Importa file SAP")}</button>
-          </div>
-        </div>
-      </div>
+      <input ref={input} type="file" multiple hidden accept=".xls,.xml,.xlsx" onChange={e => doImport(e.target.files)} />
+      <ListHeader search={search} onSearch={setSearch} placeholder={i18n.t("Cerca task, RDA, fornitore…")} filtered={filtered}
+        counts={pills.map(pl => ({ key: pl.key, label: pl.label, value: pl.value, color: pl.color, active: quick === pl.key, onClick: () => setQuick(quick === pl.key ? null : pl.key) }))}
+        add={{ label: i18n.t("Nuovo task"), onClick: () => setCreating(true) }}
+        filters={<>
+          <select value={origin} onChange={e => setOrigin(e.target.value as Origin)} aria-label={i18n.t("Origine")} style={filterSelect}>{([["all", "Tutte le origini"], ["rda", "RDA"], ["contract", "Rinnovi"], ["manual", "Manuali e acquisti"]] as [Origin, string][]).map(([k, l]) => <option key={k} value={k}>{i18n.t(l)}</option>)}</select>
+          <select value={status} onChange={e => setStatus(e.target.value as typeof status)} aria-label={i18n.t("Stato")} style={filterSelect}><option value="open">{i18n.t("Aperti")}</option><option value="done">{i18n.t("Chiusi di recente")}</option><option value="archive">{i18n.t("Archivio (tutti i chiusi)")}</option><option value="all">{i18n.t("Tutti")}</option></select>
+          {isManager && <select value={who} onChange={e => setWho(e.target.value)} aria-label={i18n.t("Assegnatario")} style={filterSelect}><option value="all">{i18n.t("Tutto il team")}</option><option value="none">{i18n.t("Da assegnare")}</option>{buyers.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select>}
+          <button onClick={() => input.current?.click()} disabled={importing} title={i18n.t("SAP · RDA aggiornate {pr} · ordini {po}", { pr: fmtAt(data.sapUpdatedAt.pr), po: fmtAt(data.sapUpdatedAt.po) })} style={filterButton}>{importing ? <Loader2 className="spin" size={15} /> : <Upload size={15} />}{i18n.t("Importa file SAP")}</button>
+        </>} />
 
       {shown.length === 0 ? (
         <EmptyState icon={<CheckCircle2 size={26} />} title={items.length ? i18n.t("Nessun task con questi filtri") : i18n.t("Nessun task")} text={items.length ? undefined : i18n.t("I task arrivano dalle RDA di SAP, dai piani di rinnovo dei contratti e da quelli che crei tu.")} />
@@ -206,7 +181,7 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
                     <div style={{ fontWeight: 650, color: C.text }} className="one-line"><TitleOf i={i} /></div>
                     <div style={{ ...sans, display: "flex", gap: 8, alignItems: "center", marginTop: 3, fontSize: 12.5, color: C.muted, minWidth: 0 }} className="one-line">{chip(i.task ? originLabel(i.task) : i18n.t(ORIGIN_LABEL[i.origin]), ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}{metaOf(i, people)}{sourcingChip(i)}</div>
                   </td>
-                  <td className="tabular" style={{ color: overdue(i) ? C.red : C.text }}><div style={{ fontWeight: overdue(i) ? 650 : 500 }}>{i.due ? fmtDate(i.due) : "—"}</div><div style={{ fontSize: 12, color: overdue(i) ? C.red : C.muted }}>{relDue(i) || (extraStatus(i) ? "" : "")}</div></td>
+                  <td className="tabular" style={{ color: C.text }}><div style={{ fontWeight: 500 }}>{i.due ? fmtDate(i.due) : "—"}</div><div style={{ fontSize: 12, color: overdue(i) ? C.red : C.muted }}>{relDue(i) || (extraStatus(i) ? "" : "")}</div></td>
                   {showWho && <td><div style={{ display: "flex", alignItems: "center", gap: 8 }}>{i.assignee !== i18n.t("Da assegnare") && <Avatar name={i.assignee} size={24} />}<span className="one-line" style={{ color: i.assignee === i18n.t("Da assegnare") ? C.purple : C.text, fontWeight: i.assignee === i18n.t("Da assegnare") ? 650 : 400, fontSize: 13 }}>{i.assignee}</span></div></td>}
                   <td onClick={e => e.stopPropagation()} style={{ textAlign: "right" }}>{contractAction(i, onCompleteStep, onSendBO, onOpenContract) ?? extraStatus(i)}</td>
                 </tr>
@@ -221,7 +196,7 @@ export function TasksView({ initialOpenId, onFocusUsed, currentUser, contracts, 
                 <div className="one-line" style={{ ...sans, fontSize: 14, fontWeight: 650, color: C.text }}><TitleOf i={i} /></div>
                 <div className="one-line" style={{ ...sans, display: "flex", gap: 6, alignItems: "center", marginTop: 5, fontSize: 12.5, color: C.muted }}>
                   {chip(i.task ? originLabel(i.task) : i18n.t(ORIGIN_LABEL[i.origin]), ORIGIN_COLOR[i.origin][0], ORIGIN_COLOR[i.origin][1])}
-                  <span className="tabular" style={{ color: overdue(i) ? C.red : C.muted, fontWeight: overdue(i) ? 650 : 400, whiteSpace: "nowrap" }}>{i.due ? `${fmtDate(i.due)} · ${relDue(i)}`.replace(/ · $/, "") : i18n.t("Senza scadenza")}</span>
+                  <span className="tabular" style={{ whiteSpace: "nowrap" }}>{i.due ? <>{fmtDate(i.due)}{relDue(i) && <> · <span style={{ color: overdue(i) ? C.red : undefined }}>{relDue(i)}</span></>}</> : i18n.t("Senza scadenza")}</span>
                 </div>
               </div>
               {showWho && (i.assignee !== i18n.t("Da assegnare") ? <span title={i.assignee}><Avatar name={i.assignee} size={24} /></span> : chip(i18n.t("Da assegnare"), C.purple, C.purpleBg))}

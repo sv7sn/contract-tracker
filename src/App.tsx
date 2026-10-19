@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { AppState, AuditEntry, CommitPayload, Contract, ContractData, NewUserInput, PlanStep, Role, User, View } from "./types.ts";
 import { api, ApiError, portalApi } from "./api.ts";
-import { C, font, iStyle, ROLE_LABELS, sans, shadow } from "./theme.ts";
+import { C, font, ROLE_LABELS, sans, shadow } from "./theme.ts";
 import { fmtDate, keyDate, tsNow } from "./lib/format.ts";
 import { clearLocal, DEMO_PASSWORD, DEMO_USERS, demoState, loadLocal, saveLocal } from "./lib/demo.ts";
 import { makePlan, RENEWAL_BY_DECISION, reschedulePlan, stepTemplate } from "./lib/plan.ts";
-import { canCreateContract, canManageUsers } from "./permissions.ts";
+import { canManageUsers } from "./permissions.ts";
 import { Avatar, BrandMark } from "./components/ui.tsx";
-import { AlertTriangle, CheckCircle2, ChevronLeft, Loader2, Plus, Search, Settings } from "./components/icons.tsx";
+import { AlertTriangle, CheckCircle2, ChevronLeft, Loader2, Settings } from "./components/icons.tsx";
 import { InviteLanding } from "./components/InviteLanding.tsx";
 import { LoginScreen } from "./components/LoginScreen.tsx";
 import { BOFormModal, ContractForm } from "./components/Modals.tsx";
@@ -350,7 +350,6 @@ export default function App() {
   // Indicatori e Amministrazione (solo Manager) si aprono dal menu del profilo.
   const tabs = navTabsFor(currentUser, mode === "api");
   const activeTab = tabOfView(view, currentUser.role);
-  const inContracts = view === "list" || view === "detail";
   const titles: Record<View, string> = { clauses: t("Libreria clausole"), reviews: t("Revisioni"), dashboard: t("Contratti"), list: t("Contratti"), planning: t("Contratti"), team: t("Contratti"), notifiche: t("Contratti"), bo: t("Le mie richieste"), users: t("Utenti e permessi"), vendors: t("Fornitori"), expiries: t("Scadenze documenti"), tasks: t("Task"), kpi: t("Indicatori di processo"), budget: t("Master Plan"), spend: t("Spesa"), requests: t("Le mie RDA e i miei contratti"), hub: t("Task"), config: t("Configurazione"), supplier: t("Area fornitore"), detail: selected?.supplier ?? "" };
   const eyebrow = view === "config" || view === "users" ? t("Amministrazione") : view === "kpi" ? t("Indicatori") : view === "detail" ? t("Contratti") : view === "clauses" && activeTab === "list" ? t("Contratti") : "";
   const sideBtn = (key: string, label: string, icon: React.ReactNode, on: boolean, click: () => void) => (
@@ -397,16 +396,7 @@ export default function App() {
               {eyebrow !== titles[view] && <div className="topbar-eyebrow">{eyebrow}</div>}
               <div className="topbar-title">{titles[view]}</div>
             </div>
-            {inContracts && hasContracts(currentUser) && currentUser.role !== "bo" && (
-              <div className="topbar-search" style={{ position: "relative", width: 300 }}>
-                <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
-                <input value={listSearch} onChange={e => { setListSearch(e.target.value); if (view !== "list") setView("list"); }} placeholder={t("Cerca fornitore, oggetto, owner…")} aria-label={t("Cerca contratti")} style={{ ...iStyle, padding: "9px 12px 9px 36px", borderRadius: 10, background: "#fff" }} />
-              </div>
-            )}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {inContracts && canCreateContract(currentUser) && (
-                <button className="desktop-only-flex" onClick={openNew} aria-label={t("Nuovo contratto")} style={{ ...sans, alignItems: "center", gap: 6, background: C.accent, border: "none", borderRadius: 10, color: "#fff", cursor: "pointer", fontSize: 13, padding: "8px 12px", fontWeight: 650, flexShrink: 0, boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={17} /><span className="desktop-label">{t("Nuovo contratto")}</span></button>
-              )}
               <button className="mobile-only" onClick={() => setShowAccount(true)} aria-label={t("Account")} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, padding: 0 }}>
                 <Avatar name={currentUser.name} size={32} />
               </button>
@@ -429,7 +419,7 @@ export default function App() {
           {(view === "config" || view === "users") && currentUser.role === "manager" && mode === "api" && subTabs([["config", t("Configurazione")], ["users", t("Utenti")]])}
           {view === "users" && canManageUsers(currentUser) && <UsersView users={users} currentUser={currentUser} onCreate={handleCreateUser} onUpdate={handleUpdateUser} onDelete={handleDeleteUser} onPurge={handlePurge} />}
           {view === "tasks" && mode === "api" && (currentUser.role === "manager" || currentUser.role === "buyer") && <TasksView onUpdateStepDate={handleUpdateStepDate} initialOpenId={focus?.taskId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} contracts={contracts} plans={plans} onCompleteStep={handleCompleteStep} onSendBO={handleSendBO} onOpenContract={openDetail} notify={showToast} onSessionExpired={sessionExpired} />}
-          {(view === "vendors" || view === "expiries") && mode === "api" && <div className={view === "vendors" ? "desktop-only" : undefined}>{subTabs([["vendors", t("Fornitori")], ["expiries", t("Scadenze documenti")]])}</div>}
+          {view === "expiries" && mode === "api" && subTabs([["vendors", t("Fornitori")], ["expiries", t("Scadenze documenti")]])}
           {view === "vendors" && mode === "api" && <VendorsView onOpenExpiries={() => setView("expiries")} initialOpenId={focus?.vendorId} onFocusUsed={() => setFocus(null)} currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "expiries" && mode === "api" && <ExpiryView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
           {view === "budget" && mode === "api" && ["manager", "buyer", "finance", "viewer"].includes(currentUser.role) && <BudgetView currentUser={currentUser} notify={showToast} onSessionExpired={sessionExpired} />}
