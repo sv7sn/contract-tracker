@@ -5,8 +5,10 @@ import { ApiError, portalApi, vendorExportUrl } from "../api.ts";
 import { btnGhost, btnPrimary, C, font, iStyle, radius, sans } from "../theme.ts";
 import { fmt, fmtDate } from "../lib/format.ts";
 import { countryName } from "../supplierRules.ts";
-import { Avatar, AuditTrail, Card, CardTitle, EmptyState, Field, Grid, HeadButton, StatCard } from "../components/ui.tsx";
-import { CheckCircle2, Clock, Copy, FileCheck2, Hourglass, Loader2, Mail, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Users, Ban, AlertTriangle, FileText, ShieldAlert, SlidersHorizontal, CalendarClock } from "../components/icons.tsx";
+import { Avatar, AuditTrail, Card, CardTitle, EmptyState, Field } from "../components/ui.tsx";
+import { ListHeader } from "../components/ListHeader.tsx";
+import { filterButton, filterSelect } from "../components/listHeaderStyles.ts";
+import { CheckCircle2, Clock, Copy, FileCheck2, Hourglass, Loader2, Mail, Paperclip, Plus, RotateCcw, Search, Send, Trash2, Users, Ban, AlertTriangle, FileText, ShieldAlert, CalendarClock } from "../components/icons.tsx";
 import { AiResult, VendorFlags, CloseButton, DocLink, KV, Notice, ReasonDialog, StatusBadge, ValidityChip, Portal, RiskBadge, RiskPanel } from "../components/vendorUi.tsx";
 import { CHECK_STYLE, fmtSize, STATUS_STYLE, supplierTimeline } from "../lib/vendors.ts";
 import { Summary } from "./SupplierPortal.tsx";
@@ -17,7 +19,6 @@ interface Props { initialOpenId?: number; onFocusUsed?: () => void; currentUser:
 const copyText = async (t: string) => { try { await navigator.clipboard.writeText(t); return true; } catch { return false; } };
 
 export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, onSessionExpired, onOpenExpiries }: Props) {
-  const [showTools, setShowTools] = useState(false);
   const [vendors, setVendors] = useState<SupplierSummary[] | null>(null);
   const [config, setConfig] = useState<PortalConfig | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -81,49 +82,20 @@ export function VendorsView({ initialOpenId, onFocusUsed, currentUser, notify, o
 
   return (
     <div>
-      <div className="desktop-only-flex" style={{ justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ ...sans, fontSize: 12.5, color: C.muted }}>{t("{n} schede", { n: vendors.length })} · {counts[mine] ?? 0} {currentUser.role === "finance" ? t("da registrare") : t("da verificare")}</div>
-        </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          {currentUser.role === "manager" && <button onClick={makeDemo} disabled={demoBusy} title={t("Crea un fornitore già registrato e in regola, per provare contratti e acquisti")} style={{ ...btnGhost, display: "flex", alignItems: "center", gap: 7, padding: "9px 14px", fontSize: 13 }}>{demoBusy ? <Loader2 className="spin" size={15} /> : <Plus size={15} />}{t("Fornitore di prova")}</button>}
-          {canInvite && <button onClick={() => setInviting(true)} style={{ ...sans, display: "flex", alignItems: "center", gap: 7, padding: "9px 16px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, cursor: "pointer", fontSize: 13, boxShadow: "0 1px 2px rgba(200,82,42,.35)" }}><Plus size={16} />{t("Invita fornitore")}</button>}
-        </div>
-      </div>
       {demo && <Notice kind="ok"><b>{t("{name} creato", { name: demo.name })}</b>: {t("registrato, documenti validi e controlli superati. Per provare anche l'area del fornitore accedi con")} <b>{demo.email}</b> {t("e password")} <b style={{ userSelect: "all" }}>{demo.password}</b> {t("(mostrata solo ora).")}</Notice>}
 
-      <div className="desktop-only"><Grid min={190} gap={12} fill style={{ marginBottom: 16 }}>
-        {tiles.filter(t => currentUser.role !== "finance" || t.key !== "invited").map(t => (
-          <button key={t.key} onClick={() => setFilter(f => f === t.key ? "all" : t.key)} aria-pressed={filter === t.key} style={{ all: "unset", cursor: "pointer", display: "block", borderRadius: radius.lg, outline: filter === t.key ? `2px solid ${C.accent}` : undefined, outlineOffset: 1 }}>
-            <StatCard label={t.label} value={counts[t.key] ?? 0} sub={t.sub} color={t.color} icon={t.icon} />
-          </button>
-        ))}
-      </Grid></div>
-
-      {/* Parte alta ferma: sul telefono i numeri diventano una riga di chip e i comandi stanno accanto alla ricerca. */}
-      <div className="sticky-filters list-head" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <div className="mobile-only chip-row" style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2, width: "100%" }}>
-          {tiles.filter(x => (currentUser.role !== "finance" || x.key !== "invited") && (counts[x.key] ?? 0) > 0 || x.key === mine).map(x => { const on = filter === x.key; return (
-            <button key={x.key} onClick={() => setFilter(f => f === x.key ? "all" : x.key)} aria-pressed={on} className="count-pill" style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0, padding: "7px 14px", borderRadius: 12, border: `1px solid ${on ? x.color : C.border}`, background: on ? `${x.color}14` : "#fff", cursor: "pointer", color: C.text, fontSize: 13, fontWeight: 600 }}>
-              <b className="tabular" style={{ ...font, fontSize: 17, color: counts[x.key] ? x.color : C.subtle }}>{counts[x.key] ?? 0}</b>{x.label}
-            </button>); })}
-        </div>
-        <div style={{ position: "relative", flex: "1 1 200px", maxWidth: 420 }}>
-          <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("Cerca per nome, email, codice SAP…")} aria-label={t("Cerca fornitori")} style={{ ...iStyle, paddingLeft: 36 }} />
-        </div>
-        <HeadButton onClick={() => setShowTools(o => !o)} label={t("Filtri")} active={showTools || filter !== "all"}><SlidersHorizontal size={18} /></HeadButton>
-        {canInvite && <HeadButton primary onClick={() => setInviting(true)} label={t("Invita fornitore")}><Plus size={19} /></HeadButton>}
-        <div className={`head-filters${showTools ? " open" : ""}`} style={{ gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-        <select value={filter} onChange={e => setFilter(e.target.value as typeof filter)} aria-label={t("Filtra per stato")} style={{ ...iStyle, width: "auto", minWidth: 190, flex: 1 }}>
-          <option value="all">{t("Tutti gli stati")}</option>
-          {(Object.keys(STATUS_STYLE) as SupplierStatus[]).map(k => <option key={k} value={k}>{t(STATUS_STYLE[k].label)}</option>)}
-          <option value="lapsed">{t("Qualifica scaduta")}</option><option value="risk_high">{t("Rischio alto")}</option><option value="risk_medium">{t("Rischio medio")}</option><option value="flags">{t("Bloccati, disattivati o esclusi")}</option><option value="dups">{t("Possibili doppioni")}</option>
-        </select>
-        {onOpenExpiries && <button className="mobile-only" onClick={onOpenExpiries} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", fontSize: 13, color: C.text }}><CalendarClock size={15} />{t("Scadenze documenti")}</button>}
-        {currentUser.role === "manager" && <button className="mobile-only" onClick={makeDemo} disabled={demoBusy} style={{ ...btnGhost, display: "inline-flex", alignItems: "center", gap: 7, padding: "9px 14px", fontSize: 13 }}>{demoBusy ? <Loader2 className="spin" size={15} /> : <Plus size={15} />}{t("Fornitore di prova")}</button>}
-        </div>
-      </div>
+      <ListHeader search={search} onSearch={setSearch} placeholder={t("Cerca per nome, email, codice SAP…")} filtered={filter !== "all"}
+        counts={tiles.filter(x => (currentUser.role !== "finance" || x.key !== "invited") && ((counts[x.key] ?? 0) > 0 || x.key === mine)).map(x => ({ key: x.key, label: x.label, value: counts[x.key] ?? 0, color: x.color, title: x.sub, active: filter === x.key, onClick: () => setFilter(f => f === x.key ? "all" : x.key) }))}
+        add={canInvite ? { label: t("Invita fornitore"), onClick: () => setInviting(true) } : undefined}
+        filters={<>
+          <select value={filter} onChange={e => setFilter(e.target.value as typeof filter)} aria-label={t("Filtra per stato")} style={filterSelect}>
+            <option value="all">{t("Tutti gli stati")}</option>
+            {(Object.keys(STATUS_STYLE) as SupplierStatus[]).map(k => <option key={k} value={k}>{t(STATUS_STYLE[k].label)}</option>)}
+            <option value="lapsed">{t("Qualifica scaduta")}</option><option value="risk_high">{t("Rischio alto")}</option><option value="risk_medium">{t("Rischio medio")}</option><option value="flags">{t("Bloccati, disattivati o esclusi")}</option><option value="dups">{t("Possibili doppioni")}</option>
+          </select>
+          {onOpenExpiries && <button onClick={onOpenExpiries} style={filterButton}><CalendarClock size={15} />{t("Scadenze documenti")}</button>}
+          {currentUser.role === "manager" && <button onClick={makeDemo} disabled={demoBusy} title={t("Crea un fornitore già registrato e in regola, per provare contratti e acquisti")} style={filterButton}>{demoBusy ? <Loader2 className="spin" size={15} /> : <Plus size={15} />}{t("Fornitore di prova")}</button>}
+        </>} />
 
       {shown.length === 0 ? (
         vendors.length === 0

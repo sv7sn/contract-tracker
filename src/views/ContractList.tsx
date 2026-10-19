@@ -1,11 +1,14 @@
 import { useMemo, useState } from "react";
 import type { Contract, Plans, User } from "../types.ts";
-import { ContractCharts, ContractSummary, type ContractFilter } from "./Dashboard.tsx";
-import { C, iStyle, radius, sans, shadow, URGENCY_COLORS } from "../theme.ts";
+import { ContractCharts } from "./Dashboard.tsx";
+import { contractCounts, type ContractFilter } from "../lib/contractCounts.ts";
+import { ListHeader } from "../components/ListHeader.tsx";
+import { filterButton, filterSelect } from "../components/listHeaderStyles.ts";
+import { C, radius, sans, shadow, URGENCY_COLORS } from "../theme.ts";
 import { closedLabel, daysToDeadline, expiredWithoutOutcome, fmt, fmtDate, urgency } from "../lib/format.ts";
 import { canCreateContract, canViewTeam } from "../permissions.ts";
-import { Avatar, Card, DaysChip, EmptyState, Grid, HeadButton, RenewalBadge } from "../components/ui.tsx";
-import { Archive, BookOpen, FileText, LayoutGrid, Paperclip, Plus, Rows3, Search, SlidersHorizontal, X } from "../components/icons.tsx";
+import { Avatar, Card, DaysChip, EmptyState, Grid, RenewalBadge } from "../components/ui.tsx";
+import { BookOpen, LayoutGrid, Paperclip, Plus, Rows3, Search } from "../components/icons.tsx";
 import { t } from "../i18n/index.ts";
 
 const VIEW_KEY = "contract-tracker:list-view";
@@ -16,7 +19,6 @@ interface Props { contracts: Contract[]; plans: Plans; currentUser: User; search
 export function ContractList({ contracts, plans, currentUser, search, onSearch, onSelect, onNew, onOpenClauses, onOpenKpi }: Props) {
   const [filter, setFilter] = useState<ContractFilter>("Tutti"); const [showArchive, setShowArchive] = useState(false); const [sort, setSort] = useState("expiry");
   const [layout, setLayout] = useState<"cards" | "table">(readView);
-  const [showTools, setShowTools] = useState(false);
   const setLayoutSaved = (l: "cards" | "table") => { setLayout(l); try { localStorage.setItem(VIEW_KEY, l); } catch { /* ignore */ } };
   const showOwner = canViewTeam(currentUser);
 
@@ -29,48 +31,26 @@ export function ContractList({ contracts, plans, currentUser, search, onSearch, 
     return list;
   }, [contracts, plans, search, filter, sort, showArchive]);
 
-  const seg = (active: boolean): React.CSSProperties => ({ ...sans, display: "flex", alignItems: "center", justifyContent: "center", gap: 7, padding: "8px 14px", border: "none", borderRadius: 9, background: active ? "#fff" : "transparent", color: active ? C.text : C.muted, cursor: "pointer", fontSize: 13, fontWeight: 600, boxShadow: active ? shadow.sm : "none", whiteSpace: "nowrap" });
   const iconBtn = (active: boolean): React.CSSProperties => ({ display: "flex", alignItems: "center", justifyContent: "center", width: 32, height: 30, border: "none", borderRadius: 8, background: active ? "#fff" : "transparent", color: active ? C.text : C.subtle, cursor: "pointer", boxShadow: active ? shadow.sm : "none" });
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr)" }}>
-      {/* Parte alta della pagina: resta ferma, sotto scorrono solo i contratti. */}
-      <div className="sticky-filters list-head" style={{ display: "grid", gap: 10, gridTemplateColumns: "minmax(0,1fr)" }}>
-        {!showArchive && <ContractSummary contracts={contracts} plans={plans} filter={filter} onFilter={setFilter} />}
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-          <div role="tablist" className="desktop-only-flex" style={{ gap: 2, background: "#e9ecf2", borderRadius: 12, padding: 3 }}>
-            <button role="tab" aria-selected={!showArchive} onClick={() => setShowArchive(false)} style={seg(!showArchive)}><FileText size={15} />{t("Attivi")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => !c.ceased).length}</span></button>
-            <button role="tab" aria-selected={showArchive} onClick={() => setShowArchive(true)} style={seg(showArchive)}><Archive size={15} />{t("Storico")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => c.ceased).length}</span></button>
-          </div>
-          <div style={{ position: "relative", flex: "1 1 160px", minWidth: 0 }} className="mobile-only">
-            <Search size={16} color={C.subtle} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)" }} />
-            <input value={search} onChange={e => onSearch(e.target.value)} placeholder={t("Cerca fornitore, oggetto, owner…")} aria-label={t("Cerca")} style={{ ...iStyle, paddingLeft: 36 }} />
-          </div>
-          <HeadButton onClick={() => setShowTools(o => !o)} label={t("Filtri")} active={showTools || showArchive || sort !== "expiry"}><SlidersHorizontal size={18} /></HeadButton>
-          {canCreateContract(currentUser) && <HeadButton primary onClick={onNew} label={t("Nuovo contratto")}><Plus size={19} /></HeadButton>}
-          <div style={{ flex: 1 }} className="desktop-only" />
-          <div className={`head-filters${showTools ? " open" : ""}`} style={{ gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            <div role="tablist" className="mobile-only" style={{ display: "flex", width: "100%", gap: 2, background: "#e9ecf2", borderRadius: 12, padding: 3 }}>
-              <button role="tab" aria-selected={!showArchive} onClick={() => setShowArchive(false)} style={seg(!showArchive)}><FileText size={15} />{t("Attivi")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => !c.ceased).length}</span></button>
-              <button role="tab" aria-selected={showArchive} onClick={() => setShowArchive(true)} style={seg(showArchive)}><Archive size={15} />{t("Storico")} <span className="tabular" style={{ color: C.subtle, fontWeight: 600 }}>{contracts.filter(c => c.ceased).length}</span></button>
-            </div>
-            {onOpenClauses && <button onClick={onOpenClauses} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 10, padding: "7px 12px", fontSize: 13, fontWeight: 600, color: C.text, cursor: "pointer" }}><BookOpen size={15} />{t("Libreria clausole")}</button>}
-            <select value={sort} onChange={e => setSort(e.target.value)} aria-label={t("Ordina")} style={{ ...iStyle, width: "auto", padding: "8px 10px", fontSize: 13, color: C.muted }}>
-          <option value="expiry">{t("Ordina per scadenza")}</option><option value="value">{t("Ordina per valore")}</option><option value="supplier">{t("Ordina per fornitore")}</option>
-        </select>
-          </div>
+      <ListHeader search={search} onSearch={onSearch} placeholder={t("Cerca fornitore, oggetto, owner…")} filtered={showArchive || sort !== "expiry"}
+        counts={showArchive ? [] : contractCounts(contracts, plans).map(x => ({ ...x, active: !!x.filter && filter === x.filter, onClick: x.filter ? () => setFilter(filter === x.filter ? "Tutti" : x.filter!) : undefined }))}
+        add={canCreateContract(currentUser) ? { label: t("Nuovo contratto"), onClick: onNew } : undefined}
+        filters={<>
+          <select value={showArchive ? "archive" : "active"} onChange={e => setShowArchive(e.target.value === "archive")} aria-label={t("Contratti")} style={filterSelect}>
+            <option value="active">{t("Attivi")} ({contracts.filter(c => !c.ceased).length})</option><option value="archive">{t("Storico")} ({contracts.filter(c => c.ceased).length})</option>
+          </select>
+          <select value={sort} onChange={e => setSort(e.target.value)} aria-label={t("Ordina")} style={filterSelect}>
+            <option value="expiry">{t("Ordina per scadenza")}</option><option value="value">{t("Ordina per valore")}</option><option value="supplier">{t("Ordina per fornitore")}</option>
+          </select>
+          {onOpenClauses && <button onClick={onOpenClauses} style={filterButton}><BookOpen size={15} />{t("Libreria clausole")}</button>}
           <div className="desktop-only-flex" role="group" aria-label={t("Vista")} style={{ gap: 2, background: "#e9ecf2", borderRadius: 10, padding: 3 }}>
             <button onClick={() => setLayoutSaved("table")} aria-pressed={layout === "table"} title={t("Tabella")} aria-label={t("Vista tabella")} style={iconBtn(layout === "table")}><Rows3 size={16} /></button>
             <button onClick={() => setLayoutSaved("cards")} aria-pressed={layout === "cards"} title={t("Schede")} aria-label={t("Vista a schede")} style={iconBtn(layout === "cards")}><LayoutGrid size={16} /></button>
           </div>
-        </div>
-        {!showArchive && filter !== "Tutti" && (
-          <div style={{ ...sans, display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: C.muted }}>
-            {t("Filtro")}: <b style={{ color: C.text }}>{t(filter)}</b>
-            <button onClick={() => setFilter("Tutti")} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 4, background: "none", border: `1px solid ${C.border}`, borderRadius: 999, padding: "3px 10px", cursor: "pointer", fontSize: 12, color: C.muted }}><X size={12} />{t("Mostra tutti")}</button>
-          </div>
-        )}
-      </div>
+        </>} />
       {filtered.length === 0 ? (
         contracts.length === 0 ? (
           <EmptyState title={t("Nessun contratto ancora")} text={t("Aggiungi il primo contratto con il suo documento: da quel momento ne seguiamo scadenze e rinnovi.")} action={canCreateContract(currentUser) && <button onClick={onNew} style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px", background: C.accent, border: "none", borderRadius: 10, color: "#fff", fontWeight: 650, cursor: "pointer" }}><Plus size={17} />{t("Crea il primo contratto")}</button>} />
@@ -92,7 +72,7 @@ export function ContractList({ contracts, plans, currentUser, search, onSearch, 
                       </td>
                       {showOwner && <td><div style={{ display: "flex", alignItems: "center", gap: 8, whiteSpace: "nowrap" }}><Avatar name={c.owner || "?"} size={26} /><span style={{ color: C.muted }}>{c.owner || "—"}</span></div></td>}
                       <td style={{ whiteSpace: "nowrap" }}><div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-start" }}><span className="tabular" style={{ color: C.text }}>{fmtDate(c.end)}</span>{c.noticeDate && <span className="tabular" style={{ fontSize: 11.5, color: C.muted }}>{t("Disdetta entro {date}", { date: fmtDate(c.noticeDate) })}</span>}<DaysChip days={days} level={u} ceased={c.ceased && (closedLabel(c) ?? true)} /></div></td>
-                      <td>{c.ceased ? <span style={{ color: C.muted }}>{closedLabel(c)}</span> : expiredWithoutOutcome(c) ? <span style={{ color: C.red, fontWeight: 650 }}>{t("Scaduto senza esito")}</span> : <RenewalBadge status={c.renewal} />}</td>
+                      <td>{c.ceased ? <span style={{ color: C.muted }}>{closedLabel(c)}</span> : expiredWithoutOutcome(c) ? <span style={{ color: C.text, fontWeight: 600 }}>{t("Scaduto senza esito")}</span> : <RenewalBadge status={c.renewal} />}</td>
                       <td className="num" style={{ fontWeight: 650, color: C.text, whiteSpace: "nowrap" }}>{fmt(c.value, c.currency)}</td>
                       <td style={{ width: 36, color: c.fileName ? C.subtle : "transparent" }}>{c.fileName && <Paperclip size={15} aria-label={t("Ha un documento")} />}</td>
                     </tr>
@@ -106,17 +86,17 @@ export function ContractList({ contracts, plans, currentUser, search, onSearch, 
         {/* Telefono: righe compatte di due righe, come i task */}
         <div className="mobile-only" style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 8 }}>
           {filtered.map(c => {
-            const days = daysToDeadline(c); const u = urgency(c); const late = !c.ceased && days < 0;
+            const days = daysToDeadline(c); const u = urgency(c);
             const status = c.ceased ? closedLabel(c) : expiredWithoutOutcome(c) ? t("Scaduto senza esito") : c.renewal && c.renewal !== "Non definito" ? t(c.renewal) : null;
-            const rel = c.ceased || expiredWithoutOutcome(c) ? "" : days < 0 ? t("scaduto da {n} gg", { n: -days }) : days === 0 ? t("scade oggi") : t("tra {n} gg", { n: days });
+            const rel = c.ceased ? "" : days < 0 ? t("scaduto da {n} gg", { n: -days }) : days === 0 ? t("scade oggi") : t("tra {n} gg", { n: days });
             return (
               <Card key={c.id} className="task-row" onClick={() => onSelect(c)} role="button" tabIndex={0} onKeyDown={e => { if (e.key === "Enter") onSelect(c); }}
                 style={{ padding: "0 13px", cursor: "pointer", borderRadius: radius.md, borderLeft: `4px solid ${URGENCY_COLORS[u]}`, display: "flex", alignItems: "center", gap: 10, boxSizing: "border-box", opacity: c.ceased ? 0.7 : 1 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="one-line" style={{ ...sans, fontSize: 14, color: C.text }}><b style={{ fontWeight: 650 }}>{c.supplier}</b> <span style={{ color: C.muted }}>{c.object}</span></div>
                   <div className="one-line" style={{ ...sans, display: "flex", gap: 6, alignItems: "center", marginTop: 5, fontSize: 12.5, color: C.muted }}>
-                    {status && <span style={{ ...sans, background: late || expiredWithoutOutcome(c) ? C.redBg : C.grayBg, color: late || expiredWithoutOutcome(c) ? C.red : C.gray, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}>{status}</span>}
-                    <span className="tabular one-line" style={{ color: u === "green" || c.ceased ? C.muted : URGENCY_COLORS[u], fontWeight: u === "red" && !c.ceased ? 650 : 400 }}>{[fmtDate(c.end), rel, fmt(c.value, c.currency)].filter(Boolean).join(" · ")}</span>
+                    {status && <span style={{ ...sans, background: C.grayBg, color: C.gray, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 650, whiteSpace: "nowrap" }}>{status}</span>}
+                    <span className="tabular one-line">{fmtDate(c.end)}{rel && <> · <span style={{ color: u === "green" ? undefined : URGENCY_COLORS[u] }}>{rel}</span></>} · {fmt(c.value, c.currency)}</span>
                   </div>
                 </div>
                 {showOwner && <span title={c.owner}><Avatar name={c.owner || "?"} size={24} /></span>}
@@ -141,7 +121,7 @@ export function ContractList({ contracts, plans, currentUser, search, onSearch, 
                     <div className="tabular" style={{ ...sans, fontSize: 14, fontWeight: 700, flexShrink: 0, color: C.text }}>{fmt(c.value, c.currency)}</div>
                   </div>
                   <div style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}>
-                    {c.ceased ? <span style={{ ...sans, fontSize: 11.5, color: C.gray, background: C.grayBg, borderRadius: 999, padding: "3px 10px", fontWeight: 600 }}>{closedLabel(c)}</span> : expiredWithoutOutcome(c) ? <span style={{ ...sans, fontSize: 11.5, color: C.red, background: C.redBg, borderRadius: 999, padding: "3px 10px", fontWeight: 650 }}>{t("Scaduto senza esito")}</span> : <RenewalBadge status={c.renewal} />}
+                    {c.ceased ? <span style={{ ...sans, fontSize: 11.5, color: C.gray, background: C.grayBg, borderRadius: 999, padding: "3px 10px", fontWeight: 600 }}>{closedLabel(c)}</span> : expiredWithoutOutcome(c) ? <span style={{ ...sans, fontSize: 11.5, color: C.gray, background: C.grayBg, borderRadius: 999, padding: "3px 10px", fontWeight: 650 }}>{t("Scaduto senza esito")}</span> : <RenewalBadge status={c.renewal} />}
                     <span style={{ marginLeft: "auto" }}><DaysChip days={days} level={u} ceased={c.ceased && (closedLabel(c) ?? true)} /></span>
                   </div>
                   {showOwner && <div style={{ ...sans, display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: C.subtle, marginTop: 10 }}><Avatar name={c.owner || "?"} size={22} />{c.owner || "—"}<span style={{ marginLeft: "auto" }}>{c.noticeDate ? t("Disdetta entro {date}", { date: fmtDate(c.noticeDate) }) : t("Scade il {date}", { date: fmtDate(c.end) })}</span></div>}
