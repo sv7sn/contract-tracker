@@ -1,5 +1,6 @@
 import { fill, t } from "./i18n/index.ts";
 import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type NegotiationBundle, type NegotiationSummary, type Obligation, type ReadinessCheck, type SecurityEvent, type ClmKpis, type ReviewRule, type ClauseView, type ClmAuditEntry, type ClmBundle, type ClmDiff, type ClmFindings, type ClmTemplateInfo, type FuncKey, type MyReview, type ReviewStatus, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type EligibleSupplier, type RdaSuggestion, type Task, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import { DOC_MIME } from "./supplierRules.ts";
 
 export class ApiError extends Error {
   status: number;
@@ -217,10 +218,14 @@ export async function uploadSupplierDocument(file: File): Promise<string> {
   const { uploadPresigned } = await import("@vercel/blob/client");
   const safeName = file.name.replace(/[^\p{L}\p{N}._ ()-]+/gu, "_").slice(-120);
   try {
-    const result = await uploadPresigned(`suppliers/${crypto.randomUUID()}/${safeName}`, file, { access: "private", handleUploadUrl: "/api/portal?op=supplier-upload-token" });
+    // Come per i contratti: il tipo dichiarato dal browser (Word, immagini) può mancare o non essere quello atteso dall'archivio, quindi lo ricaviamo dall'estensione.
+    const mime = DOC_MIME[file.name.toLowerCase().split(".").pop() ?? ""];
+    const result = await uploadPresigned(`suppliers/${crypto.randomUUID()}/${safeName}`, mime ? new File([file], safeName, { type: mime }) : file, { access: "private", handleUploadUrl: "/api/portal?op=supplier-upload-token" });
     return result.pathname;
   } catch (err) {
-    throw new Error(err instanceof Error && err.message ? err.message.replace(/^Vercel Blob: /, "").slice(0, 200) : t("Caricamento del documento non riuscito"));
+    const message = err instanceof Error ? err.message : "";
+    if (/content.?type|not allowed/i.test(message)) throw new Error(t("Formato non supportato: usa PDF, Word, PowerPoint o immagini (JPG, PNG)"));
+    throw new Error(message ? message.replace(/^Vercel Blob: /, "").slice(0, 200) : t("Caricamento del documento non riuscito"));
   }
 }
 

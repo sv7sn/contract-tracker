@@ -248,7 +248,8 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
   const invite = async (what: "resend" | "delete") => {
     setBusy(what); setError(null);
     try {
-      if (what === "resend") { const r = await portalApi.reinvite(id); setS(r.supplier); notify(t("Invito rinviato")); }
+      // Il link si vede solo qui: il server ne conserva solo l'impronta. Senza email configurate è l'unico modo di farlo arrivare al fornitore.
+      if (what === "resend") { const r = await portalApi.reinvite(id); setS({ ...r.supplier, inviteLink: r.link }); setCopied(false); notify(t("Nuovo link creato: copialo e mandalo al fornitore")); }
       else { if (!window.confirm(t("Eliminare questo invito?"))) { setBusy(null); return; } await portalApi.deleteInvite(id); notify(t("Invito eliminato")); onClose(); }
       onChanged();
     } catch (err) { setError(fail(err)); }
@@ -280,7 +281,7 @@ export function VendorSheet({ id, config, currentUser, onClose, onChanged, notif
                 {s.inviteLink && <div style={{ ...sans, fontSize: 12, background: "#fff", border: `1px solid ${C.border}`, borderRadius: 8, padding: 8, overflowWrap: "anywhere", marginBottom: 10 }}>{s.inviteLink}</div>}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {s.inviteLink && <button onClick={async () => setCopied(await copyText(s.inviteLink!))} style={btn(false)}><Copy size={15} />{copied ? t("Copiato") : t("Copia link")}</button>}
-                  {isBuyerStep && <button onClick={() => invite("resend")} disabled={!!busy} style={btn(false)}>{spin("resend")}<Mail size={15} />{t("Rinvia invito")}</button>}
+                  {isBuyerStep && <button onClick={() => invite("resend")} disabled={!!busy} style={btn(false)}>{spin("resend")}<Mail size={15} />{s.inviteLink ? t("Rinvia invito") : t("Crea un nuovo link")}</button>}
                   {isBuyerStep && <button onClick={() => invite("delete")} disabled={!!busy} style={btn(false, true)}>{spin("delete")}<Trash2 size={15} />{t("Elimina")}</button>}
                 </div>
               </Card>

@@ -63,6 +63,8 @@ const en: Record<string, string> = {
   "Non è un doppione: invita": "Not a duplicate: invite",
   "Invia invito": "Send invitation",
   "Controlli eseguiti": "Checks completed",
+  "Nuovo link creato: copialo e mandalo al fornitore": "New link created: copy it and send it to the supplier",
+  "Crea un nuovo link": "Create a new link",
   "Invito rinviato": "Invitation resent",
   "Eliminare questo invito?": "Delete this invitation?",
   "Invito eliminato": "Invitation deleted",
