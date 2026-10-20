@@ -2,13 +2,13 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.5.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:807558c0-d07c-48d7-bdf2-3c021a80138b",
+  "serialNumber": "urn:uuid:17553871-c077-4490-bac7-c89a65450f76",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-10-13T15:46:17.912Z",
+    "timestamp": "2026-10-20T07:51:46.863Z",
     "lifecycles": [
       {
-        "phase": "pre-build"
+        "phase": "build"
       }
     ],
     "tools": [
@@ -45,6 +45,8 @@
       "name": "@fontsource-variable/inter",
       "version": "5.3.0",
       "scope": "required",
+      "author": "Google Inc.",
+      "description": "Self-host the Inter font in a neatly bundled NPM package.",
       "purl": "pkg:npm/%40fontsource-variable/inter@5.3.0",
       "properties": [
         {
@@ -56,6 +58,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/@fontsource-variable/inter/-/inter-5.3.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/fontsource/font-files.git"
+        },
+        {
+          "type": "website",
+          "url": "https://fontsource.org/fonts/inter"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/fontsource/font-files/issues"
         }
       ],
       "hashes": [
@@ -78,6 +92,7 @@
       "name": "@vercel/blob",
       "version": "2.8.1",
       "scope": "required",
+      "description": "The Vercel Blob JavaScript API client",
       "purl": "pkg:npm/%40vercel/blob@2.8.1",
       "properties": [
         {
@@ -89,6 +104,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/@vercel/blob/-/blob-2.8.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/vercel/storage.git"
+        },
+        {
+          "type": "website",
+          "url": "https://vercel.com/storage/blob"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/vercel/storage/issues"
         }
       ],
       "hashes": [
@@ -111,6 +138,7 @@
       "name": "@vercel/cli-config",
       "version": "0.3.1",
       "scope": "required",
+      "description": "Shared core utilities for Vercel global configuration",
       "purl": "pkg:npm/%40vercel/cli-config@0.3.1",
       "properties": [
         {
@@ -122,6 +150,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/@vercel/cli-config/-/cli-config-0.3.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/vercel/vercel.git"
+        },
+        {
+          "type": "website",
+          "url": "https://vercel.com/docs/projects/project-configuration/global-configuration"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/vercel/vercel/issues"
         }
       ],
       "hashes": [
@@ -144,6 +184,8 @@
       "name": "zod",
       "version": "4.1.11",
       "scope": "required",
+      "author": "Colin McDonnell",
+      "description": "TypeScript-first schema declaration and validation library with static type inference",
       "purl": "pkg:npm/zod@4.1.11",
       "properties": [
         {
@@ -155,6 +197,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/zod/-/zod-4.1.11.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/colinhacks/zod.git"
+        },
+        {
+          "type": "website",
+          "url": "https://zod.dev"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/colinhacks/zod/issues"
         }
       ],
       "hashes": [
@@ -177,6 +231,7 @@
       "name": "@vercel/cli-exec",
       "version": "1.0.1",
       "scope": "required",
+      "description": "Helpers for locating and executing the Vercel CLI",
       "purl": "pkg:npm/%40vercel/cli-exec@1.0.1",
       "properties": [
         {
@@ -188,6 +243,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/@vercel/cli-exec/-/cli-exec-1.0.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/vercel/vercel.git"
+        },
+        {
+          "type": "website",
+          "url": "https://vercel.com"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/vercel/vercel/issues"
         }
       ],
       "hashes": [
@@ -210,6 +277,7 @@
       "name": "@vercel/oidc",
       "version": "3.8.10",
       "scope": "required",
+      "description": "Runtime OIDC helpers intended for use with Vercel Functions",
       "purl": "pkg:npm/%40vercel/oidc@3.8.10",
       "properties": [
         {
@@ -221,6 +289,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/@vercel/oidc/-/oidc-3.8.10.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/vercel/vercel.git"
+        },
+        {
+          "type": "website",
+          "url": "https://vercel.com"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/vercel/vercel/issues"
         }
       ],
       "hashes": [
@@ -243,6 +323,7 @@
       "name": "async-retry",
       "version": "1.3.3",
       "scope": "required",
+      "description": "Retrying made simple, easy and async",
       "purl": "pkg:npm/async-retry@1.3.3",
       "properties": [
         {
@@ -254,6 +335,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/async-retry/-/async-retry-1.3.3.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/vercel/async-retry.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/vercel/async-retry#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/vercel/async-retry/issues"
         }
       ],
       "hashes": [
@@ -276,6 +369,8 @@
       "name": "execa",
       "version": "5.1.1",
       "scope": "required",
+      "author": "Sindre Sorhus",
+      "description": "Process execution for humans",
       "purl": "pkg:npm/execa@5.1.1",
       "properties": [
         {
@@ -287,6 +382,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/execa/-/execa-5.1.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/sindresorhus/execa.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/sindresorhus/execa#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/sindresorhus/execa/issues"
         }
       ],
       "hashes": [
@@ -309,6 +416,8 @@
       "name": "get-stream",
       "version": "6.0.1",
       "scope": "required",
+      "author": "Sindre Sorhus",
+      "description": "Get a stream as a string, buffer, or array",
       "purl": "pkg:npm/get-stream@6.0.1",
       "properties": [
         {
@@ -320,6 +429,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/get-stream/-/get-stream-6.0.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/sindresorhus/get-stream.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/sindresorhus/get-stream#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/sindresorhus/get-stream/issues"
         }
       ],
       "hashes": [
@@ -342,6 +463,8 @@
       "name": "human-signals",
       "version": "2.1.0",
       "scope": "required",
+      "author": "ehmicky",
+      "description": "Human-friendly process signals",
       "purl": "pkg:npm/human-signals@2.1.0",
       "properties": [
         {
@@ -353,6 +476,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/human-signals/-/human-signals-2.1.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/ehmicky/human-signals.git"
+        },
+        {
+          "type": "website",
+          "url": "https://git.io/JeluP"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/ehmicky/human-signals/issues"
         }
       ],
       "hashes": [
@@ -375,6 +510,8 @@
       "name": "is-buffer",
       "version": "2.0.5",
       "scope": "required",
+      "author": "Feross Aboukhadijeh",
+      "description": "Determine if an object is a Buffer",
       "purl": "pkg:npm/is-buffer@2.0.5",
       "properties": [
         {
@@ -386,6 +523,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/is-buffer/-/is-buffer-2.0.5.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/feross/is-buffer.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/feross/is-buffer#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/feross/is-buffer/issues"
         }
       ],
       "hashes": [
@@ -408,6 +557,7 @@
       "name": "is-node-process",
       "version": "1.2.0",
       "scope": "required",
+      "description": "Reliably determines if the code is running in Node.js",
       "purl": "pkg:npm/is-node-process@1.2.0",
       "properties": [
         {
@@ -419,6 +569,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/is-node-process/-/is-node-process-1.2.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/mswjs/is-node-process.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/mswjs/is-node-process#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/mswjs/is-node-process/issues"
         }
       ],
       "hashes": [
@@ -441,6 +603,8 @@
       "name": "is-stream",
       "version": "2.0.1",
       "scope": "required",
+      "author": "Sindre Sorhus",
+      "description": "Check if something is a Node.js stream",
       "purl": "pkg:npm/is-stream@2.0.1",
       "properties": [
         {
@@ -452,6 +616,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/is-stream/-/is-stream-2.0.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/sindresorhus/is-stream.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/sindresorhus/is-stream#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/sindresorhus/is-stream/issues"
         }
       ],
       "hashes": [
@@ -474,6 +650,8 @@
       "name": "jose",
       "version": "5.10.0",
       "scope": "required",
+      "author": "Filip Skokan",
+      "description": "JWA, JWS, JWE, JWT, JWK, JWKS for Node.js, Browser, Cloudflare Workers, Deno, Bun, and other Web-interoperable runtimes",
       "purl": "pkg:npm/jose@5.10.0",
       "properties": [
         {
@@ -485,6 +663,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/jose/-/jose-5.10.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/panva/jose.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/panva/jose"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/panva/jose/issues"
         }
       ],
       "hashes": [
@@ -507,6 +697,8 @@
       "name": "lucide-react",
       "version": "1.53.0",
       "scope": "required",
+      "author": "Eric Fennis",
+      "description": "A Lucide icon library package for React applications.",
       "purl": "pkg:npm/lucide-react@1.53.0",
       "properties": [
         {
@@ -518,6 +710,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/lucide-react/-/lucide-react-1.53.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/lucide-icons/lucide.git"
+        },
+        {
+          "type": "website",
+          "url": "https://lucide.dev"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/lucide-icons/lucide/issues"
         }
       ],
       "hashes": [
@@ -540,6 +744,8 @@
       "name": "merge-stream",
       "version": "2.0.0",
       "scope": "required",
+      "author": "Stephen Sugden",
+      "description": "Create a stream that emits events from multiple other streams",
       "purl": "pkg:npm/merge-stream@2.0.0",
       "properties": [
         {
@@ -551,6 +757,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/merge-stream/-/merge-stream-2.0.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/grncdr/merge-stream.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/grncdr/merge-stream#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/grncdr/merge-stream/issues"
         }
       ],
       "hashes": [
@@ -573,6 +791,8 @@
       "name": "mimic-fn",
       "version": "2.1.0",
       "scope": "required",
+      "author": "Sindre Sorhus",
+      "description": "Make a function mimic another one",
       "purl": "pkg:npm/mimic-fn@2.1.0",
       "properties": [
         {
@@ -584,6 +804,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/mimic-fn/-/mimic-fn-2.1.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/sindresorhus/mimic-fn.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/sindresorhus/mimic-fn#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/sindresorhus/mimic-fn/issues"
         }
       ],
       "hashes": [
@@ -606,6 +838,8 @@
       "name": "npm-run-path",
       "version": "4.0.1",
       "scope": "required",
+      "author": "Sindre Sorhus",
+      "description": "Get your PATH prepended with locally installed binaries",
       "purl": "pkg:npm/npm-run-path@4.0.1",
       "properties": [
         {
@@ -617,6 +851,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/npm-run-path/-/npm-run-path-4.0.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/sindresorhus/npm-run-path.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/sindresorhus/npm-run-path#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/sindresorhus/npm-run-path/issues"
         }
       ],
       "hashes": [
@@ -639,6 +885,8 @@
       "name": "onetime",
       "version": "5.1.2",
       "scope": "required",
+      "author": "Sindre Sorhus",
+      "description": "Ensure a function is only called once",
       "purl": "pkg:npm/onetime@5.1.2",
       "properties": [
         {
@@ -650,6 +898,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/onetime/-/onetime-5.1.2.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/sindresorhus/onetime.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/sindresorhus/onetime#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/sindresorhus/onetime/issues"
         }
       ],
       "hashes": [
@@ -672,6 +932,8 @@
       "name": "os-paths",
       "version": "4.4.0",
       "scope": "required",
+      "author": "Roy Ivy III",
+      "description": "Generate portable common OS paths (home, temp, ...)",
       "purl": "pkg:npm/os-paths@4.4.0",
       "properties": [
         {
@@ -683,6 +945,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/os-paths/-/os-paths-4.4.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/rivy/js.os-paths.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/rivy/js.os-paths#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/rivy/js.os-paths/issues"
         }
       ],
       "hashes": [
@@ -705,6 +979,8 @@
       "name": "pg",
       "version": "8.23.1",
       "scope": "required",
+      "author": "Brian Carlson",
+      "description": "PostgreSQL client - pure javascript & libpq with the same API",
       "purl": "pkg:npm/pg@8.23.1",
       "properties": [
         {
@@ -716,6 +992,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/pg/-/pg-8.23.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/brianc/node-postgres.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/brianc/node-postgres"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/brianc/node-postgres/issues"
         }
       ],
       "hashes": [
@@ -738,6 +1026,7 @@
       "name": "pg-cloudflare",
       "version": "1.4.1",
       "scope": "optional",
+      "description": "A socket implementation that can run on Cloudflare Workers using native TCP connections.",
       "purl": "pkg:npm/pg-cloudflare@1.4.1",
       "properties": [
         {
@@ -749,6 +1038,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/pg-cloudflare/-/pg-cloudflare-1.4.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/brianc/node-postgres.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/brianc/node-postgres#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/brianc/node-postgres/issues"
         }
       ],
       "hashes": [
@@ -771,6 +1072,8 @@
       "name": "pg-connection-string",
       "version": "2.14.1",
       "scope": "required",
+      "author": "Blaine Bublitz",
+      "description": "Functions for dealing with a PostgreSQL connection string",
       "purl": "pkg:npm/pg-connection-string@2.14.1",
       "properties": [
         {
@@ -782,6 +1085,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/pg-connection-string/-/pg-connection-string-2.14.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/brianc/node-postgres.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/brianc/node-postgres/tree/master/packages/pg-connection-string"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/brianc/node-postgres/issues"
         }
       ],
       "hashes": [
@@ -804,6 +1119,8 @@
       "name": "pg-pool",
       "version": "3.14.0",
       "scope": "required",
+      "author": "Brian M. Carlson",
+      "description": "Connection pool for node-postgres",
       "purl": "pkg:npm/pg-pool@3.14.0",
       "properties": [
         {
@@ -815,6 +1132,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/pg-pool/-/pg-pool-3.14.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/brianc/node-postgres.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/brianc/node-postgres/tree/master/packages/pg-pool#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/brianc/node-postgres/issues"
         }
       ],
       "hashes": [
@@ -837,6 +1166,8 @@
       "name": "pgpass",
       "version": "1.0.5",
       "scope": "required",
+      "author": "Hannes Hörl",
+      "description": "Module for reading .pgpass",
       "purl": "pkg:npm/pgpass@1.0.5",
       "properties": [
         {
@@ -848,6 +1179,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/pgpass/-/pgpass-1.0.5.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/hoegaarden/pgpass.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/hoegaarden/pgpass#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/hoegaarden/pgpass/issues"
         }
       ],
       "hashes": [
@@ -870,6 +1213,7 @@
       "name": "react",
       "version": "19.2.5",
       "scope": "required",
+      "description": "React is a JavaScript library for building user interfaces.",
       "purl": "pkg:npm/react@19.2.5",
       "properties": [
         {
@@ -881,12 +1225,31 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/react/-/react-19.2.5.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/facebook/react.git"
+        },
+        {
+          "type": "website",
+          "url": "https://react.dev/"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/facebook/react/issues"
         }
       ],
       "hashes": [
         {
           "alg": "SHA-512",
           "content": "9655092f3cf5cd3501aec92dda9c1980bab9f407a689f21fb70e1a07b2713aa7f51d8d850da183c60c2900f5731d4d6475669b1fb15ab8fe22d6811e7abd9608"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
         }
       ]
     },
@@ -896,6 +1259,7 @@
       "name": "react-dom",
       "version": "19.2.5",
       "scope": "required",
+      "description": "React package for working with the DOM.",
       "purl": "pkg:npm/react-dom@19.2.5",
       "properties": [
         {
@@ -907,12 +1271,31 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/react-dom/-/react-dom-19.2.5.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/facebook/react.git"
+        },
+        {
+          "type": "website",
+          "url": "https://react.dev/"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/facebook/react/issues"
         }
       ],
       "hashes": [
         {
           "alg": "SHA-512",
           "content": "2796c0673f835cc3305bfc15df1cca91ee7d01fe821d8ec6e2e60b3753af05c284b163ace29404c63f3a04129a9b197f224e5bc7dc213abbc19520df5b38126a"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
         }
       ]
     },
@@ -922,6 +1305,8 @@
       "name": "retry",
       "version": "0.13.1",
       "scope": "required",
+      "author": "Tim Koschützki",
+      "description": "Abstraction for exponential and custom retry strategies for failed operations.",
       "purl": "pkg:npm/retry@0.13.1",
       "properties": [
         {
@@ -933,6 +1318,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/retry/-/retry-0.13.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/tim-kos/node-retry.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/tim-kos/node-retry"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/tim-kos/node-retry/issues"
         }
       ],
       "hashes": [
@@ -955,6 +1352,7 @@
       "name": "scheduler",
       "version": "0.27.0",
       "scope": "required",
+      "description": "Cooperative scheduler for the browser environment.",
       "purl": "pkg:npm/scheduler@0.27.0",
       "properties": [
         {
@@ -966,12 +1364,31 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/scheduler/-/scheduler-0.27.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/facebook/react.git"
+        },
+        {
+          "type": "website",
+          "url": "https://react.dev/"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/facebook/react/issues"
         }
       ],
       "hashes": [
         {
           "alg": "SHA-512",
           "content": "78dbfe5ab55b2aed5fdef6d8253ff1b62179b320391cf20cb5ff48818fe72a0d2c5aacc0504bea63fc66ece71973fa9a7cbc7f88ef4580e99e480a78bf9b62fd"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
         }
       ]
     },
@@ -981,6 +1398,8 @@
       "name": "signal-exit",
       "version": "3.0.7",
       "scope": "required",
+      "author": "Ben Coe",
+      "description": "when you want to fire an event no matter how a process exits.",
       "purl": "pkg:npm/signal-exit@3.0.7",
       "properties": [
         {
@@ -992,6 +1411,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/signal-exit/-/signal-exit-3.0.7.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/tapjs/signal-exit.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/tapjs/signal-exit"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/tapjs/signal-exit/issues"
         }
       ],
       "hashes": [
@@ -1014,6 +1445,8 @@
       "name": "split2",
       "version": "4.2.0",
       "scope": "required",
+      "author": "Matteo Collina",
+      "description": "split a Text Stream into a Line Stream, using Stream 3",
       "purl": "pkg:npm/split2@4.2.0",
       "properties": [
         {
@@ -1025,6 +1458,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/split2/-/split2-4.2.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/mcollina/split2.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/mcollina/split2#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "http://github.com/mcollina/split2/issues"
         }
       ],
       "hashes": [
@@ -1047,6 +1492,8 @@
       "name": "strip-final-newline",
       "version": "2.0.0",
       "scope": "required",
+      "author": "Sindre Sorhus",
+      "description": "Strip the final newline character from a string/buffer",
       "purl": "pkg:npm/strip-final-newline@2.0.0",
       "properties": [
         {
@@ -1058,6 +1505,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/strip-final-newline/-/strip-final-newline-2.0.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/sindresorhus/strip-final-newline.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/sindresorhus/strip-final-newline#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/sindresorhus/strip-final-newline/issues"
         }
       ],
       "hashes": [
@@ -1080,6 +1539,7 @@
       "name": "throttleit",
       "version": "2.1.0",
       "scope": "required",
+      "description": "Throttle a function to limit its execution rate",
       "purl": "pkg:npm/throttleit@2.1.0",
       "properties": [
         {
@@ -1091,6 +1551,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/throttleit/-/throttleit-2.1.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/sindresorhus/throttleit.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/sindresorhus/throttleit#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/sindresorhus/throttleit/issues"
         }
       ],
       "hashes": [
@@ -1113,6 +1585,7 @@
       "name": "undici",
       "version": "6.29.0",
       "scope": "required",
+      "description": "An HTTP/1.1 client, written from scratch for Node.js",
       "purl": "pkg:npm/undici@6.29.0",
       "properties": [
         {
@@ -1124,6 +1597,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/undici/-/undici-6.29.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/nodejs/undici.git"
+        },
+        {
+          "type": "website",
+          "url": "https://undici.nodejs.org"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/nodejs/undici/issues"
         }
       ],
       "hashes": [
@@ -1146,6 +1631,8 @@
       "name": "xdg-app-paths",
       "version": "5.5.1",
       "scope": "required",
+      "author": "Roy Ivy III",
+      "description": "Generate portable (and XDG-compatible) paths for storing cache, config, data, etc",
       "purl": "pkg:npm/xdg-app-paths@5.5.1",
       "properties": [
         {
@@ -1157,6 +1644,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/xdg-app-paths/-/xdg-app-paths-5.5.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/rivy/js.xdg-app-paths.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/rivy/js.xdg-app-paths#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/rivy/js.xdg-app-paths/issues"
         }
       ],
       "hashes": [
@@ -1179,6 +1678,8 @@
       "name": "xdg-portable",
       "version": "7.3.0",
       "scope": "required",
+      "author": "Roy Ivy III",
+      "description": "Generate portable XDG Base Directory paths",
       "purl": "pkg:npm/xdg-portable@7.3.0",
       "properties": [
         {
@@ -1190,6 +1691,18 @@
         {
           "type": "distribution",
           "url": "https://registry.npmjs.org/xdg-portable/-/xdg-portable-7.3.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/rivy/js.xdg-portable.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/rivy/js.xdg-portable#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/rivy/js.xdg-portable/issues"
         }
       ],
       "hashes": [
@@ -1237,8 +1750,8 @@
     {
       "ref": "@vercel/cli-config@0.3.1",
       "dependsOn": [
-        "xdg-app-paths@5.5.1",
-        "zod@4.1.11"
+        "zod@4.1.11",
+        "xdg-app-paths@5.5.1"
       ]
     },
     {
@@ -1254,9 +1767,9 @@
     {
       "ref": "@vercel/oidc@3.8.10",
       "dependsOn": [
+        "jose@5.10.0",
         "@vercel/cli-config@0.3.1",
-        "@vercel/cli-exec@1.0.1",
-        "jose@5.10.0"
+        "@vercel/cli-exec@1.0.1"
       ]
     },
     {

@@ -7,7 +7,8 @@ import { DEFAULT_DOC_RULES, DEFAULT_DOC_TYPES } from "./_supplier-rules.js";
 import { canCreateContract, canDeleteContract, canEditContract, canRespondBO, canViewContract } from "./_permissions.js";
 import { FILE_PATH_RE } from "./_blob.js";
 
-const connectionString = process.env.DATABASE_URL ?? process.env.POSTGRES_URL;
+// sslmode=require/prefer è già trattato da pg come verify-full (certificato verificato): lo scriviamo esplicito, così resta tale anche con le versioni future.
+const connectionString = (process.env.DATABASE_URL ?? process.env.POSTGRES_URL)?.replace(/([?&])sslmode=(require|prefer|verify-ca)\b/, "$1sslmode=verify-full");
 
 // Una sola connessione per istanza serverless: il pooler di Neon gestisce la concorrenza.
 let pool: pg.Pool | undefined;

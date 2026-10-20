@@ -15,6 +15,10 @@ Variabili in `.env.example`. Il **Manager** vede in *Configurazione → Sicurezz
 - Impostare `DISABLE_DEMO_TOOLS=1` (spegne gli strumenti di prova) e togliere `ADMIN_*` dall'ambiente.
 - Verificare in *Configurazione → Sicurezza e configurazione* che non resti nulla in giallo.
 - Svuotare i dati di simulazione dalla stessa pagina di Configurazione, se presenti.
+- Impostare `SESSION_SECRET` (valore lungo e casuale) e l'invio email (`RESEND_API_KEY`, `MAIL_FROM`, oppure il server di posta aziendale).
+- Dati in UE: l'ambiente di prova attuale (Vercel, Neon e Blob) è in regione `iad1` (USA). Per l'uso reale: database e archivio in UE (`fra1`) oppure sui server aziendali; funzioni nella stessa regione del database (`"regions"` in `vercel.json`).
+- Account di servizio intestati all'azienda (oggi Vercel e Neon sono su un account personale, piano gratuito; il piano Hobby di Vercel non è previsto per uso aziendale).
+- Togliere dall'ambiente Vercel le variabili non usate dal codice (es. `VITE_SUPABASE_*`, `TSC_COMPILE_ON_ERROR`).
 
 ## 3. Monitoraggio
 - `GET /api/portal?op=health` risponde `{"ok":true}` se il database è raggiungibile (503 altrimenti): adatto a un controllo di disponibilità esterno.
