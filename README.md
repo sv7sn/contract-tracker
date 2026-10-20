@@ -4,7 +4,7 @@ Applicazione React + TypeScript (Vite) per il monitoraggio delle scadenze contra
 e la pianificazione delle attività di rinnovo (analisi spend, coinvolgimento del Business Owner, negoziazione, firma).
 Funziona da telefono e da computer (menu laterale e griglie a più colonne su schermi larghi).
 
-> **Per la revisione tecnica:** vedi [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (architettura, sicurezza, integrazioni, limiti dichiarati).
+> **Per la revisione tecnica:** parti da [`CONSEGNA.md`](CONSEGNA.md) (stato, verifiche, punti aperti e piano), poi [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (architettura, sicurezza, integrazioni, limiti dichiarati).
 > Test automatici: `npm run test:api` (richiede Postgres locale, vedi `tests/run.sh`).
 
 ## Accesso e permessi
