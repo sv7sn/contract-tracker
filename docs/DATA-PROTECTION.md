@@ -20,8 +20,8 @@ Non sono previsti dati particolari (art. 9 GDPR) né dati su minori. I documenti
 
 | Servizio | Cosa riceve | Note |
 |---|---|---|
-| **Vercel** | Esecuzione dell'applicazione, archivio file | Funzioni oggi in regione `iad1` (USA est): **da valutare per i trasferimenti extra-UE** |
-| **Neon** | Database | **Regione da confermare** |
+| **Vercel** | Esecuzione dell'applicazione, archivio file (Blob) | Funzioni e archivio file in regione `iad1` (USA est): **trasferimento extra-UE**. Ambiente di prova; per l'uso reale vedi §5 |
+| **Neon** | Database | Regione `iad1` (USA est): **trasferimento extra-UE**. La regione di un database Neon non si cambia: per l'uso reale serve un nuovo database in UE (`fra1`) o sui server aziendali |
 | **Resend** | Destinatario, oggetto e testo delle email | Servizio di invio |
 | **VIES, GLEIF, liste sanzioni, OpenSanctions, openapi.com** | Partita IVA e nome del fornitore | Solo dati di aziende, richieste in uscita |
 | **Anthropic** (solo se attivato) | Documenti dei fornitori per il controllo automatico | **Disattivato di default**; da attivare solo dopo approvazione di IT Security e Legal |

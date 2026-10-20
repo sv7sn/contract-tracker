@@ -50,7 +50,7 @@ Fuori ambito (non realizzato): firma elettronica, funzioni AI sui contratti, int
 ```
 src/        interfaccia (views/, components/, lib/); ~8.200 righe
   i18n/       lingue: italiano (testo nel codice) e inglese (src/i18n/en/*.ts, chiave = testo italiano)
-api/        funzioni e logica; ~7.400 righe. I file con prefisso _ sono moduli, gli altri sono funzioni
+api/        funzioni e logica; ~8.000 righe. I file con prefisso _ sono moduli, gli altri sono funzioni
   portal.ts   router unico: ?op=<operazione>, con controllo del ruolo per blocco di operazioni
   _db.ts      schema, query, validazioni
   _permissions.ts, _auth.ts, _crypto.ts   accesso, sessioni, hash
