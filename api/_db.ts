@@ -1,6 +1,17 @@
 import { createHash } from "node:crypto";
 import pg from "pg";
-import type { AppState, AuditEntry, CommitPayload, Contract, NewUserInput, PlanStep, Role, StepStatus, UpdateUserInput, User } from "../src/types.ts";
+import type {
+  AppState,
+  AuditEntry,
+  CommitPayload,
+  Contract,
+  NewUserInput,
+  PlanStep,
+  Role,
+  StepStatus,
+  UpdateUserInput,
+  User,
+} from "../src/types.ts";
 import { HttpError } from "./_http.js";
 import { hashPassword, MIN_PASSWORD, passwordProblem } from "./_crypto.js";
 import { DEFAULT_DOC_RULES, DEFAULT_DOC_TYPES } from "./_supplier-rules.js";
@@ -8,13 +19,18 @@ import { canCreateContract, canDeleteContract, canEditContract, canRespondBO, ca
 import { FILE_PATH_RE } from "./_blob.js";
 
 // sslmode=require/prefer è già trattato da pg come verify-full (certificato verificato): lo scriviamo esplicito, così resta tale anche con le versioni future.
-const connectionString = (process.env.DATABASE_URL ?? process.env.POSTGRES_URL)?.replace(/([?&])sslmode=(require|prefer|verify-ca)\b/, "$1sslmode=verify-full");
+const connectionString = (process.env.DATABASE_URL ?? process.env.POSTGRES_URL)?.replace(
+  /([?&])sslmode=(require|prefer|verify-ca)\b/,
+  "$1sslmode=verify-full",
+);
 
-// Una sola connessione per istanza serverless: il pooler di Neon gestisce la concorrenza.
+// Connessioni per istanza: 1 su Vercel (ogni funzione serve una richiesta alla volta e il pooler di Neon gestisce la concorrenza);
+// su un server Node che serve molte richieste insieme si alza con DB_POOL_MAX (es. 10).
+const POOL_MAX = Math.min(50, Math.max(1, Number(process.env.DB_POOL_MAX) || 1));
 let pool: pg.Pool | undefined;
 export function getPool() {
   if (!connectionString) throw new HttpError(503, "Database non configurato (manca DATABASE_URL)");
-  pool ??= new pg.Pool({ connectionString, max: 1 });
+  pool ??= new pg.Pool({ connectionString, max: POOL_MAX });
   return pool;
 }
 
@@ -375,7 +391,10 @@ export function ensureSchema() {
       // Lo schema si applica solo se è cambiato (impronta salvata nelle impostazioni): niente DDL né blocchi a ogni avvio.
       // Il blocco consultivo non è mai atteso senza limite: dietro un pooler una connessione rimasta appesa lo terrebbe per sempre.
       const hash = createHash("sha256").update(SCHEMA).digest("hex");
-      const current = await db.query("select value #>> '{}' as v from settings where key = 'schema_hash'").then(r => r.rows[0]?.v, () => undefined);
+      const current = await db.query("select value #>> '{}' as v from settings where key = 'schema_hash'").then(
+        r => r.rows[0]?.v,
+        () => undefined,
+      );
       if (current !== hash) {
         for (let i = 0; i < 40 && !locked; i++) {
           locked = (await db.query("select pg_try_advisory_lock(727001) as ok")).rows[0].ok;
@@ -384,29 +403,63 @@ export function ensureSchema() {
         await db.query("set lock_timeout = '15s'");
         await db.query(SCHEMA);
         await db.query("set lock_timeout = 0");
-        await db.query("insert into settings (key, value) values ('schema_hash', $1) on conflict (key) do update set value = excluded.value", [JSON.stringify(hash)]);
+        await db.query(
+          "insert into settings (key, value) values ('schema_hash', $1) on conflict (key) do update set value = excluded.value",
+          [JSON.stringify(hash)],
+        );
       }
-      await db.query(`insert into settings (key, value) values ('sap', $1) on conflict do nothing`, [JSON.stringify({ tradingPartner: "999999", sortKey: "002", cashManagementGroup: "0_VEND_001", releaseGroup: "MFL1", reconciliationAccounts: {} })]);
+      await db.query(`insert into settings (key, value) values ('sap', $1) on conflict do nothing`, [
+        JSON.stringify({
+          tradingPartner: "999999",
+          sortKey: "002",
+          cashManagementGroup: "0_VEND_001",
+          releaseGroup: "MFL1",
+          reconciliationAccounts: {},
+        }),
+      ]);
       await db.query(`insert into industry_codes (code, name) values ('CT00', 'Partner / Clienti') on conflict do nothing`);
-      await db.query(`insert into payment_terms (code, label) values ('0030','30 giorni data fattura'),('0060','60 giorni data fattura'),('0090','90 giorni data fattura') on conflict do nothing`);
+      await db.query(
+        `insert into payment_terms (code, label) values ('0030','30 giorni data fattura'),('0060','60 giorni data fattura'),('0090','90 giorni data fattura') on conflict do nothing`,
+      );
       await db.query(`insert into settings (key, value) values ('rda', $1) on conflict do nothing`, [JSON.stringify({ slaDays: 7 })]);
-      await db.query(`insert into settings (key, value) values ('reminders', $1) on conflict do nothing`, [JSON.stringify({ enabled: true, days: [60, 30, 15], repeatDays: 7, escalateAfter: 2 })]);
+      await db.query(`insert into settings (key, value) values ('reminders', $1) on conflict do nothing`, [
+        JSON.stringify({ enabled: true, days: [60, 30, 15], repeatDays: 7, escalateAfter: 2 }),
+      ]);
       if (!(await db.query("select 1 from doc_types limit 1")).rows.length) {
-        for (const [i, t] of DEFAULT_DOC_TYPES.entries()) await db.query("insert into doc_types (key, label, help, expires, multiple, position) values ($1,$2,$3,$4,$5,$6) on conflict do nothing", [t.key, t.label, t.help, t.expires, t.multiple, i]);
-        for (const r of DEFAULT_DOC_RULES) await db.query("insert into doc_rules (doc_type, scope, value, level) values ($1,$2,$3,$4) on conflict do nothing", [r.docType, r.scope, r.value, r.level]);
+        for (const [i, t] of DEFAULT_DOC_TYPES.entries())
+          await db.query(
+            "insert into doc_types (key, label, help, expires, multiple, position) values ($1,$2,$3,$4,$5,$6) on conflict do nothing",
+            [t.key, t.label, t.help, t.expires, t.multiple, i],
+          );
+        for (const r of DEFAULT_DOC_RULES)
+          await db.query("insert into doc_rules (doc_type, scope, value, level) values ($1,$2,$3,$4) on conflict do nothing", [
+            r.docType,
+            r.scope,
+            r.value,
+            r.level,
+          ]);
       }
       const { rows } = await db.query("select count(*)::int as n from users");
-      const email = process.env.ADMIN_EMAIL?.trim(), password = process.env.ADMIN_PASSWORD;
+      const email = process.env.ADMIN_EMAIL?.trim(),
+        password = process.env.ADMIN_PASSWORD;
       if (rows[0].n === 0 && email && password) {
-        if (password.length < MIN_PASSWORD) { console.error(`ADMIN_PASSWORD troppo corta (minimo ${MIN_PASSWORD} caratteri)`); return; }
-        await db.query("insert into users (email, name, role, title, password_hash) values ($1,$2,'manager',$3,$4) on conflict do nothing",
-          [email.toLowerCase(), process.env.ADMIN_NAME?.trim() || "Amministratore", "Amministratore", await hashPassword(password)]);
+        if (password.length < MIN_PASSWORD) {
+          console.error(`ADMIN_PASSWORD troppo corta (minimo ${MIN_PASSWORD} caratteri)`);
+          return;
+        }
+        await db.query(
+          "insert into users (email, name, role, title, password_hash) values ($1,$2,'manager',$3,$4) on conflict do nothing",
+          [email.toLowerCase(), process.env.ADMIN_NAME?.trim() || "Amministratore", "Amministratore", await hashPassword(password)],
+        );
       }
     } finally {
       if (locked) await db.query("select pg_advisory_unlock(727001)").catch(() => undefined);
       db.release();
     }
-  })().catch(err => { ready = undefined; throw err; });
+  })().catch(err => {
+    ready = undefined;
+    throw err;
+  });
   return ready;
 }
 
@@ -414,9 +467,11 @@ export function ensureSchema() {
 const STATUSES: StepStatus[] = ["upcoming", "done", "pending_bo"];
 const isDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
 const isEmail = (v: unknown): v is string => typeof v === "string" && v.length <= 200 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
-const str = (v: unknown, max = 2000) => typeof v === "string" ? v.slice(0, max) : "";
-const nstr = (v: unknown) => typeof v === "string" ? v.slice(0, 2000) : null;
-const bad = (msg: string): never => { throw new HttpError(400, msg); };
+const str = (v: unknown, max = 2000) => (typeof v === "string" ? v.slice(0, max) : "");
+const nstr = (v: unknown) => (typeof v === "string" ? v.slice(0, 2000) : null);
+const bad = (msg: string): never => {
+  throw new HttpError(400, msg);
+};
 
 type ContractInput = Omit<Contract, "id"> & { id?: number };
 
@@ -433,30 +488,61 @@ function cleanContract(c: unknown): ContractInput {
   if (noticeDays !== null && (!Number.isInteger(noticeDays) || noticeDays < 1 || noticeDays > 1095)) bad("Giorni di preavviso non validi");
   let noticeDate = r.noticeDate === undefined || r.noticeDate === null ? "" : r.noticeDate;
   if (noticeDate !== "" && !isDate(noticeDate)) bad("Data limite di disdetta non valida");
-  if (noticeDays !== null && noticeDate === "") { const d = new Date(`${r.end as string}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - noticeDays); noticeDate = d.toISOString().slice(0, 10); }
+  if (noticeDays !== null && noticeDate === "") {
+    const d = new Date(`${r.end as string}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - noticeDays);
+    noticeDate = d.toISOString().slice(0, 10);
+  }
   if (noticeDate !== "" && (noticeDate as string) > (r.end as string)) bad("La data limite di disdetta deve precedere la scadenza");
   return {
     id: Number.isInteger(r.id) ? (r.id as number) : undefined,
-    supplier: str(r.supplier, 200), object: str(r.object, 300), category: str(r.category, 100), country: str(r.country, 100),
-    value: Number.isFinite(value) ? value : 0, currency: str(r.currency, 3) || "EUR",
-    start: str(r.start, 10), end: r.end as string, owner: str(r.owner, 100), boEmail: str(r.boEmail, 200).toLowerCase(), boUserId: Number.isInteger(r.boUserId) && (r.boUserId as number) > 0 ? r.boUserId as number : null,
-    renewal: str(r.renewal, 100) || "Non definito", type: str(r.type, 100), notes: str(r.notes, 4000),
-    ceased: r.ceased === true, fileName: nstr(r.fileName), noticeDays, noticeDate: noticeDate as string,
-    supplierId: Number.isInteger(r.supplierId) && (r.supplierId as number) > 0 ? r.supplierId as number : null,
+    supplier: str(r.supplier, 200),
+    object: str(r.object, 300),
+    category: str(r.category, 100),
+    country: str(r.country, 100),
+    value: Number.isFinite(value) ? value : 0,
+    currency: str(r.currency, 3) || "EUR",
+    start: str(r.start, 10),
+    end: r.end as string,
+    owner: str(r.owner, 100),
+    boEmail: str(r.boEmail, 200).toLowerCase(),
+    boUserId: Number.isInteger(r.boUserId) && (r.boUserId as number) > 0 ? (r.boUserId as number) : null,
+    renewal: str(r.renewal, 100) || "Non definito",
+    type: str(r.type, 100),
+    notes: str(r.notes, 4000),
+    ceased: r.ceased === true,
+    fileName: nstr(r.fileName),
+    noticeDays,
+    noticeDate: noticeDate as string,
+    supplierId: Number.isInteger(r.supplierId) && (r.supplierId as number) > 0 ? (r.supplierId as number) : null,
     internalOrder: str(r.internalOrder, 40).replace(/\s+/g, ""),
-    filePath: r.filePath == null ? null : typeof r.filePath === "string" && FILE_PATH_RE.test(r.filePath) ? r.filePath : bad("Documento non valido"),
+    filePath:
+      r.filePath == null
+        ? null
+        : typeof r.filePath === "string" && FILE_PATH_RE.test(r.filePath)
+          ? r.filePath
+          : bad("Documento non valido"),
   };
 }
 
 function cleanPlan(plan: unknown): PlanStep[] {
   if (!Array.isArray(plan) || plan.length > 20) return bad("Piano non valido");
   return plan.map((raw: Record<string, unknown>) => {
-    if (!isDate(raw.scheduledDate) || !isDate(raw.originalDate) || !STATUSES.includes(raw.status as StepStatus) || !str(raw.stepId)) bad("Attività del piano non valida");
+    if (!isDate(raw.scheduledDate) || !isDate(raw.originalDate) || !STATUSES.includes(raw.status as StepStatus) || !str(raw.stepId))
+      bad("Attività del piano non valida");
     return {
-      contractId: 0, stepId: str(raw.stepId, 50), scheduledDate: raw.scheduledDate as string, originalDate: raw.originalDate as string,
-      status: raw.status as StepStatus, completedAt: nstr(raw.completedAt), completedBy: nstr(raw.completedBy),
-      boDecision: nstr(raw.boDecision), boNotes: str(raw.boNotes), boRespondedAt: nstr(raw.boRespondedAt),
-      modified: raw.modified === true, modifiedReason: str(raw.modifiedReason),
+      contractId: 0,
+      stepId: str(raw.stepId, 50),
+      scheduledDate: raw.scheduledDate as string,
+      originalDate: raw.originalDate as string,
+      status: raw.status as StepStatus,
+      completedAt: nstr(raw.completedAt),
+      completedBy: nstr(raw.completedBy),
+      boDecision: nstr(raw.boDecision),
+      boNotes: str(raw.boNotes),
+      boRespondedAt: nstr(raw.boRespondedAt),
+      modified: raw.modified === true,
+      modifiedReason: str(raw.modifiedReason),
     };
   });
 }
@@ -464,7 +550,12 @@ function cleanPlan(plan: unknown): PlanStep[] {
 function cleanAudit(audit: unknown): AuditEntry[] {
   if (audit === undefined) return [];
   if (!Array.isArray(audit) || audit.length > 50) return bad("Audit non valido");
-  return audit.map((a: Record<string, unknown>) => ({ ts: str(a.ts, 50), user: str(a.user, 100), action: str(a.action, 300), detail: str(a.detail, 1000) }));
+  return audit.map((a: Record<string, unknown>) => ({
+    ts: str(a.ts, 50),
+    user: str(a.user, 100),
+    action: str(a.action, 300),
+    detail: str(a.detail, 1000),
+  }));
 }
 
 export function cleanPayload(body: unknown): CommitPayload {
@@ -482,8 +573,28 @@ export function cleanPayload(body: unknown): CommitPayload {
 
 // ─── Utenti ──────────────────────────────────────────────────
 /** Solo i campi pubblici: mai l'hash della password. */
-export const publicUser = (u: User): User => ({ id: u.id, email: u.email, name: u.name, role: u.role, title: u.title, active: u.active, sapUser: u.sapUser ?? "", lang: u.lang ?? "it", phone: u.phone ?? "" });
-const toUser = (r: Record<string, unknown>): User => ({ id: r.id as number, email: r.email as string, name: r.name as string, role: r.role as Role, title: r.title as string, active: r.active as boolean, sapUser: (r.sap_user as string) ?? "", lang: r.lang === "en" ? "en" : "it", phone: (r.phone as string) ?? "" });
+export const publicUser = (u: User): User => ({
+  id: u.id,
+  email: u.email,
+  name: u.name,
+  role: u.role,
+  title: u.title,
+  active: u.active,
+  sapUser: u.sapUser ?? "",
+  lang: u.lang ?? "it",
+  phone: u.phone ?? "",
+});
+const toUser = (r: Record<string, unknown>): User => ({
+  id: r.id as number,
+  email: r.email as string,
+  name: r.name as string,
+  role: r.role as Role,
+  title: r.title as string,
+  active: r.active as boolean,
+  sapUser: (r.sap_user as string) ?? "",
+  lang: r.lang === "en" ? "en" : "it",
+  phone: (r.phone as string) ?? "",
+});
 
 export async function countUsers(): Promise<number> {
   return (await getPool().query("select count(*)::int as n from users")).rows[0].n;
@@ -507,21 +618,40 @@ const IP_LIMIT = 30;
 export async function tooManyAttempts(email: string, ip: string | null = null): Promise<boolean> {
   const db = getPool();
   await db.query("delete from login_attempts where at < now() - interval '1 day'");
-  const { rows } = await db.query(`select count(*)::int as n from login_attempts where lower(email) = lower($1) and at > now() - interval '${WINDOW}'`, [email]);
+  const { rows } = await db.query(
+    `select count(*)::int as n from login_attempts where lower(email) = lower($1) and at > now() - interval '${WINDOW}'`,
+    [email],
+  );
   if (rows[0].n >= FAILED_LIMIT) return true;
   if (!ip) return false;
   const byIp = await db.query(`select count(*)::int as n from login_attempts where ip = $1 and at > now() - interval '${WINDOW}'`, [ip]);
   return byIp.rows[0].n >= IP_LIMIT;
 }
-export const recordFailedAttempt = (email: string, ip: string | null = null) => getPool().query("insert into login_attempts (email, ip) values ($1, $2)", [email.toLowerCase(), ip]);
+export const recordFailedAttempt = (email: string, ip: string | null = null) =>
+  getPool().query("insert into login_attempts (email, ip) values ($1, $2)", [email.toLowerCase(), ip]);
 
 /** Registro degli eventi di sicurezza (accessi, password, sessioni): lo legge il Manager in Configurazione. */
-export async function logSecurity(event: string, o: { userId?: number | null; email?: string; ip?: string | null; detail?: string } = {}): Promise<void> {
-  try { await getPool().query("insert into security_events (user_id, email, event, ip, detail) values ($1,$2,$3,$4,$5)", [o.userId ?? null, (o.email ?? "").toLowerCase(), event, o.ip ?? null, (o.detail ?? "").slice(0, 300)]); }
-  catch (err) { console.error("security_events", err); }
+export async function logSecurity(
+  event: string,
+  o: { userId?: number | null; email?: string; ip?: string | null; detail?: string } = {},
+): Promise<void> {
+  try {
+    await getPool().query("insert into security_events (user_id, email, event, ip, detail) values ($1,$2,$3,$4,$5)", [
+      o.userId ?? null,
+      (o.email ?? "").toLowerCase(),
+      event,
+      o.ip ?? null,
+      (o.detail ?? "").slice(0, 300),
+    ]);
+  } catch (err) {
+    console.error("security_events", err);
+  }
 }
 export async function bumpSessionVersion(userId: number): Promise<number> {
-  return (await getPool().query("update users set session_version = session_version + 1 where id = $1 returning session_version", [userId])).rows[0]?.session_version ?? 0;
+  return (
+    (await getPool().query("update users set session_version = session_version + 1 where id = $1 returning session_version", [userId]))
+      .rows[0]?.session_version ?? 0
+  );
 }
 export const clearAttempts = (email: string) => getPool().query("delete from login_attempts where lower(email) = lower($1)", [email]);
 
@@ -530,11 +660,23 @@ export async function setPassword(userId: number, password: string): Promise<num
   const email = (await getPool().query("select email from users where id = $1", [userId])).rows[0]?.email ?? "";
   const problem = passwordProblem(password, email);
   if (problem) throw new HttpError(400, problem);
-  return (await getPool().query("update users set password_hash = $1, session_version = session_version + 1 where id = $2 returning session_version", [await hashPassword(password), userId])).rows[0].session_version;
+  return (
+    await getPool().query(
+      "update users set password_hash = $1, session_version = session_version + 1 where id = $2 returning session_version",
+      [await hashPassword(password), userId],
+    )
+  ).rows[0].session_version;
 }
 
 /** Codice utente SAP del richiedente (es. DANTADI001): serve a riconoscere le RDA che ha aperto. */
-const cleanSapUser = (v: unknown) => (typeof v === "string" ? v.trim().toUpperCase().replace(/[^A-Z0-9_.-]/g, "").slice(0, 30) : "");
+const cleanSapUser = (v: unknown) =>
+  typeof v === "string"
+    ? v
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9_.-]/g, "")
+        .slice(0, 30)
+    : "";
 const uniqueViolation = (err: unknown) => (err as { code?: string })?.code === "23505";
 
 export async function createUser(input: unknown): Promise<User> {
@@ -543,10 +685,25 @@ export async function createUser(input: unknown): Promise<User> {
   const name = str(r.name, 80).trim();
   if (name.length < 2) bad("Nome obbligatorio");
   if (!ROLES.includes(r.role as Role)) bad("Ruolo non valido");
-  { const problem = typeof r.password !== "string" ? `La password deve avere almeno ${MIN_PASSWORD} caratteri` : passwordProblem(r.password, String(r.email ?? "")); if (problem) bad(problem); }
+  {
+    const problem =
+      typeof r.password !== "string"
+        ? `La password deve avere almeno ${MIN_PASSWORD} caratteri`
+        : passwordProblem(r.password, String(r.email ?? ""));
+    if (problem) bad(problem);
+  }
   try {
-    const { rows } = await getPool().query("insert into users (email, name, role, title, password_hash, sap_user) values ($1,$2,$3,$4,$5,$6) returning *",
-      [(r.email as string).trim().toLowerCase(), name, r.role, str(r.title, 100), await hashPassword(r.password as string), cleanSapUser(r.sapUser)]);
+    const { rows } = await getPool().query(
+      "insert into users (email, name, role, title, password_hash, sap_user) values ($1,$2,$3,$4,$5,$6) returning *",
+      [
+        (r.email as string).trim().toLowerCase(),
+        name,
+        r.role,
+        str(r.title, 100),
+        await hashPassword(r.password as string),
+        cleanSapUser(r.sapUser),
+      ],
+    );
     return toUser(rows[0]);
   } catch (err) {
     if (uniqueViolation(err)) throw new HttpError(409, "Esiste già un utente con questa email o questo nome");
@@ -570,12 +727,25 @@ export async function deleteUser(actor: User, id: number): Promise<void> {
     if (rows[0].n === 0) bad("Deve restare almeno un manager attivo");
   }
   const owned = await countOwnedContracts(target);
-  const asBo = (await getPool().query("select count(*)::int as n from contracts where lower(bo_email) = lower($1)", [target.email])).rows[0].n;
+  const asBo = (await getPool().query("select count(*)::int as n from contracts where lower(bo_email) = lower($1)", [target.email])).rows[0]
+    .n;
   if (owned || asBo) {
     const name = target.name;
-    if (owned && asBo) throw HttpError.t(409, "{name} è contract owner di {owned} e Business Owner di {bo} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)", { name, owned, bo: asBo });
-    if (owned) throw HttpError.t(409, "{name} è contract owner di {owned} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)", { name, owned });
-    throw HttpError.t(409, "{name} è Business Owner di {bo} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)", { name, bo: asBo });
+    if (owned && asBo)
+      throw HttpError.t(
+        409,
+        "{name} è contract owner di {owned} e Business Owner di {bo} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)",
+        { name, owned, bo: asBo },
+      );
+    if (owned)
+      throw HttpError.t(409, "{name} è contract owner di {owned} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)", {
+        name,
+        owned,
+      });
+    throw HttpError.t(409, "{name} è Business Owner di {bo} contratti: riassegnali prima di eliminarlo (oppure disattiva l'utente)", {
+      name,
+      bo: asBo,
+    });
   }
   await getPool().query("delete from users where id = $1", [id]);
   await getPool().query("delete from login_attempts where lower(email) = lower($1)", [target.email]);
@@ -592,40 +762,82 @@ export async function updateUser(actor: User, input: unknown): Promise<User> {
   if (target.id === actor.id && (role !== actor.role || !active)) bad("Non puoi cambiare il tuo ruolo né disattivare il tuo account");
   if (role !== target.role && role === "bo") {
     const owned = await countOwnedContracts(target);
-    if (owned > 0) throw HttpError.t(409, "{name} è contract owner di {owned} contratti: riassegnali prima di renderlo Business Owner", { name: target.name, owned });
+    if (owned > 0)
+      throw HttpError.t(409, "{name} è contract owner di {owned} contratti: riassegnali prima di renderlo Business Owner", {
+        name: target.name,
+        owned,
+      });
   }
   if (target.role === "manager" && target.active && (role !== "manager" || !active)) {
-    const { rows } = await getPool().query("select count(*)::int as n from users where role = 'manager' and active and id <> $1", [target.id]);
+    const { rows } = await getPool().query("select count(*)::int as n from users where role = 'manager' and active and id <> $1", [
+      target.id,
+    ]);
     if (rows[0].n === 0) bad("Deve restare almeno un manager attivo");
   }
-  const { rows } = await getPool().query("update users set role = $1, title = $2, active = $3, sap_user = $4 where id = $5 returning *",
-    [role, r.title === undefined ? target.title : str(r.title, 100), active, r.sapUser === undefined ? target.sapUser ?? "" : cleanSapUser(r.sapUser), target.id]);
-  if (r.password !== undefined) { await setPassword(target.id, r.password); await logSecurity("password_reset_by_admin", { userId: target.id, email: target.email, detail: `da ${actor.name}` }); }
-  else if (role !== target.role || !active) await bumpSessionVersion(target.id);
+  const { rows } = await getPool().query("update users set role = $1, title = $2, active = $3, sap_user = $4 where id = $5 returning *", [
+    role,
+    r.title === undefined ? target.title : str(r.title, 100),
+    active,
+    r.sapUser === undefined ? (target.sapUser ?? "") : cleanSapUser(r.sapUser),
+    target.id,
+  ]);
+  if (r.password !== undefined) {
+    await setPassword(target.id, r.password);
+    await logSecurity("password_reset_by_admin", { userId: target.id, email: target.email, detail: `da ${actor.name}` });
+  } else if (role !== target.role || !active) await bumpSessionVersion(target.id);
   return toUser(rows[0]);
 }
 
 // ─── Lettura (filtrata per ruolo) ────────────────────────────
 function rowToContract(r: Record<string, unknown>): Contract {
   return {
-    id: r.id as number, supplier: r.supplier as string, object: r.object as string, category: r.category as string, country: r.country as string,
-    value: r.value as number, currency: r.currency as string, start: r.start_date as string, end: r.end_date as string, owner: r.owner as string,
-    boEmail: r.bo_email as string, renewal: r.renewal as string, type: r.type as string, notes: r.notes as string, ceased: (r.ceased as boolean) || r.status === "closed",
-    fileName: r.file_name as string | null, filePath: r.file_path as string | null,
-    noticeDays: r.notice_days as number | null, noticeDate: (r.notice_date as string) ?? "",
-    status: (r.status as Contract["status"]) ?? "active", outcome: (r.outcome as Contract["outcome"]) ?? "", outcomeNote: (r.outcome_note as string) ?? "",
-    closedAt: r.closed_at ? new Date(r.closed_at as string).toISOString() : null, replaces: (r.replaces as number | null) ?? null, replacedBy: (r.replaced_by as number | null) ?? null,
-    supplierId: (r.supplier_id as number | null) ?? null, internalOrder: (r.internal_order as string) ?? "",
-    boLeadDays: (r.bo_lead_days as number | null) ?? null, ownerId: (r.owner_id as number | null) ?? null,
-    boUserId: (r.bo_user_id as number | null) ?? null, boName: (r.bo_name as string | null) ?? "",
+    id: r.id as number,
+    supplier: r.supplier as string,
+    object: r.object as string,
+    category: r.category as string,
+    country: r.country as string,
+    value: r.value as number,
+    currency: r.currency as string,
+    start: r.start_date as string,
+    end: r.end_date as string,
+    owner: r.owner as string,
+    boEmail: r.bo_email as string,
+    renewal: r.renewal as string,
+    type: r.type as string,
+    notes: r.notes as string,
+    ceased: (r.ceased as boolean) || r.status === "closed",
+    fileName: r.file_name as string | null,
+    filePath: r.file_path as string | null,
+    noticeDays: r.notice_days as number | null,
+    noticeDate: (r.notice_date as string) ?? "",
+    status: (r.status as Contract["status"]) ?? "active",
+    outcome: (r.outcome as Contract["outcome"]) ?? "",
+    outcomeNote: (r.outcome_note as string) ?? "",
+    closedAt: r.closed_at ? new Date(r.closed_at as string).toISOString() : null,
+    replaces: (r.replaces as number | null) ?? null,
+    replacedBy: (r.replaced_by as number | null) ?? null,
+    supplierId: (r.supplier_id as number | null) ?? null,
+    internalOrder: (r.internal_order as string) ?? "",
+    boLeadDays: (r.bo_lead_days as number | null) ?? null,
+    ownerId: (r.owner_id as number | null) ?? null,
+    boUserId: (r.bo_user_id as number | null) ?? null,
+    boName: (r.bo_name as string | null) ?? "",
   };
 }
 function rowToStep(r: Record<string, unknown>): PlanStep {
   return {
-    contractId: r.contract_id as number, stepId: r.step_id as string, scheduledDate: r.scheduled_date as string, originalDate: r.original_date as string,
-    status: r.status as StepStatus, completedAt: r.completed_at as string | null, completedBy: r.completed_by as string | null,
-    boDecision: r.bo_decision as string | null, boNotes: r.bo_notes as string, boRespondedAt: r.bo_responded_at as string | null,
-    modified: r.modified as boolean, modifiedReason: r.modified_reason as string,
+    contractId: r.contract_id as number,
+    stepId: r.step_id as string,
+    scheduledDate: r.scheduled_date as string,
+    originalDate: r.original_date as string,
+    status: r.status as StepStatus,
+    completedAt: r.completed_at as string | null,
+    completedBy: r.completed_by as string | null,
+    boDecision: r.bo_decision as string | null,
+    boNotes: r.bo_notes as string,
+    boRespondedAt: r.bo_responded_at as string | null,
+    modified: r.modified as boolean,
+    modifiedReason: r.modified_reason as string,
   };
 }
 
@@ -645,8 +857,14 @@ export async function loadState(user: User): Promise<AppState> {
   const db = getPool();
   await linkContractSuppliers(db);
   // Un Business Owner creato dopo il contratto: si collega all'email già indicata.
-  await db.query("update contracts c set bo_user_id = u.id from users u where c.bo_user_id is null and c.bo_email <> '' and lower(u.email) = lower(c.bo_email) and u.role = 'bo' and u.active");
-  const contracts = (await db.query("select c.*, bu.name as bo_name from contracts c left join users bu on bu.id = c.bo_user_id order by c.id")).rows.map(rowToContract).filter(c => canViewContract(user, c));
+  await db.query(
+    "update contracts c set bo_user_id = u.id from users u where c.bo_user_id is null and c.bo_email <> '' and lower(u.email) = lower(c.bo_email) and u.role = 'bo' and u.active",
+  );
+  const contracts = (
+    await db.query("select c.*, bu.name as bo_name from contracts c left join users bu on bu.id = c.bo_user_id order by c.id")
+  ).rows
+    .map(rowToContract)
+    .filter(c => canViewContract(user, c));
   const state: AppState = { contracts, plans: {}, auditLogs: {} };
   if (!contracts.length) return state;
   const ids = contracts.map(c => c.id);
@@ -662,10 +880,14 @@ export async function loadState(user: User): Promise<AppState> {
 // ─── Scrittura (tutto in una transazione, con controllo dei permessi) ─
 export type Queryable = Pick<pg.PoolClient, "query">;
 
-export async function getContract(id: number): Promise<Contract | undefined> { return fetchContract(getPool(), id); }
+export async function getContract(id: number): Promise<Contract | undefined> {
+  return fetchContract(getPool(), id);
+}
 
 async function fetchContract(db: Queryable, id: number): Promise<Contract | undefined> {
-  const r = (await db.query("select c.*, bu.name as bo_name from contracts c left join users bu on bu.id = c.bo_user_id where c.id = $1", [id])).rows[0];
+  const r = (
+    await db.query("select c.*, bu.name as bo_name from contracts c left join users bu on bu.id = c.bo_user_id where c.id = $1", [id])
+  ).rows[0];
   return r ? rowToContract(r) : undefined;
 }
 export async function fetchPlan(db: Queryable, id: number): Promise<PlanStep[]> {
@@ -673,26 +895,55 @@ export async function fetchPlan(db: Queryable, id: number): Promise<PlanStep[]> 
 }
 
 async function upsertContract(db: Queryable, c: ContractInput): Promise<number> {
-  const cols = [c.supplier, c.object, c.category, c.country, c.value, c.currency, c.start, c.end, c.owner, c.boEmail, c.renewal, c.type, c.notes, c.ceased, c.fileName, c.filePath, c.noticeDays, c.noticeDate, c.supplierId ?? null, c.internalOrder ?? ""];
-  if (c.supplierId && !(await db.query("select 1 from suppliers where id = $1", [c.supplierId])).rows.length) bad("Fornitore non trovato in anagrafica");
-  const ownerId = (await db.query("select id from users where lower(name) = lower($1) and role in ('manager','buyer')", [c.owner])).rows[0]?.id ?? null;
+  const cols = [
+    c.supplier,
+    c.object,
+    c.category,
+    c.country,
+    c.value,
+    c.currency,
+    c.start,
+    c.end,
+    c.owner,
+    c.boEmail,
+    c.renewal,
+    c.type,
+    c.notes,
+    c.ceased,
+    c.fileName,
+    c.filePath,
+    c.noticeDays,
+    c.noticeDate,
+    c.supplierId ?? null,
+    c.internalOrder ?? "",
+  ];
+  if (c.supplierId && !(await db.query("select 1 from suppliers where id = $1", [c.supplierId])).rows.length)
+    bad("Fornitore non trovato in anagrafica");
+  const ownerId =
+    (await db.query("select id from users where lower(name) = lower($1) and role in ('manager','buyer')", [c.owner])).rows[0]?.id ?? null;
   // Business Owner: si sceglie tra gli utenti con quel ruolo; l'email segue l'utente. Un'email sola (contratti vecchi) resta valida e si collega all'utente se esiste.
   let boUserId: number | null = c.boUserId ?? null;
   if (boUserId) {
     const bu = (await db.query("select email from users where id = $1 and active and role = 'bo'", [boUserId])).rows[0];
     if (!bu) bad("Il Business Owner deve essere un utente attivo con ruolo Business Owner");
     cols[9] = bu.email as string;
-  } else if (c.boEmail) boUserId = (await db.query("select id from users where lower(email) = lower($1) and active and role = 'bo'", [c.boEmail])).rows[0]?.id ?? null;
+  } else if (c.boEmail)
+    boUserId =
+      (await db.query("select id from users where lower(email) = lower($1) and active and role = 'bo'", [c.boEmail])).rows[0]?.id ?? null;
   cols.push(ownerId, boUserId);
   if (c.id === undefined) {
     const r = await db.query(
       `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, ceased, file_name, file_path, notice_days, notice_date, supplier_id, internal_order, owner_id, bo_user_id)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) returning id`, cols);
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) returning id`,
+      cols,
+    );
     return r.rows[0].id;
   }
   const r = await db.query(
     `update contracts set supplier=$1, object=$2, category=$3, country=$4, value=$5, currency=$6, start_date=$7, end_date=$8,
-       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15, file_path=$16, notice_days=$17, notice_date=$18, supplier_id=$19, internal_order=$20, owner_id=$21, bo_user_id=$22 where id=$23`, [...cols, c.id]);
+       owner=$9, bo_email=$10, renewal=$11, type=$12, notes=$13, ceased=$14, file_name=$15, file_path=$16, notice_days=$17, notice_date=$18, supplier_id=$19, internal_order=$20, owner_id=$21, bo_user_id=$22 where id=$23`,
+    [...cols, c.id],
+  );
   if (!r.rowCount) throw new HttpError(404, "Contratto non trovato");
   return c.id;
 }
@@ -703,15 +954,34 @@ export async function replacePlan(db: Queryable, contractId: number, plan: PlanS
     await db.query(
       `insert into plan_steps (contract_id, step_id, scheduled_date, original_date, status, completed_at, completed_by, bo_decision, bo_notes, bo_responded_at, modified, modified_reason)
        values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-      [contractId, s.stepId, s.scheduledDate, s.originalDate, s.status, s.completedAt, s.completedBy, s.boDecision, s.boNotes, s.boRespondedAt, s.modified, s.modifiedReason]);
+      [
+        contractId,
+        s.stepId,
+        s.scheduledDate,
+        s.originalDate,
+        s.status,
+        s.completedAt,
+        s.completedBy,
+        s.boDecision,
+        s.boNotes,
+        s.boRespondedAt,
+        s.modified,
+        s.modifiedReason,
+      ],
+    );
   }
 }
 
 export async function addAudit(db: Queryable, contractId: number, user: User, entries: AuditEntry[]) {
   for (const e of entries) {
     // L'autore è sempre l'utente della sessione: il client non può attribuire azioni ad altri ("Sistema" indica le azioni automatiche).
-    await db.query("insert into audit_log (contract_id, ts, user_name, action, detail) values ($1,$2,$3,$4,$5)",
-      [contractId, e.ts, e.user === "Sistema" ? "Sistema" : user.name, e.action, e.detail]);
+    await db.query("insert into audit_log (contract_id, ts, user_name, action, detail) values ($1,$2,$3,$4,$5)", [
+      contractId,
+      e.ts,
+      e.user === "Sistema" ? "Sistema" : user.name,
+      e.action,
+      e.detail,
+    ]);
   }
 }
 
@@ -737,7 +1007,18 @@ async function assertValidOwner(db: Queryable, owner: string) {
   if (!rows.length) bad("Il contract owner deve essere un buyer o un manager attivo");
 }
 
-const STEP_FIELDS = ["scheduledDate", "originalDate", "status", "completedAt", "completedBy", "boDecision", "boNotes", "boRespondedAt", "modified", "modifiedReason"] as const;
+const STEP_FIELDS = [
+  "scheduledDate",
+  "originalDate",
+  "status",
+  "completedAt",
+  "completedBy",
+  "boDecision",
+  "boNotes",
+  "boRespondedAt",
+  "modified",
+  "modifiedReason",
+] as const;
 
 /** Un Business Owner può solo registrare la propria decisione: cambia lo stato di rinnovo e la sola attività "bo_response". */
 function assertBoOnlyChanges(existing: Contract, existingPlan: PlanStep[], contract?: ContractInput, plan?: PlanStep[]) {

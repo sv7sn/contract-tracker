@@ -29,8 +29,14 @@ const LINES: [string, string, string, string, string, number, number, number, nu
 ];
 // Fornitori registrati (codice SAP fittizio) usati da RDA, PO e contratti.
 const SUPPLIERS: [string, string][] = [
-  ["AgroLab Srl", "SIMV0001"], ["Software Point Srl", "SIMV0002"], ["CloudItalia Spa", "SIMV0003"], ["Rockwell Automation Srl", "SIMV0004"],
-  ["Pulito Spa", "SIMV0005"], ["Sicurezza Nord Srl", "SIMV0006"], ["Expo Service Srl", "SIMV0007"], ["Academy Srl", "SIMV0008"],
+  ["AgroLab Srl", "SIMV0001"],
+  ["Software Point Srl", "SIMV0002"],
+  ["CloudItalia Spa", "SIMV0003"],
+  ["Rockwell Automation Srl", "SIMV0004"],
+  ["Pulito Spa", "SIMV0005"],
+  ["Sicurezza Nord Srl", "SIMV0006"],
+  ["Expo Service Srl", "SIMV0007"],
+  ["Academy Srl", "SIMV0008"],
 ];
 const SAP_CODE = Object.fromEntries(SUPPLIERS);
 // RDA già ordinate: [IO, titolo, fornitore, valore, mese di rilascio]
@@ -76,15 +82,44 @@ const CONTRACTS: [string, string, string, number, string, string, number | null]
 
 // Categorie SAP (gruppo merci) per la categoria del Master Plan.
 const MATL: Record<string, [string, string]> = {
-  SERVICES: ["020302", "Servizi tecnici e prove"], CONSULTING: ["020601", "Consult./Profess."], SOFTWARE: ["919010100", "SW PURCHASING"], MAINTENANCE: ["080101007", "Hard. & Soft. Maint."],
-  TRAINING: ["020701", "Formazione"], FACILITY: ["050101", "Facility services"], MARKETING: ["020202", "Comm. & PR"],
+  SERVICES: ["020302", "Servizi tecnici e prove"],
+  CONSULTING: ["020601", "Consult./Profess."],
+  SOFTWARE: ["919010100", "SW PURCHASING"],
+  MAINTENANCE: ["080101007", "Hard. & Soft. Maint."],
+  TRAINING: ["020701", "Formazione"],
+  FACILITY: ["050101", "Facility services"],
+  MARKETING: ["020202", "Comm. & PR"],
 };
 const LINE_OF = Object.fromEntries(LINES.map(l => [l[0], l]));
 // Ordini senza RDA: [PO, fornitore, codice SAP, IO, descrizione, valore ricevuto, mese, accordo quadro SAP]
 // (i servizi a contratto chiamati ogni mese, un accordo quadro SAP e qualche acquisto fuori processo della coda lunga)
 const CALL_OFFS: [string, string, string, string, string, number, number, string][] = [
-  ...[4, 5, 6, 7, 8, 9].map(m => [`SIMPO40${String(m).padStart(2, "0")}`, "PULITO SPA", "SIMV0005", "SIM2600000007", `Canone pulizie ${m}/2026`, 15500, m, ""] as [string, string, string, string, string, number, number, string]),
-  ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(m => [`SIMPO41${String(m).padStart(2, "0")}`, "SICUREZZA NORD SRL", "SIMV0006", "SIM2600000008", `Vigilanza ${m}/2026`, 5800, m, "SIMAG0001"] as [string, string, string, string, string, number, number, string]),
+  ...[4, 5, 6, 7, 8, 9].map(
+    m =>
+      [`SIMPO40${String(m).padStart(2, "0")}`, "PULITO SPA", "SIMV0005", "SIM2600000007", `Canone pulizie ${m}/2026`, 15500, m, ""] as [
+        string,
+        string,
+        string,
+        string,
+        string,
+        number,
+        number,
+        string,
+      ],
+  ),
+  ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map(
+    m =>
+      [
+        `SIMPO41${String(m).padStart(2, "0")}`,
+        "SICUREZZA NORD SRL",
+        "SIMV0006",
+        "SIM2600000008",
+        `Vigilanza ${m}/2026`,
+        5800,
+        m,
+        "SIMAG0001",
+      ] as [string, string, string, string, string, number, number, string],
+  ),
   ["SIMPO4201", "FERRAMENTA ROSSI SNC", "SIMV0101", "SIM2600000007", "Materiale di consumo manutenzione", 450, 3, ""],
   ["SIMPO4202", "TIPOGRAFIA BIANCHI SRL", "SIMV0102", "SIM2600000009", "Stampa brochure fiera", 1200, 4, ""],
   ["SIMPO4203", "CATERING VERDI SRL", "SIMV0103", "SIM2600000009", "Catering evento clienti", 3800, 9, ""],
@@ -102,26 +137,75 @@ function mpCsv(year: 26 | 27): Uint8Array {
   return new TextEncoder().encode([head, ...rows, `Grand Total;;;;;${year === 26 ? "0;0;0;0;0" : "0"}`].join("\n"));
 }
 
-const addDays = (d: string, n: number) => { const x = new Date(`${d}T00:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
-interface DemoPoLine { po: string; item: string; docDate: string; supplierCode: string; supplierName: string; pr: string; prValue: number; netValue: number | null; value: number; source: string;
-  matlGroup: string; matlGroupDesc: string; agreement: string; io: string; costCenter: string; shortText: string }
+const addDays = (d: string, n: number) => {
+  const x = new Date(`${d}T00:00:00Z`);
+  x.setUTCDate(x.getUTCDate() + n);
+  return x.toISOString().slice(0, 10);
+};
+interface DemoPoLine {
+  po: string;
+  item: string;
+  docDate: string;
+  supplierCode: string;
+  supplierName: string;
+  pr: string;
+  prValue: number;
+  netValue: number | null;
+  value: number;
+  source: string;
+  matlGroup: string;
+  matlGroupDesc: string;
+  agreement: string;
+  io: string;
+  costCenter: string;
+  shortText: string;
+}
 async function insertPoLine(tx: Queryable, l: DemoPoLine): Promise<void> {
-  await tx.query(`insert into po_lines (po, item, doc_date, created_on, doc_type, supplier_code, supplier_name, pr, pr_value, net_value, gr_amount, value, value_source, currency, matl_group, matl_group_desc, agreement, internal_order, cost_center, gl_account, short_text, pgr, created_by)
+  await tx.query(
+    `insert into po_lines (po, item, doc_date, created_on, doc_type, supplier_code, supplier_name, pr, pr_value, net_value, gr_amount, value, value_source, currency, matl_group, matl_group_desc, agreement, internal_order, cost_center, gl_account, short_text, pgr, created_by)
     values ($1,$2,$3,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'EUR',$13,$14,$15,$16,$17,'N00000',$18,'SIM','SIMULAZIONE') on conflict do nothing`,
-    [l.po, l.item, l.docDate, l.agreement ? "EC" : "EB", l.supplierCode, l.supplierName, l.pr, l.prValue, l.netValue, l.source === "gr" ? l.value : 0, l.value, l.source, l.matlGroup, l.matlGroupDesc, l.agreement, l.io, l.costCenter, l.shortText]);
+    [
+      l.po,
+      l.item,
+      l.docDate,
+      l.agreement ? "EC" : "EB",
+      l.supplierCode,
+      l.supplierName,
+      l.pr,
+      l.prValue,
+      l.netValue,
+      l.source === "gr" ? l.value : 0,
+      l.value,
+      l.source,
+      l.matlGroup,
+      l.matlGroupDesc,
+      l.agreement,
+      l.io,
+      l.costCenter,
+      l.shortText,
+    ],
+  );
 }
 
 async function ensureConfig(db: Queryable): Promise<void> {
-  if (!(await db.query("select 1 from buying_companies limit 1")).rows.length) await db.query("insert into buying_companies (code, name, sap_company_code, purch_org) values ('SIMCO', 'Società di prova (simulazione)', '9999', '9999')");
-  if (!(await db.query("select 1 from industry_codes limit 1")).rows.length) await db.query("insert into industry_codes (code, name) values ('SIM01', 'Codice merceologico di prova')");
+  if (!(await db.query("select 1 from buying_companies limit 1")).rows.length)
+    await db.query(
+      "insert into buying_companies (code, name, sap_company_code, purch_org) values ('SIMCO', 'Società di prova (simulazione)', '9999', '9999')",
+    );
+  if (!(await db.query("select 1 from industry_codes limit 1")).rows.length)
+    await db.query("insert into industry_codes (code, name) values ('SIM01', 'Codice merceologico di prova')");
 }
 
 export async function loadBudgetDemo(user: User): Promise<{ years: number[]; tasks: number; contracts: number; suppliers: number }> {
   if (user.role !== "manager") throw new HttpError(403, "Solo il Manager carica la simulazione");
   const db = getPool();
-  if ((await db.query("select 1 from tasks where created_by = $1 limit 1", [SIM_TAG])).rows.length) throw new HttpError(409, "La simulazione è già caricata: eliminala prima di ricaricarla");
-  const real = (await db.query("select distinct year from mp_versions where year in (2026, 2027) and file_name <> $1", [SIM_FILE])).rows.map(r => r.year as number);
-  if (real.length) throw new HttpError(409, `Esiste già un Master Plan reale per il ${real.join(" e ")}: la simulazione non lo sovrascrive`);
+  if ((await db.query("select 1 from tasks where created_by = $1 limit 1", [SIM_TAG])).rows.length)
+    throw new HttpError(409, "La simulazione è già caricata: eliminala prima di ricaricarla");
+  const real = (
+    await db.query("select distinct year from mp_versions where year in (2026, 2027) and file_name <> $1", [SIM_FILE])
+  ).rows.map(r => r.year as number);
+  if (real.length)
+    throw new HttpError(409, `Esiste già un Master Plan reale per il ${real.join(" e ")}: la simulazione non lo sovrascrive`);
   await ensureConfig(db);
   await importBudget(user, 2026, "", SIM_FILE, mpCsv(26));
   await importBudget(user, 2027, "", SIM_FILE, mpCsv(27));
@@ -129,65 +213,260 @@ export async function loadBudgetDemo(user: User): Promise<{ years: number[]; tas
   const supplierId: Record<string, number> = {};
   for (const [name, sapCode] of SUPPLIERS) supplierId[name] = (await createDemoSupplier(user, { name, sapCode })).id;
   // Qualche valutazione di prova (si eliminano con i fornitori).
-  const RATINGS: [string, number, number, number, number, string][] = [["AgroLab Srl", 5, 4, 5, 3, "Analisi affidabili"], ["AgroLab Srl", 4, 4, 4, 4, ""], ["Software Point Srl", 4, 5, 4, 3, ""], ["Pulito Spa", 3, 2, 3, 4, "Ritardi frequenti nelle pulizie del magazzino"], ["Expo Service Srl", 5, 5, 4, 3, "Allestimento fiera impeccabile"]];
-  for (const [name, q, d, sv, pr, comment] of RATINGS) await db.query("insert into supplier_ratings (supplier_id, rater_id, rater_name, quality, delivery, service, price, comment) values ($1,$2,$3,$4,$5,$6,$7,$8)", [supplierId[name], user.id, "Buyer di prova", q, d, sv, pr, comment]);
-  const buyers = (await db.query("select id from users where active and role in ('buyer','manager') order by role = 'buyer' desc, id")).rows.map(r => r.id as number);
+  const RATINGS: [string, number, number, number, number, string][] = [
+    ["AgroLab Srl", 5, 4, 5, 3, "Analisi affidabili"],
+    ["AgroLab Srl", 4, 4, 4, 4, ""],
+    ["Software Point Srl", 4, 5, 4, 3, ""],
+    ["Pulito Spa", 3, 2, 3, 4, "Ritardi frequenti nelle pulizie del magazzino"],
+    ["Expo Service Srl", 5, 5, 4, 3, "Allestimento fiera impeccabile"],
+  ];
+  for (const [name, q, d, sv, pr, comment] of RATINGS)
+    await db.query(
+      "insert into supplier_ratings (supplier_id, rater_id, rater_name, quality, delivery, service, price, comment) values ($1,$2,$3,$4,$5,$6,$7,$8)",
+      [supplierId[name], user.id, "Buyer di prova", q, d, sv, pr, comment],
+    );
+  const buyers = (
+    await db.query("select id from users where active and role in ('buyer','manager') order by role = 'buyer' desc, id")
+  ).rows.map(r => r.id as number);
   const who = (i: number) => buyers[i % buyers.length] ?? user.id;
   let tasks = 0;
   await inTransaction(async tx => {
     // RDA già diventate ordine, con PO in SAP collegato al fornitore.
     for (const [i, [io, title, supplier, value, month]] of ORDERED.entries()) {
-      const pr = `SIM-${8000001 + i}`, po = `SIMPO${String(1001 + i)}`, release = `2026-${String(month).padStart(2, "0")}-15`;
-      const sourcing = value > 10000 ? JSON.stringify({ mode: "comparison", quotes: [{ supplier, amount: Math.round(value * 1.06), chosen: true }, { supplier: "Concorrente Srl", amount: Math.round(value * 1.15), chosen: false }], justification: "", recordedBy: user.name, recordedAt: release, approval: null, approvedBy: "", approvedAt: null, approvalNote: "", baseline: null, finalAmount: value }) : null;
-      await tx.query(`insert into tasks (source, source_key, title, due, assignee_id, status, done_at, done_reason, done_by, meta, sourcing, created_by, created_at)
+      const pr = `SIM-${8000001 + i}`,
+        po = `SIMPO${String(1001 + i)}`,
+        release = `2026-${String(month).padStart(2, "0")}-15`;
+      const sourcing =
+        value > 10000
+          ? JSON.stringify({
+              mode: "comparison",
+              quotes: [
+                { supplier, amount: Math.round(value * 1.06), chosen: true },
+                { supplier: "Concorrente Srl", amount: Math.round(value * 1.15), chosen: false },
+              ],
+              justification: "",
+              recordedBy: user.name,
+              recordedAt: release,
+              approval: null,
+              approvedBy: "",
+              approvedAt: null,
+              approvalNote: "",
+              baseline: null,
+              finalAmount: value,
+            })
+          : null;
+      await tx.query(
+        `insert into tasks (source, source_key, title, due, assignee_id, status, done_at, done_reason, done_by, meta, sourcing, created_by, created_at)
         values ('rda', $1, $2, ($3::date + 7), $4, 'done', ($3::date + 20), 'po_created', 'SAP', $5, $6, $7, $3::date)`,
-        [pr, `RDA ${pr} · ${title}`, release, who(i), JSON.stringify({ io: { [io]: value }, value, currency: "EUR", releaseDate: release, requestedBy: "SIMULAZIONE", pgr: "SIM", lines: 1 }), sourcing, SIM_TAG]);
-      await tx.query("insert into sap_pos (po, pr, supplier_code, supplier_name, doc_date, pgr) values ($1,$2,$3,$4,($5::date + 20),'SIM') on conflict do nothing", [po, pr, SAP_CODE[supplier], supplier.toUpperCase(), release]);
+        [
+          pr,
+          `RDA ${pr} · ${title}`,
+          release,
+          who(i),
+          JSON.stringify({
+            io: { [io]: value },
+            value,
+            currency: "EUR",
+            releaseDate: release,
+            requestedBy: "SIMULAZIONE",
+            pgr: "SIM",
+            lines: 1,
+          }),
+          sourcing,
+          SIM_TAG,
+        ],
+      );
+      await tx.query(
+        "insert into sap_pos (po, pr, supplier_code, supplier_name, doc_date, pgr) values ($1,$2,$3,$4,($5::date + 20),'SIM') on conflict do nothing",
+        [po, pr, SAP_CODE[supplier], supplier.toUpperCase(), release],
+      );
       // Riga d'ordine per la spesa; l'ordine della fiera EIMA ha un valore netto oltre la RDA (controllo "PO oltre la RDA").
-      const line = LINE_OF[io], [mg, mgDesc] = MATL[line[4]] ?? ["", ""], net = title === "Fiera EIMA" ? 79000 : null;
-      await insertPoLine(tx, { po, item: "10", docDate: addDays(release, 20), supplierCode: SAP_CODE[supplier], supplierName: supplier.toUpperCase(), pr, prValue: value, netValue: net,
-        value: net ?? value, source: net ? "net" : "pr", matlGroup: mg, matlGroupDesc: mgDesc, agreement: "", io, costCenter: line[1], shortText: title });
+      const line = LINE_OF[io],
+        [mg, mgDesc] = MATL[line[4]] ?? ["", ""],
+        net = title === "Fiera EIMA" ? 79000 : null;
+      await insertPoLine(tx, {
+        po,
+        item: "10",
+        docDate: addDays(release, 20),
+        supplierCode: SAP_CODE[supplier],
+        supplierName: supplier.toUpperCase(),
+        pr,
+        prValue: value,
+        netValue: net,
+        value: net ?? value,
+        source: net ? "net" : "pr",
+        matlGroup: mg,
+        matlGroupDesc: mgDesc,
+        agreement: "",
+        io,
+        costCenter: line[1],
+        shortText: title,
+      });
       tasks++;
     }
     // RDA aperte, approvate e da lavorare, in situazioni diverse.
     for (const [i, [io, title, value, ago, kase]] of OPEN.entries()) {
-      const pr = `SIM-${8100001 + i}`, release = day(-ago);
-      const meta = { io: io ? { [io]: value } : {}, value, currency: "EUR", releaseDate: release, requestedBy: "SIMULAZIONE", pgr: "SIM", lines: 1, costCenter: io ? "" : "5821", firstSeen: new Date().toISOString() };
-      const sourcing = kase === "compared" ? { mode: "comparison", quotes: [{ supplier: "Software Point Srl", amount: 18500, chosen: true }, { supplier: "CloudItalia Spa", amount: 21000, chosen: false }], justification: "", recordedBy: user.name, recordedAt: new Date().toISOString(), approval: null, approvedBy: "", approvedAt: null, approvalNote: "", baseline: 20000, finalAmount: 17900 }
-        : kase === "exception" ? { mode: "exception", quotes: [], justification: "Unico allestitore disponibile con i tempi della fiera", recordedBy: "Buyer di prova", recordedAt: new Date().toISOString(), approval: "pending", approvedBy: "", approvedAt: null, approvalNote: "" } : null;
-      const id = (await tx.query(`insert into tasks (source, source_key, title, due, assignee_id, assignee_auto, group_key, meta, sourcing, created_by) values ('rda',$1,$2,($3::date + 7),$4,false,'SIM',$5,$6,$7) returning id`,
-        [pr, `RDA ${pr} · ${title}`, release, who(i + 1), JSON.stringify(meta), sourcing ? JSON.stringify(sourcing) : null, SIM_TAG])).rows[0].id;
-      await tx.query(`insert into rda_lines (pr, item, pgr, short_text, qty, unit, price, per, currency, release_date, requested_by, created_by, plant, cost_center, gl_account, value, internal_order)
-        values ($1,'10','SIM',$2,1,'PZ',$3,1,'EUR',$4,'SIMULAZIONE','SIMULAZIONE','SIM1',$5,'N00000',$3,$6)`, [pr, title, value, release, io ? "" : "5821", io]);
-      if (kase === "has_po") await tx.query("insert into sap_pos (po, pr, supplier_code, supplier_name, doc_date, pgr) values ($1,$2,'SIMV0004','ROCKWELL AUTOMATION SRL',current_date,'SIM') on conflict do nothing", ["SIMPO2001", pr]);
-      if (kase === "has_po") await insertPoLine(tx, { po: "SIMPO2001", item: "10", docDate: day(0), supplierCode: "SIMV0004", supplierName: "ROCKWELL AUTOMATION SRL", pr, prValue: value, netValue: null, value, source: "pr",
-        matlGroup: MATL.MAINTENANCE[0], matlGroupDesc: MATL.MAINTENANCE[1], agreement: "", io, costCenter: LINE_OF[io][1], shortText: title });
-      void id; tasks++;
+      const pr = `SIM-${8100001 + i}`,
+        release = day(-ago);
+      const meta = {
+        io: io ? { [io]: value } : {},
+        value,
+        currency: "EUR",
+        releaseDate: release,
+        requestedBy: "SIMULAZIONE",
+        pgr: "SIM",
+        lines: 1,
+        costCenter: io ? "" : "5821",
+        firstSeen: new Date().toISOString(),
+      };
+      const sourcing =
+        kase === "compared"
+          ? {
+              mode: "comparison",
+              quotes: [
+                { supplier: "Software Point Srl", amount: 18500, chosen: true },
+                { supplier: "CloudItalia Spa", amount: 21000, chosen: false },
+              ],
+              justification: "",
+              recordedBy: user.name,
+              recordedAt: new Date().toISOString(),
+              approval: null,
+              approvedBy: "",
+              approvedAt: null,
+              approvalNote: "",
+              baseline: 20000,
+              finalAmount: 17900,
+            }
+          : kase === "exception"
+            ? {
+                mode: "exception",
+                quotes: [],
+                justification: "Unico allestitore disponibile con i tempi della fiera",
+                recordedBy: "Buyer di prova",
+                recordedAt: new Date().toISOString(),
+                approval: "pending",
+                approvedBy: "",
+                approvedAt: null,
+                approvalNote: "",
+              }
+            : null;
+      const id = (
+        await tx.query(
+          `insert into tasks (source, source_key, title, due, assignee_id, assignee_auto, group_key, meta, sourcing, created_by) values ('rda',$1,$2,($3::date + 7),$4,false,'SIM',$5,$6,$7) returning id`,
+          [pr, `RDA ${pr} · ${title}`, release, who(i + 1), JSON.stringify(meta), sourcing ? JSON.stringify(sourcing) : null, SIM_TAG],
+        )
+      ).rows[0].id;
+      await tx.query(
+        `insert into rda_lines (pr, item, pgr, short_text, qty, unit, price, per, currency, release_date, requested_by, created_by, plant, cost_center, gl_account, value, internal_order)
+        values ($1,'10','SIM',$2,1,'PZ',$3,1,'EUR',$4,'SIMULAZIONE','SIMULAZIONE','SIM1',$5,'N00000',$3,$6)`,
+        [pr, title, value, release, io ? "" : "5821", io],
+      );
+      if (kase === "has_po")
+        await tx.query(
+          "insert into sap_pos (po, pr, supplier_code, supplier_name, doc_date, pgr) values ($1,$2,'SIMV0004','ROCKWELL AUTOMATION SRL',current_date,'SIM') on conflict do nothing",
+          ["SIMPO2001", pr],
+        );
+      if (kase === "has_po")
+        await insertPoLine(tx, {
+          po: "SIMPO2001",
+          item: "10",
+          docDate: day(0),
+          supplierCode: "SIMV0004",
+          supplierName: "ROCKWELL AUTOMATION SRL",
+          pr,
+          prValue: value,
+          netValue: null,
+          value,
+          source: "pr",
+          matlGroup: MATL.MAINTENANCE[0],
+          matlGroupDesc: MATL.MAINTENANCE[1],
+          agreement: "",
+          io,
+          costCenter: LINE_OF[io][1],
+          shortText: title,
+        });
+      void id;
+      tasks++;
     }
     // Ordini senza RDA: servizi a contratto, accordo quadro SAP e acquisti fuori processo.
     for (const [po, name, code, io, text, value, month, agmt] of CALL_OFFS) {
       const cat = MATL[LINE_OF[io][4]];
-      await insertPoLine(tx, { po, item: "10", docDate: `2026-${String(month).padStart(2, "0")}-05`, supplierCode: code, supplierName: name, pr: "", prValue: 0, netValue: null, value, source: "gr",
-        matlGroup: cat[0], matlGroupDesc: cat[1], agreement: agmt, io, costCenter: LINE_OF[io][1], shortText: text });
+      await insertPoLine(tx, {
+        po,
+        item: "10",
+        docDate: `2026-${String(month).padStart(2, "0")}-05`,
+        supplierCode: code,
+        supplierName: name,
+        pr: "",
+        prValue: 0,
+        netValue: null,
+        value,
+        source: "gr",
+        matlGroup: cat[0],
+        matlGroupDesc: cat[1],
+        agreement: agmt,
+        io,
+        costCenter: LINE_OF[io][1],
+        shortText: text,
+      });
     }
     // Acquisti manuali in previsione (senza RDA) e un'attività semplice.
     for (const [i, [io, title, supplier, value, month]] of PURCHASES.entries()) {
-      await tx.query(`insert into tasks (source, kind, title, detail, due, assignee_id, meta, created_by) values ('manual','purchase',$1,$2,$3,$4,$5,$6)`,
-        [title, "Pratica di prova della simulazione", `2026-${String(month).padStart(2, "0")}-15`, who(i), JSON.stringify({ value, currency: "EUR", supplier, supplierId: supplierId[supplier] ?? null, object: title, internalOrder: io }), SIM_TAG]);
+      await tx.query(
+        `insert into tasks (source, kind, title, detail, due, assignee_id, meta, created_by) values ('manual','purchase',$1,$2,$3,$4,$5,$6)`,
+        [
+          title,
+          "Pratica di prova della simulazione",
+          `2026-${String(month).padStart(2, "0")}-15`,
+          who(i),
+          JSON.stringify({ value, currency: "EUR", supplier, supplierId: supplierId[supplier] ?? null, object: title, internalOrder: io }),
+          SIM_TAG,
+        ],
+      );
       tasks++;
     }
-    await tx.query(`insert into tasks (source, kind, title, detail, due, assignee_id, created_by) values ('manual','activity','Chiamare AgroLab per il listino 2027','Attività di prova della simulazione',$1,$2,$3)`, [day(5), user.id, SIM_TAG]);
+    await tx.query(
+      `insert into tasks (source, kind, title, detail, due, assignee_id, created_by) values ('manual','activity','Chiamare AgroLab per il listino 2027','Attività di prova della simulazione',$1,$2,$3)`,
+      [day(5), user.id, SIM_TAG],
+    );
     tasks++;
     // Contratti collegati a fornitori e internal order, con il loro piano di rinnovo.
     for (const [io, supplier, object, value, start, end, notice] of CONTRACTS) {
       let noticeDate = "";
-      if (notice) { const d = new Date(`${end}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - notice); noticeDate = d.toISOString().slice(0, 10); }
-      const cid = (await tx.query(`insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, internal_order, supplier_id, notice_days, notice_date)
-        values ($1,$2,'Simulazione','Italia',$3,'EUR',$4,$5,$6,'','Non definito','Servizi',$7,$8,$9,$10,$11) returning id`, [supplier, object, value, start, end, user.name, SIM_TAG, io, supplierId[supplier] ?? null, notice, noticeDate])).rows[0].id as number;
-      await tx.query("update contracts set owner_id = (select u.id from users u where lower(u.name) = lower(contracts.owner) and u.role in ('manager','buyer')) where id = $1", [cid]);
+      if (notice) {
+        const d = new Date(`${end}T00:00:00Z`);
+        d.setUTCDate(d.getUTCDate() - notice);
+        noticeDate = d.toISOString().slice(0, 10);
+      }
+      const cid = (
+        await tx.query(
+          `insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, bo_email, renewal, type, notes, internal_order, supplier_id, notice_days, notice_date)
+        values ($1,$2,'Simulazione','Italia',$3,'EUR',$4,$5,$6,'','Non definito','Servizi',$7,$8,$9,$10,$11) returning id`,
+          [supplier, object, value, start, end, user.name, SIM_TAG, io, supplierId[supplier] ?? null, notice, noticeDate],
+        )
+      ).rows[0].id as number;
+      await tx.query(
+        "update contracts set owner_id = (select u.id from users u where lower(u.name) = lower(contracts.owner) and u.role in ('manager','buyer')) where id = $1",
+        [cid],
+      );
       for (const s of makePlan(cid, noticeDate || end))
-        await tx.query(`insert into plan_steps (contract_id, step_id, scheduled_date, original_date, status, completed_at, completed_by, bo_decision, bo_notes, bo_responded_at, modified, modified_reason) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-          [cid, s.stepId, s.scheduledDate, s.originalDate, s.status, s.completedAt, s.completedBy, s.boDecision, s.boNotes, s.boRespondedAt, s.modified, s.modifiedReason]);
+        await tx.query(
+          `insert into plan_steps (contract_id, step_id, scheduled_date, original_date, status, completed_at, completed_by, bo_decision, bo_notes, bo_responded_at, modified, modified_reason) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+          [
+            cid,
+            s.stepId,
+            s.scheduledDate,
+            s.originalDate,
+            s.status,
+            s.completedAt,
+            s.completedBy,
+            s.boDecision,
+            s.boNotes,
+            s.boRespondedAt,
+            s.modified,
+            s.modifiedReason,
+          ],
+        );
     }
   });
   await ensureRenewalTasks(db);
@@ -199,7 +478,9 @@ export async function deleteBudgetDemo(user: User): Promise<{ deleted: number }>
   const files: string[] = [];
   const res = await inTransaction(async tx => {
     let n = 0;
-    const count = (r: { rowCount: number | null }) => { n += r.rowCount ?? 0; };
+    const count = (r: { rowCount: number | null }) => {
+      n += r.rowCount ?? 0;
+    };
     count(await tx.query("delete from tasks where created_by = $1 or source_key like 'SIM-%'", [SIM_TAG]));
     count(await tx.query("delete from contracts where notes = $1 and category = 'Simulazione'", [SIM_TAG]));
     count(await tx.query("delete from mp_versions where file_name = $1", [SIM_FILE]));
@@ -208,12 +489,20 @@ export async function deleteBudgetDemo(user: User): Promise<{ deleted: number }>
     count(await tx.query("delete from rda_lines where pr like 'SIM-%'"));
     const sups = (await tx.query("select id, user_id from suppliers where sap_code like 'SIMV%'")).rows;
     if (sups.length) {
-      files.push(...(await tx.query("select file_path from supplier_documents where supplier_id = any($1)", [sups.map(s => s.id)])).rows.map(r => r.file_path as string));
+      files.push(
+        ...(await tx.query("select file_path from supplier_documents where supplier_id = any($1)", [sups.map(s => s.id)])).rows.map(
+          r => r.file_path as string,
+        ),
+      );
       count(await tx.query("delete from suppliers where id = any($1)", [sups.map(s => s.id)]));
       await tx.query("delete from users where id = any($1) and role = 'supplier'", [sups.map(s => s.user_id).filter(Boolean)]);
     }
-    await tx.query("delete from buying_companies where code = 'SIMCO' and not exists (select 1 from suppliers where 'SIMCO' = any(company_codes))");
-    await tx.query("delete from industry_codes where code = 'SIM01' and not exists (select 1 from suppliers where industry_code = 'SIM01')");
+    await tx.query(
+      "delete from buying_companies where code = 'SIMCO' and not exists (select 1 from suppliers where 'SIMCO' = any(company_codes))",
+    );
+    await tx.query(
+      "delete from industry_codes where code = 'SIM01' and not exists (select 1 from suppliers where industry_code = 'SIM01')",
+    );
     return { deleted: n };
   });
   await deleteDocuments(files);
@@ -223,13 +512,43 @@ export async function deleteBudgetDemo(user: User): Promise<{ deleted: number }>
 // ─── File SAP di prova ───────────────────────────────────────
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 function sheet(rows: (string | number | null)[][]): Uint8Array {
-  const xml = `<?xml version="1.0" encoding="utf-16"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Sheet1"><Table>${rows.map(r => `<Row>${r.map(c => c === null ? "<Cell/>" : `<Cell><Data ss:Type="String">${esc(String(c))}</Data></Cell>`).join("")}</Row>`).join("")}</Table></Worksheet></Workbook>`;
-  const b = Buffer.alloc(2 + xml.length * 2); b[0] = 0xff; b[1] = 0xfe; b.write(xml, 2, "utf16le");
+  const xml = `<?xml version="1.0" encoding="utf-16"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Sheet1"><Table>${rows.map(r => `<Row>${r.map(c => (c === null ? "<Cell/>" : `<Cell><Data ss:Type="String">${esc(String(c))}</Data></Cell>`)).join("")}</Row>`).join("")}</Table></Worksheet></Workbook>`;
+  const b = Buffer.alloc(2 + xml.length * 2);
+  b[0] = 0xff;
+  b[1] = 0xfe;
+  b.write(xml, 2, "utf16le");
   return new Uint8Array(b);
 }
 /** RDA aperte di prova (formato OPEN_PR di SAP): nuove RDA su internal order SIM, da importare dal modulo Task. */
 export function demoPrFile(): Uint8Array {
-  const head = ["PGr", "Purch.Req.", "Item", "Document Type", "Plnt", "Material", "Short Text", "Qty Requested", "Un", "Ordered", "Un", "Valn Price", "Crcy", "Per", "Req.Date", "Deliv. Date", "Release Dt", "Requested By", "Created By", "S", "A", "PO", "Item", "Order", "Cost Ctr", "G/L Acct"];
+  const head = [
+    "PGr",
+    "Purch.Req.",
+    "Item",
+    "Document Type",
+    "Plnt",
+    "Material",
+    "Short Text",
+    "Qty Requested",
+    "Un",
+    "Ordered",
+    "Un",
+    "Valn Price",
+    "Crcy",
+    "Per",
+    "Req.Date",
+    "Deliv. Date",
+    "Release Dt",
+    "Requested By",
+    "Created By",
+    "S",
+    "A",
+    "PO",
+    "Item",
+    "Order",
+    "Cost Ctr",
+    "G/L Acct",
+  ];
   const rows: [string, string, number, string, number][] = [
     ["SIM-8200001", "Servizio di traduzione tecnica", 8500, "SIM2600000010", 1],
     ["SIM-8200002", "Workshop innovazione digitale", 26000, "SIM2600000003", 2],
@@ -238,15 +557,139 @@ export function demoPrFile(): Uint8Array {
   ];
   // Le RDA aperte della simulazione restano nel file (altrimenti l'import le chiuderebbe come "non più aperte"),
   // tranne quella che ha già il PO: uscendo dall'elenco si chiude da sola come "PO creato".
-  const all: [string, string, number, string, number][] = [...OPEN.flatMap(([io, text, value, ago, kase], i) => kase === "has_po" ? [] : [[`SIM-${8100001 + i}`, text, value, io, ago] as [string, string, number, string, number]]), ...rows];
-  return sheet([head, ...all.map(([pr, text, value, io, ago]) => ["SIM", pr, "10", "EC", "SIM1", null, text, String(value), "NR", "0", "NR", "1.00", "EUR", "1", day(-ago), day(30), day(-ago), "SIMULAZIONE", "SIMULAZIONE", "N", io ? "F" : "K", null, "0", io || null, io ? null : "5821", "N00000"])]);
+  const all: [string, string, number, string, number][] = [
+    ...OPEN.flatMap(([io, text, value, ago, kase], i) =>
+      kase === "has_po" ? [] : [[`SIM-${8100001 + i}`, text, value, io, ago] as [string, string, number, string, number]],
+    ),
+    ...rows,
+  ];
+  return sheet([
+    head,
+    ...all.map(([pr, text, value, io, ago]) => [
+      "SIM",
+      pr,
+      "10",
+      "EC",
+      "SIM1",
+      null,
+      text,
+      String(value),
+      "NR",
+      "0",
+      "NR",
+      "1.00",
+      "EUR",
+      "1",
+      day(-ago),
+      day(30),
+      day(-ago),
+      "SIMULAZIONE",
+      "SIMULAZIONE",
+      "N",
+      io ? "F" : "K",
+      null,
+      "0",
+      io || null,
+      io ? null : "5821",
+      "N00000",
+    ]),
+  ]);
 }
 /** Ordini di prova (formato PO_LAST_7D): il PO della prima RDA del file RDA di prova, che così si chiude da sola. */
 export function demoPoFile(): Uint8Array {
-  const head = ["CoCd", "POrg", "Supplier", "PGr", "Doc. Date", "Type", "Crcy", "Matl Group", "Short Text", "Item", "Purch.Doc.", "Agmt", "Material Group Desc.", "TOTAL GR Amount in Loc Curr", "Order Number", "Cost Center", "Name 1", "Created by", "Created on", "Purch.Req.", "PR VALUE"];
-  return sheet([head,
-    ["9999", "9999", "SIMV0007", "SIM", day(0), "EB", "EUR", "020601", "Servizio di traduzione tecnica", "10", "SIMPO3001", null, "Consult./Profess.", "0.00", "SIM2600000010", "5821", "EXPO SERVICE SRL", "SIMULAZIONE", day(0), "SIM-8200001", "8500.00"],
-    ["9999", "9999", "SIMV0006", "SIM", day(0), "EC", "EUR", "050101", "Vigilanza 10/2026", "10", "SIMPO3002", "SIMAG0001", "Facility services", "5800.00", "SIM2600000008", "5831", "SICUREZZA NORD SRL", "SIMULAZIONE", day(0), null, "0.00"],
-    ["9999", "9999", "SIMV0106", "SIM", day(0), "EB", "EUR", "020202", "Gadget fiera", "10", "SIMPO3003", null, "Comm. & PR", "650.00", "SIM2600000009", "5810", "GADGET FACTORY SRL", "SIMULAZIONE", day(0), null, "0.00"],
+  const head = [
+    "CoCd",
+    "POrg",
+    "Supplier",
+    "PGr",
+    "Doc. Date",
+    "Type",
+    "Crcy",
+    "Matl Group",
+    "Short Text",
+    "Item",
+    "Purch.Doc.",
+    "Agmt",
+    "Material Group Desc.",
+    "TOTAL GR Amount in Loc Curr",
+    "Order Number",
+    "Cost Center",
+    "Name 1",
+    "Created by",
+    "Created on",
+    "Purch.Req.",
+    "PR VALUE",
+  ];
+  return sheet([
+    head,
+    [
+      "9999",
+      "9999",
+      "SIMV0007",
+      "SIM",
+      day(0),
+      "EB",
+      "EUR",
+      "020601",
+      "Servizio di traduzione tecnica",
+      "10",
+      "SIMPO3001",
+      null,
+      "Consult./Profess.",
+      "0.00",
+      "SIM2600000010",
+      "5821",
+      "EXPO SERVICE SRL",
+      "SIMULAZIONE",
+      day(0),
+      "SIM-8200001",
+      "8500.00",
+    ],
+    [
+      "9999",
+      "9999",
+      "SIMV0006",
+      "SIM",
+      day(0),
+      "EC",
+      "EUR",
+      "050101",
+      "Vigilanza 10/2026",
+      "10",
+      "SIMPO3002",
+      "SIMAG0001",
+      "Facility services",
+      "5800.00",
+      "SIM2600000008",
+      "5831",
+      "SICUREZZA NORD SRL",
+      "SIMULAZIONE",
+      day(0),
+      null,
+      "0.00",
+    ],
+    [
+      "9999",
+      "9999",
+      "SIMV0106",
+      "SIM",
+      day(0),
+      "EB",
+      "EUR",
+      "020202",
+      "Gadget fiera",
+      "10",
+      "SIMPO3003",
+      null,
+      "Comm. & PR",
+      "650.00",
+      "SIM2600000009",
+      "5810",
+      "GADGET FACTORY SRL",
+      "SIMULAZIONE",
+      day(0),
+      null,
+      "0.00",
+    ],
   ]);
 }

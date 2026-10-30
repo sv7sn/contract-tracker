@@ -16,10 +16,12 @@ Applicazione web per l'ufficio acquisti (procurement indiretto): segue una prati
 | `docs/OPERATIONS.md` | Rilascio, configurazione, monitoraggio, backup e ripristino, segreti, incidenti |
 | `docs/DATA-PROTECTION.md` | Dati personali trattati, fornitori di servizi, conservazione, punti aperti per il DPO |
 | `docs/SBOM.cdx.json` | Elenco delle dipendenze di produzione (CycloneDX) |
+| `AGENTS.md` | Regole del progetto per chi modifica il codice, anche con un assistente di programmazione (OpenCode) |
 
 ## 2. Come si verifica
 ```bash
 npm ci
+npm run format:check  # formattazione uniforme (Prettier)
 npm run lint          # ESLint
 npm run test:i18n     # traduzioni complete (italiano / inglese)
 npm run build         # controllo dei tipi TypeScript (interfaccia e API) e build
@@ -37,7 +39,7 @@ Gli stessi controlli girano in automatico a ogni modifica (`.github/workflows/ci
 | 4 | **Accesso e due fattori** | Email e password (hash scrypt, blocco dopo tentativi falliti) | Accesso con account aziendale (OpenID Connect) già realizzato e spento: si attiva con i dati dell'applicazione registrata dall'IT; i due fattori arrivano dal sistema aziendale | Fase 2 |
 | 5 | **Verifica di sicurezza indipendente** | Verifica interna automatica e ripetibile (`SECURITY.md` §1 bis) | Test di penetrazione prima dell'apertura del portale fornitori | Fase 3 |
 | 6 | **Componenti scritti in proprio** | Accesso aziendale (OpenID Connect), sessioni firmate e generazione dei file Word senza librerie esterne, per tenere le dipendenze al minimo (sei in produzione) | Revisione mirata nel test di sicurezza; sostituibili con librerie standard se la sicurezza IT lo preferisce | Fase 3 |
-| 7 | **Stile del codice** | Controllo automatico (ESLint) senza formattazione uniforme; alcune righe lunghe | Formattatore automatico (Prettier) attivato in un'unica modifica e aggiunto ai controlli automatici | Subito dopo la consegna |
+| 7 | **Stile del codice** | Formattazione uniforme con Prettier, verificata a ogni modifica insieme a ESLint | Fatto | Fatto |
 | 8 | **Test dell'interfaccia** | Test automatici sulle API e sulle regole; interfaccia provata a mano su PC e telefono | Test automatici dei percorsi principali nel browser | Fase 2 |
 | 9 | **Aggiornamenti del database** | Schema aggiornato all'avvio con istruzioni idempotenti, senza versioni numerate | Accettabile per il pilota; migrazioni numerate se richieste dalle regole IT | Da concordare |
 | 10 | **Firma elettronica, SAP in tempo reale, revisione in Word** | Non realizzati (SAP oggi tramite file) | Fasi successive, da concordare con IT e Legal | Dopo il pilota |

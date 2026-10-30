@@ -18,9 +18,22 @@ export function computeSaving(s: Pick<Sourcing, "quotes" | "baseline" | "finalAm
   const vsBaseline = s.baseline && s.baseline > 0 ? r2(s.baseline - final) : null;
   const vsAverage = avg !== null ? r2(avg - final) : null;
   const negotiation = chosen && s.finalAmount && s.finalAmount > 0 ? r2(chosen.amount - s.finalAmount) : null;
-  const [basis, amount, ref] = vsBaseline !== null ? ["baseline", vsBaseline, s.baseline!] as const
-    : vsAverage !== null ? ["average", vsAverage, avg!] as const
-    : negotiation !== null ? ["negotiation", negotiation, chosen!.amount] as const : [null, 0, 0] as const;
+  const [basis, amount, ref] =
+    vsBaseline !== null
+      ? (["baseline", vsBaseline, s.baseline!] as const)
+      : vsAverage !== null
+        ? (["average", vsAverage, avg!] as const)
+        : negotiation !== null
+          ? (["negotiation", negotiation, chosen!.amount] as const)
+          : ([null, 0, 0] as const);
   if (!basis) return null;
-  return { finalAmount: r2(final), vsBaseline, vsAverage, negotiation, amount, pct: ref ? Math.round((amount / ref) * 1000) / 10 : 0, basis };
+  return {
+    finalAmount: r2(final),
+    vsBaseline,
+    vsAverage,
+    negotiation,
+    amount,
+    pct: ref ? Math.round((amount / ref) * 1000) / 10 : 0,
+    basis,
+  };
 }

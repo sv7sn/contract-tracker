@@ -10,13 +10,15 @@ export const isManager = (u: Subject) => u.role === "manager";
 /** Il contratto è del buyer: per utente collegato (ownerId) e, per i contratti più vecchi non ancora collegati, per nome. */
 const isOwner = (u: Subject, c: Pick<Contract, "owner" | "ownerId">) => {
   // Il buyer agisce anche per i colleghi che sostituisce (u.acting), oltre che per sé.
-  const ids = u.acting?.ids ?? (u.id !== undefined ? [u.id] : []), names = u.acting?.names ?? [u.name];
+  const ids = u.acting?.ids ?? (u.id !== undefined ? [u.id] : []),
+    names = u.acting?.names ?? [u.name];
   return c.ownerId != null && ids.length ? ids.includes(c.ownerId) : names.some(n => same(c.owner, n));
 };
 
 /** Controlling / CFO (viewer) vedono tutti i contratti ma non modificano nulla. */
 /** Il Business Owner del contratto: per utente collegato (boUserId) o, per i contratti più vecchi, per email. */
-const isBo = (u: Subject, c: Pick<Contract, "boUserId" | "boEmail">) => (c.boUserId != null && u.id !== undefined ? c.boUserId === u.id : !!c.boEmail && same(c.boEmail, u.email));
+const isBo = (u: Subject, c: Pick<Contract, "boUserId" | "boEmail">) =>
+  c.boUserId != null && u.id !== undefined ? c.boUserId === u.id : !!c.boEmail && same(c.boEmail, u.email);
 
 export const canViewContract = (u: Subject, c: Pick<Contract, "owner" | "ownerId" | "boEmail" | "boUserId">) =>
   u.role === "manager" || u.role === "viewer" || (u.role === "buyer" && isOwner(u, c)) || (u.role === "bo" && isBo(u, c));

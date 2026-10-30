@@ -1,0 +1,8 @@
+node_modules
+dist
+tests/.build
+package-lock.json
+docs
+*.md
+# Dizionari delle traduzioni: oggetti "chiave": "valore" letti come JSON da scripts/i18n-check.mjs
+src/i18n/en

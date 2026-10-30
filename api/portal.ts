@@ -13,7 +13,25 @@ import { listBoMessages, myRequests, postBoMessage } from "./_requests.js";
 import { boInfo, loadBoSettings, runBoNotices, saveBoSettings, sendBoNotice, setBoLead } from "./_bo.js";
 import { addCover, deleteCover, listCover } from "./_cover.js";
 import { resetData, resetPreview } from "./_reset.js";
-import { clmKpis, acceptDeviation, addComment, decideReview, diffDrafts, draftAudit, draftAuditCsv, draftBundle, draftFile, draftFindings, draftFromTemplate, inviteReviewers, myReviews, resolveComment, runReviewReminders, templateInfo, uploadDraft } from "./_clm.js";
+import {
+  clmKpis,
+  acceptDeviation,
+  addComment,
+  decideReview,
+  diffDrafts,
+  draftAudit,
+  draftAuditCsv,
+  draftBundle,
+  draftFile,
+  draftFindings,
+  draftFromTemplate,
+  inviteReviewers,
+  myReviews,
+  resolveComment,
+  runReviewReminders,
+  templateInfo,
+  uploadDraft,
+} from "./_clm.js";
 import { myNegotiations, negotiationBundle, shareDraft, supplierComment, supplierDraftFile, supplierUpload } from "./_clm-supplier.js";
 import { completeObligation, deleteObligation, listObligations, saveObligation } from "./_obligations.js";
 import { listSecurityEvents, readiness, securityCsv } from "./_security.js";
@@ -27,20 +45,68 @@ import { createTestAccesses, removeTestAccesses, createDemoSupplier, resetTestSu
 import { deleteBudgetDemo, demoPoFile, demoPrFile, loadBudgetDemo } from "./_budget-demo.js";
 import { BUDGET_TEMPLATE, budgetIo, budgetView, deleteBudgetVersion, importBudget } from "./_budget.js";
 import { refreshIfStale, refreshSanctionLists } from "./_sanctions.js";
-import { addTaskDocument, createManualTask, registerPurchaseContract, decideSourcingException, deleteManualTask, deleteTaskDocument, getTask, importSapFile, listTasks, saveSourcing, setRenewalOutcome, registerTaskContract, setIoBuyer, setTaskLinks, setTaskSupplier, tasksArchive, suggestRdas, taskDocumentPath, taskSummary, updateTask } from "./_tasks.js";
+import {
+  addTaskDocument,
+  createManualTask,
+  registerPurchaseContract,
+  decideSourcingException,
+  deleteManualTask,
+  deleteTaskDocument,
+  getTask,
+  importSapFile,
+  listTasks,
+  saveSourcing,
+  setRenewalOutcome,
+  registerTaskContract,
+  setIoBuyer,
+  setTaskLinks,
+  setTaskSupplier,
+  tasksArchive,
+  suggestRdas,
+  taskDocumentPath,
+  taskSummary,
+  updateTask,
+} from "./_tasks.js";
 import { ssoCallback, ssoPublicConfig, ssoStart } from "./_oidc.js";
 import { runRiskChecks } from "./_risk.js";
 import { clientIp, errorResponse, HttpError, readJson } from "./_http.js";
 import { canConfigurePortal, canInviteSuppliers } from "./_permissions.js";
 import {
-  documentOwner, activateInvite, addMyDocument, deleteInvite, deleteMyDocument, documentForDownload, getMySupplier, getVendor, inviteInfo,
-  inviteSupplier, listEligibleSuppliers, listVendors, loadConfig, reinviteSupplier, saveConfig, saveMyData, submitMyRegistration, vendorAction,
+  documentOwner,
+  activateInvite,
+  addMyDocument,
+  deleteInvite,
+  deleteMyDocument,
+  documentForDownload,
+  getMySupplier,
+  getVendor,
+  inviteInfo,
+  inviteSupplier,
+  listEligibleSuppliers,
+  listVendors,
+  loadConfig,
+  reinviteSupplier,
+  saveConfig,
+  saveMyData,
+  submitMyRegistration,
+  vendorAction,
 } from "./_portal.js";
 import { DOC_EXTENSIONS, DOC_MIME, MAX_DOC_BYTES, SUPPLIER_FILE_PATH_RE } from "./_supplier-rules.js";
 import type { VendorAction } from "../src/types.ts";
 
 // Router unico del portale fornitori (un solo file = una sola funzione Vercel). Si sceglie l'operazione con ?op=...
-const VENDOR_ACTIONS: VendorAction[] = ["approve", "reject", "request_revision", "set_payment_terms", "change_status", "block", "deactivate", "exclude", "reactivate", "sanctions_manual"];
+const VENDOR_ACTIONS: VendorAction[] = [
+  "approve",
+  "reject",
+  "request_revision",
+  "set_payment_terms",
+  "change_status",
+  "block",
+  "deactivate",
+  "exclude",
+  "reactivate",
+  "sanctions_manual",
+];
 const STAFF = ["manager", "buyer", "finance"] as const;
 
 /** Risposta di download per un allegato: PDF e immagini si aprono nel browser, il resto si scarica. */
@@ -48,7 +114,14 @@ function fileDownload(stream: ReadableStream<Uint8Array>, fileName: string): Res
   const ext = fileName.toLowerCase().split(".").pop() ?? "";
   const type = DOC_MIME[ext] ?? "application/octet-stream";
   const inline = type === "application/pdf" || type.startsWith("image/");
-  return new Response(stream, { headers: { ...noStore, "Content-Type": type, "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(fileName.replace(/[\r\n"\\/]/g, "_"))}`, "X-Content-Type-Options": "nosniff" } });
+  return new Response(stream, {
+    headers: {
+      ...noStore,
+      "Content-Type": type,
+      "Content-Disposition": `${inline ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(fileName.replace(/[\r\n"\\/]/g, "_"))}`,
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }
 
 function originOf(request: Request) {
@@ -57,7 +130,10 @@ function originOf(request: Request) {
 }
 const noStore = { "Cache-Control": "no-store" };
 const json = (data: unknown, init?: ResponseInit) => Response.json(data, { ...init, headers: { ...noStore, ...(init?.headers ?? {}) } });
-const download = (data: unknown, name: string) => new Response(JSON.stringify(data, null, 2), { headers: { ...noStore, "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${name}"` } });
+const download = (data: unknown, name: string) =>
+  new Response(JSON.stringify(data, null, 2), {
+    headers: { ...noStore, "Content-Type": "application/json; charset=utf-8", "Content-Disposition": `attachment; filename="${name}"` },
+  });
 const idOf = (url: URL) => {
   const id = Number(url.searchParams.get("id"));
   if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, "Identificativo non valido");
@@ -65,7 +141,9 @@ const idOf = (url: URL) => {
 };
 
 /** Strumenti di prova (accessi di prova, simulazione, fornitori di prova): in produzione reale si spengono con DISABLE_DEMO_TOOLS=1. */
-const demoOnly = () => { if (process.env.DISABLE_DEMO_TOOLS === "1") throw new HttpError(403, "Gli strumenti di prova sono disattivati in questo ambiente"); };
+const demoOnly = () => {
+  if (process.env.DISABLE_DEMO_TOOLS === "1") throw new HttpError(403, "Gli strumenti di prova sono disattivati in questo ambiente");
+};
 
 async function handle(request: Request): Promise<Response> {
   try {
@@ -76,7 +154,12 @@ async function handle(request: Request): Promise<Response> {
 
     // ── Controllo di salute per il monitoraggio (nessun dato, nessuna autenticazione) ──
     if (op === "health" && method === "GET") {
-      try { await getPool().query("select 1"); return json({ ok: true }); } catch { return json({ ok: false }, { status: 503 }); }
+      try {
+        await getPool().query("select 1");
+        return json({ ok: true });
+      } catch {
+        return json({ ok: false }, { status: 503 });
+      }
     }
 
     // ── Accesso aziendale (SSO): pubbliche, sono i passaggi che portano alla sessione ──
@@ -88,7 +171,10 @@ async function handle(request: Request): Promise<Response> {
     if (op === "invite-info" && method === "GET") return json(await inviteInfo(url.searchParams.get("token") ?? ""));
     if (op === "activate" && method === "POST") {
       const body = (await readJson(request)) as { token?: unknown; password?: unknown };
-      const user = await activateInvite(typeof body.token === "string" ? body.token : "", typeof body.password === "string" ? body.password : "");
+      const user = await activateInvite(
+        typeof body.token === "string" ? body.token : "",
+        typeof body.password === "string" ? body.password : "",
+      );
       return json({ user }, { headers: { "Set-Cookie": sessionCookie(request, createSessionToken(user.id, 0)) } });
     }
 
@@ -114,7 +200,9 @@ async function handle(request: Request): Promise<Response> {
       if (!secret) throw new HttpError(503, "RDA_INGEST_SECRET non configurato");
       if (request.headers.get("authorization") !== `Bearer ${secret}`) throw new HttpError(401, "Non autorizzato");
       const name = decodeURIComponent(request.headers.get("x-file-name") ?? "") || "allegato.xls";
-      return json(await importSapFile("Automatico", name, new Uint8Array(await request.arrayBuffer()), url.searchParams.get("force") === "1"));
+      return json(
+        await importSapFile("Automatico", name, new Uint8Array(await request.arrayBuffer()), url.searchParams.get("force") === "1"),
+      );
     }
 
     // ── Area del fornitore ──
@@ -122,7 +210,8 @@ async function handle(request: Request): Promise<Response> {
       const user = await requireRole(request, ["supplier"]);
       const origin = originOf(request);
       if (op === "supplier-me" && method === "GET") return json({ supplier: await getMySupplier(user) });
-      if (op === "supplier-export" && method === "GET") return download(await exportSupplier(getPool(), (await getMySupplier(user)).id), "i-miei-dati.json");
+      if (op === "supplier-export" && method === "GET")
+        return download(await exportSupplier(getPool(), (await getMySupplier(user)).id), "i-miei-dati.json");
       if (op === "supplier-rfq-spec" && method === "GET") {
         const doc = await rfqFile(user, idOf(url), "spec");
         const blob = await openDocument(doc.filePath);
@@ -130,9 +219,12 @@ async function handle(request: Request): Promise<Response> {
         return fileDownload(blob.stream, doc.fileName);
       }
       if (op === "supplier-negotiations" && method === "GET") return json({ negotiations: await myNegotiations(user) });
-      if (op === "supplier-negotiation" && method === "GET") return json(await negotiationBundle(user, idOf(url), Number(url.searchParams.get("draft")) || undefined));
-      if (op === "supplier-negotiation-comment" && method === "POST") return json(await supplierComment(user, idOf(url), (await readJson(request)) as Record<string, unknown>, origin));
-      if (op === "supplier-negotiation-upload" && method === "POST") return json(await supplierUpload(user, idOf(url), (await readJson(request)) as Record<string, unknown>, origin), { status: 201 });
+      if (op === "supplier-negotiation" && method === "GET")
+        return json(await negotiationBundle(user, idOf(url), Number(url.searchParams.get("draft")) || undefined));
+      if (op === "supplier-negotiation-comment" && method === "POST")
+        return json(await supplierComment(user, idOf(url), (await readJson(request)) as Record<string, unknown>, origin));
+      if (op === "supplier-negotiation-upload" && method === "POST")
+        return json(await supplierUpload(user, idOf(url), (await readJson(request)) as Record<string, unknown>, origin), { status: 201 });
       if (op === "supplier-negotiation-file" && method === "GET") {
         const f = await supplierDraftFile(user, idOf(url));
         if (!f.filePath) return fileDownload(new Blob([new Uint8Array(f.buffer!)]).stream(), f.fileName);
@@ -141,19 +233,29 @@ async function handle(request: Request): Promise<Response> {
         return fileDownload(blob.stream, f.fileName);
       }
       if (op === "supplier-rfqs" && method === "GET") return json({ rfqs: await listMyRfqs(user) });
-      if (op === "supplier-rfq-quote" && method === "POST") return json({ rfqs: await submitQuote(user, idOf(url), (await readJson(request)) as Record<string, unknown>, origin) });
+      if (op === "supplier-rfq-quote" && method === "POST")
+        return json({ rfqs: await submitQuote(user, idOf(url), (await readJson(request)) as Record<string, unknown>, origin) });
       if (op === "supplier-save" && method === "POST") return json({ supplier: await saveMyData(user, await readJson(request), origin) });
       if (op === "supplier-submit" && method === "POST") return json({ supplier: await submitMyRegistration(user, origin) });
       if (op === "supplier-upload-token" && method === "POST") {
         const body = (await readJson(request)) as Parameters<typeof handleUploadPresigned>[0]["body"];
-        if (!body || typeof body !== "object" || typeof (body as { type?: unknown }).type !== "string") throw new HttpError(400, "Richiesta di caricamento non valida");
+        if (!body || typeof body !== "object" || typeof (body as { type?: unknown }).type !== "string")
+          throw new HttpError(400, "Richiesta di caricamento non valida");
         const result = await handleUploadPresigned({
-          request, body,
+          request,
+          body,
           getSignedToken: async pathname => {
             const m = SUPPLIER_FILE_PATH_RE.exec(pathname);
             const ext = pathname.toLowerCase().split(".").pop() ?? "";
             if (!m || !DOC_EXTENSIONS.includes(ext)) throw new HttpError(400, "Percorso del documento non valido");
-            return { token: await issueSignedToken({ pathname, operations: ["put"], allowedContentTypes: Object.values(DOC_MIME), maximumSizeInBytes: MAX_DOC_BYTES }) };
+            return {
+              token: await issueSignedToken({
+                pathname,
+                operations: ["put"],
+                allowedContentTypes: Object.values(DOC_MIME),
+                maximumSizeInBytes: MAX_DOC_BYTES,
+              }),
+            };
           },
         });
         return json(result);
@@ -203,28 +305,63 @@ async function handle(request: Request): Promise<Response> {
       const user = await requireRole(request, ["bo", "manager", "buyer"]);
       if (op === "my-requests" && method === "GET") return json({ requests: await myRequests(user) });
       if (op === "bo-messages" && method === "GET") return json({ messages: await listBoMessages(user, idOf(url)) });
-      if (op === "bo-message-send" && method === "POST") return json({ messages: await postBoMessage(user, idOf(url), ((await readJson(request)) as { body?: unknown }).body, originOf(request)) });
+      if (op === "bo-message-send" && method === "POST")
+        return json({
+          messages: await postBoMessage(user, idOf(url), ((await readJson(request)) as { body?: unknown }).body, originOf(request)),
+        });
     }
 
     // ── CLM: bozze del contratto e pareri delle funzioni (buyer, Manager, Richiedente, Legal, Compliance, IT Security) ──
-    if (["drafts", "draft-upload", "draft-invite", "draft-comment", "draft-comment-resolve", "draft-decide", "draft-file", "my-reviews", "draft-templates", "draft-from-template", "draft-diff", "draft-findings", "draft-deviation", "draft-audit", "draft-audit-export", "draft-share"].includes(op)) {
+    if (
+      [
+        "drafts",
+        "draft-upload",
+        "draft-invite",
+        "draft-comment",
+        "draft-comment-resolve",
+        "draft-decide",
+        "draft-file",
+        "my-reviews",
+        "draft-templates",
+        "draft-from-template",
+        "draft-diff",
+        "draft-findings",
+        "draft-deviation",
+        "draft-audit",
+        "draft-audit-export",
+        "draft-share",
+      ].includes(op)
+    ) {
       const u = await requireRole(request, ["manager", "buyer", "bo", "legal", "compliance", "itsec"]);
       const body = async () => (await readJson(request)) as Record<string, unknown>;
       if (op === "my-reviews" && method === "GET") return json({ reviews: await myReviews(u) });
-      if (op === "drafts" && method === "GET") return json(await draftBundle(u, idOf(url), Number(url.searchParams.get("draft")) || undefined));
-      if (op === "draft-upload" && method === "POST") return json(await uploadDraft(u, idOf(url), await body(), originOf(request)), { status: 201 });
+      if (op === "drafts" && method === "GET")
+        return json(await draftBundle(u, idOf(url), Number(url.searchParams.get("draft")) || undefined));
+      if (op === "draft-upload" && method === "POST")
+        return json(await uploadDraft(u, idOf(url), await body(), originOf(request)), { status: 201 });
       if (op === "draft-invite" && method === "POST") return json(await inviteReviewers(u, idOf(url), await body(), originOf(request)));
       if (op === "draft-comment" && method === "POST") return json(await addComment(u, idOf(url), await body()));
-      if (op === "draft-comment-resolve" && method === "POST") return json(await resolveComment(u, idOf(url), (await body()).resolved !== false));
+      if (op === "draft-comment-resolve" && method === "POST")
+        return json(await resolveComment(u, idOf(url), (await body()).resolved !== false));
       if (op === "draft-decide" && method === "POST") return json(await decideReview(u, idOf(url), await body(), originOf(request)));
       if (op === "draft-share" && method === "POST") return json(await shareDraft(u, idOf(url), await body(), originOf(request)));
       if (op === "draft-templates" && method === "GET") return json({ templates: await templateInfo(u, idOf(url)) });
-      if (op === "draft-from-template" && method === "POST") return json(await draftFromTemplate(u, idOf(url), await body(), originOf(request)), { status: 201 });
-      if (op === "draft-diff" && method === "GET") return json(await diffDrafts(u, idOf(url), Number(url.searchParams.get("from")), Number(url.searchParams.get("to"))));
-      if (op === "draft-findings" && method === "GET") return json(await draftFindings(u, idOf(url), Number(url.searchParams.get("draft")) || undefined));
+      if (op === "draft-from-template" && method === "POST")
+        return json(await draftFromTemplate(u, idOf(url), await body(), originOf(request)), { status: 201 });
+      if (op === "draft-diff" && method === "GET")
+        return json(await diffDrafts(u, idOf(url), Number(url.searchParams.get("from")), Number(url.searchParams.get("to"))));
+      if (op === "draft-findings" && method === "GET")
+        return json(await draftFindings(u, idOf(url), Number(url.searchParams.get("draft")) || undefined));
       if (op === "draft-deviation" && method === "POST") return json(await acceptDeviation(u, idOf(url), await body()));
       if (op === "draft-audit" && method === "GET") return json({ entries: await draftAudit(u, idOf(url)) });
-      if (op === "draft-audit-export" && method === "GET") return new Response(await draftAuditCsv(u, idOf(url)), { headers: { ...noStore, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="registro-bozza-${idOf(url)}.csv"` } });
+      if (op === "draft-audit-export" && method === "GET")
+        return new Response(await draftAuditCsv(u, idOf(url)), {
+          headers: {
+            ...noStore,
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": `attachment; filename="registro-bozza-${idOf(url)}.csv"`,
+          },
+        });
       if (op === "draft-file" && method === "GET") {
         const f = await draftFile(u, idOf(url));
         if (!f.filePath) return fileDownload(new Blob([new Uint8Array(f.buffer!)]).stream(), f.fileName);
@@ -238,7 +375,8 @@ async function handle(request: Request): Promise<Response> {
     if (["obligations", "obligation-save", "obligation-done", "obligation-delete"].includes(op)) {
       const u = await requireRole(request, ["manager", "buyer", "bo"]);
       if (op === "obligations" && method === "GET") return json({ obligations: await listObligations(u, idOf(url)) });
-      if (op === "obligation-save" && method === "POST") return json({ obligations: await saveObligation(u, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "obligation-save" && method === "POST")
+        return json({ obligations: await saveObligation(u, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "obligation-done" && method === "POST") return json({ obligations: await completeObligation(u, idOf(url)) });
       if (op === "obligation-delete" && method === "POST") return json({ obligations: await deleteObligation(u, idOf(url)) });
     }
@@ -248,7 +386,8 @@ async function handle(request: Request): Promise<Response> {
       const u = await requireRole(request, ["manager", "viewer"]);
       if (op === "clm-kpis" && method === "GET") return json(await clmKpis(u));
       if (op === "review-rules" && method === "GET") return json({ rules: await listRules(u) });
-      if (op === "review-rule-save" && method === "POST") return json({ rules: await saveRule(u, (await readJson(request)) as Record<string, unknown>) });
+      if (op === "review-rule-save" && method === "POST")
+        return json({ rules: await saveRule(u, (await readJson(request)) as Record<string, unknown>) });
       if (op === "review-rule-delete" && method === "POST") return json({ rules: await deleteRule(u, idOf(url)) });
     }
 
@@ -257,8 +396,12 @@ async function handle(request: Request): Promise<Response> {
       const u = await requireRole(request, ["manager", "buyer", "legal", "compliance", "itsec"]);
       if (!canReadClauses(u)) throw new HttpError(403, "Operazione non consentita");
       if (op === "clauses" && method === "GET") return json({ clauses: await listClauses(u) });
-      if (op === "clause-save" && method === "POST") return json({ clauses: await saveClause(u, (await readJson(request)) as Record<string, unknown>) });
-      if (op === "clause-decide" && method === "POST") { const b = (await readJson(request)) as { approve?: unknown; note?: unknown }; return json({ clauses: await decideClauseVersion(u, idOf(url), b.approve === true, String(b.note ?? "")) }); }
+      if (op === "clause-save" && method === "POST")
+        return json({ clauses: await saveClause(u, (await readJson(request)) as Record<string, unknown>) });
+      if (op === "clause-decide" && method === "POST") {
+        const b = (await readJson(request)) as { approve?: unknown; note?: unknown };
+        return json({ clauses: await decideClauseVersion(u, idOf(url), b.approve === true, String(b.note ?? "")) });
+      }
     }
 
     // ── Sicurezza (Manager) ──
@@ -266,7 +409,13 @@ async function handle(request: Request): Promise<Response> {
       const u = await requireRole(request, ["manager"]);
       if (op === "security-events") return json({ events: await listSecurityEvents(u) });
       if (op === "readiness") return json({ checks: await readiness(u) });
-      return new Response(await securityCsv(u), { headers: { ...noStore, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="eventi-sicurezza.csv"' } });
+      return new Response(await securityCsv(u), {
+        headers: {
+          ...noStore,
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="eventi-sicurezza.csv"',
+        },
+      });
     }
     // ── Lingua dell'interfaccia e delle email (ogni utente, fornitori compresi) ──
     if (op === "my-lang" && method === "POST") {
@@ -280,7 +429,8 @@ async function handle(request: Request): Promise<Response> {
     if (op === "my-profile" && method === "POST") {
       const u = await requireUser(request);
       const b = (await readJson(request)) as { title?: unknown; phone?: unknown };
-      const title = typeof b.title === "string" ? b.title.trim() : "", phone = typeof b.phone === "string" ? b.phone.trim() : "";
+      const title = typeof b.title === "string" ? b.title.trim() : "",
+        phone = typeof b.phone === "string" ? b.phone.trim() : "";
       if (title.length > 80) throw new HttpError(400, "Funzione troppo lunga (massimo 80 caratteri)");
       if (phone && !/^[+0-9 ()./-]{5,30}$/.test(phone)) throw new HttpError(400, "Numero di telefono non valido");
       await getPool().query("update users set title = $1, phone = $2 where id = $3", [title, phone, u.id]);
@@ -300,44 +450,69 @@ async function handle(request: Request): Promise<Response> {
       if (op === "kpis" && method === "GET") return json(await computeKpis(user));
       if (op === "categories" && method === "GET") return json(await listCategories(user));
       if (op === "spend" && method === "GET") return json(await spendView(user, Number(url.searchParams.get("year")) || undefined));
-      if (op === "spend-lines" && method === "GET") return json(await spendLines(user, Number(url.searchParams.get("year")), url.searchParams.get("supplier") ?? ""));
+      if (op === "spend-lines" && method === "GET")
+        return json(await spendLines(user, Number(url.searchParams.get("year")), url.searchParams.get("supplier") ?? ""));
       if (op === "budget" && method === "GET") return json(await budgetView(user, Number(url.searchParams.get("year")) || undefined));
-      if (op === "budget-io" && method === "GET") return json(await budgetIo(user, url.searchParams.get("io") ?? "", Number(url.searchParams.get("year")) || undefined));
+      if (op === "budget-io" && method === "GET")
+        return json(await budgetIo(user, url.searchParams.get("io") ?? "", Number(url.searchParams.get("year")) || undefined));
     }
 
     // ── Staff ──
     const user = await requireRole(request, [...STAFF]);
     const origin = originOf(request);
-    if (op === "io-buyer" && method === "POST") { const b = (await readJson(request)) as { io?: unknown; userId?: unknown }; return json(await setIoBuyer(user, b.io, b.userId)); }
+    if (op === "io-buyer" && method === "POST") {
+      const b = (await readJson(request)) as { io?: unknown; userId?: unknown };
+      return json(await setIoBuyer(user, b.io, b.userId));
+    }
     // ── Task (Manager e Buyer) ──
     if (op.startsWith("task") || op.startsWith("rfq") || op === "rda-import") {
       if (user.role !== "manager" && user.role !== "buyer") throw new HttpError(403, "Operazione non consentita");
       if (op === "tasks" && method === "GET") return json(await listTasks(user));
       if (op === "task-summary" && method === "GET") return json(await taskSummary(user));
       if (op === "task" && method === "GET") return json({ task: await getTask(user, idOf(url)) });
-      if (op === "task-create" && method === "POST") return json({ task: await createManualTask(user, (await readJson(request)) as Record<string, unknown>) }, { status: 201 });
-      if (op === "task-update" && method === "POST") return json({ task: await updateTask(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
-      if (op === "task-sourcing" && method === "POST") return json({ task: await saveSourcing(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
-      if (op === "task-sourcing-approve" && method === "POST") return json({ task: await decideSourcingException(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-create" && method === "POST")
+        return json({ task: await createManualTask(user, (await readJson(request)) as Record<string, unknown>) }, { status: 201 });
+      if (op === "task-update" && method === "POST")
+        return json({ task: await updateTask(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-sourcing" && method === "POST")
+        return json({ task: await saveSourcing(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-sourcing-approve" && method === "POST")
+        return json({ task: await decideSourcingException(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "rfq-file" && method === "GET") {
-        const doc = await rfqFile(user, idOf(url), url.searchParams.get("kind") === "spec" ? "spec" : "quote", Number(url.searchParams.get("supplier")) || undefined);
+        const doc = await rfqFile(
+          user,
+          idOf(url),
+          url.searchParams.get("kind") === "spec" ? "spec" : "quote",
+          Number(url.searchParams.get("supplier")) || undefined,
+        );
         const blob = await openDocument(doc.filePath);
         if (!blob) throw new HttpError(404, "Documento non trovato");
         return fileDownload(blob.stream, doc.fileName);
       }
       if (op === "rfqs" && method === "GET") return json({ rfqs: await listTaskRfqs(user, Number(url.searchParams.get("taskId"))) });
-      if (op === "rfq-create" && method === "POST") return json({ rfqs: await createRfq(user, (await readJson(request)) as Record<string, unknown>, originOf(request)) }, { status: 201 });
+      if (op === "rfq-create" && method === "POST")
+        return json(
+          { rfqs: await createRfq(user, (await readJson(request)) as Record<string, unknown>, originOf(request)) },
+          { status: 201 },
+        );
       if (op === "rfq-close" && method === "POST") return json({ rfqs: await closeRfq(user, idOf(url)) });
-      if (op === "rfq-use" && method === "POST") return json({ task: await applyRfq(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
-      if (op === "task-outcome" && method === "POST") return json({ task: await setRenewalOutcome(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
-      if (op === "task-contract" && method === "POST") return json({ task: await registerPurchaseContract(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "rfq-use" && method === "POST")
+        return json({ task: await applyRfq(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-outcome" && method === "POST")
+        return json({ task: await setRenewalOutcome(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-contract" && method === "POST")
+        return json({ task: await registerPurchaseContract(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-rda-suggest" && method === "GET") return json({ suggestions: await suggestRdas(user, idOf(url)) });
-      if (op === "task-contract-register" && method === "POST") return json({ task: await registerTaskContract(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-contract-register" && method === "POST")
+        return json({ task: await registerTaskContract(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "tasks-archive" && method === "GET") return json({ tasks: await tasksArchive(user, url.searchParams.get("q") ?? "") });
-      if (op === "task-supplier" && method === "POST") return json({ task: await setTaskSupplier(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-supplier" && method === "POST")
+        return json({ task: await setTaskSupplier(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-suppliers" && method === "GET") return json({ suppliers: await listEligibleSuppliers() });
-      if (op === "task-links" && method === "POST") return json({ task: await setTaskLinks(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
-      if (op === "task-doc" && method === "POST") return json({ task: await addTaskDocument(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-links" && method === "POST")
+        return json({ task: await setTaskLinks(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
+      if (op === "task-doc" && method === "POST")
+        return json({ task: await addTaskDocument(user, idOf(url), (await readJson(request)) as Record<string, unknown>) });
       if (op === "task-doc" && method === "DELETE") {
         const { task, staleFile } = await deleteTaskDocument(user, idOf(url), Number(url.searchParams.get("doc")));
         if (staleFile) await deleteDocuments([staleFile]);
@@ -349,12 +524,24 @@ async function handle(request: Request): Promise<Response> {
         if (!blob) throw new HttpError(404, "Documento non trovato");
         const ext = doc.fileName.toLowerCase().split(".").pop() ?? "";
         const type = ext === "pdf" ? "application/pdf" : "application/octet-stream";
-        return new Response(blob.stream, { headers: { "Content-Type": type, "Content-Disposition": `${type === "application/pdf" ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(doc.fileName.replace(/[\r\n"\\/]/g, "_"))}`, "X-Content-Type-Options": "nosniff", "Cache-Control": "private, no-store" } });
+        return new Response(blob.stream, {
+          headers: {
+            "Content-Type": type,
+            "Content-Disposition": `${type === "application/pdf" ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(doc.fileName.replace(/[\r\n"\\/]/g, "_"))}`,
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "private, no-store",
+          },
+        });
       }
-      if (op === "task" && method === "DELETE") { await deleteManualTask(user, idOf(url)); return json({ ok: true }); }
+      if (op === "task" && method === "DELETE") {
+        await deleteManualTask(user, idOf(url));
+        return json({ ok: true });
+      }
       if (op === "rda-import" && method === "POST") {
         const name = decodeURIComponent(request.headers.get("x-file-name") ?? "") || "file.xls";
-        return json(await importSapFile(user.name, name, new Uint8Array(await request.arrayBuffer()), url.searchParams.get("force") === "1"));
+        return json(
+          await importSapFile(user.name, name, new Uint8Array(await request.arrayBuffer()), url.searchParams.get("force") === "1"),
+        );
       }
     }
     if (op === "doc-monitor" && method === "GET") return json(await monitorData(user));
@@ -362,7 +549,15 @@ async function handle(request: Request): Promise<Response> {
       const body = (await readJson(request)) as { supplierId?: unknown; channel?: unknown; note?: unknown };
       const supplierId = Number(body.supplierId);
       if (!Number.isInteger(supplierId) || supplierId <= 0) throw new HttpError(400, "Indica il fornitore");
-      return json(await remindSupplier(user, supplierId, body.channel === "phone" ? "phone" : "email", typeof body.note === "string" ? body.note : "", origin));
+      return json(
+        await remindSupplier(
+          user,
+          supplierId,
+          body.channel === "phone" ? "phone" : "email",
+          typeof body.note === "string" ? body.note : "",
+          origin,
+        ),
+      );
     }
     if (op === "risk-run" && method === "POST") {
       if (!canConfigurePortal(user)) throw new HttpError(403, "Operazione non consentita");
@@ -381,49 +576,113 @@ async function handle(request: Request): Promise<Response> {
       return json({ supplier: await getVendor(user, owner) });
     }
     // ── Categorie unificate ──
-    if (op === "category-save" && method === "POST") { const b = (await readJson(request)) as { id?: unknown; name?: string }; return json(await saveCategory(user, b.id ? Number(b.id) : null, String(b.name ?? ""))); }
+    if (op === "category-save" && method === "POST") {
+      const b = (await readJson(request)) as { id?: unknown; name?: string };
+      return json(await saveCategory(user, b.id ? Number(b.id) : null, String(b.name ?? "")));
+    }
     if (op === "category" && method === "DELETE") return json(await deleteCategory(user, Number(url.searchParams.get("id"))));
-    if (op === "category-map" && method === "POST") { const b = (await readJson(request)) as { kind?: string; key?: string; categoryId?: unknown }; return json(await setCategoryMap(user, String(b.kind ?? ""), String(b.key ?? ""), b.categoryId ? Number(b.categoryId) : null)); }
-    if (op === "category-buyers" && method === "POST") { const b = (await readJson(request)) as { categoryId?: unknown; userIds?: unknown }; return json(await setCategoryBuyers(user, Number(b.categoryId), b.userIds)); }
+    if (op === "category-map" && method === "POST") {
+      const b = (await readJson(request)) as { kind?: string; key?: string; categoryId?: unknown };
+      return json(await setCategoryMap(user, String(b.kind ?? ""), String(b.key ?? ""), b.categoryId ? Number(b.categoryId) : null));
+    }
+    if (op === "category-buyers" && method === "POST") {
+      const b = (await readJson(request)) as { categoryId?: unknown; userIds?: unknown };
+      return json(await setCategoryBuyers(user, Number(b.categoryId), b.userIds));
+    }
     if (op === "category-seed" && method === "POST") return json(await seedCategoriesFromMp(user));
     if (op === "cover" && method === "GET") return json(await listCover(user));
     if (op === "cover-add" && method === "POST") return json(await addCover(user, (await readJson(request)) as Record<string, unknown>));
     if (op === "cover" && method === "DELETE") return json(await deleteCover(user, idOf(url)));
     if (op === "reset-preview" && method === "GET") return json({ counts: await resetPreview(user) });
-    if (op === "reset-run" && method === "POST") { const b = (await readJson(request)) as { areas?: unknown; confirm?: unknown }; const deleted = await resetData(user, b.areas, b.confirm); await logSecurity("data_reset", { userId: user.id, email: user.email, ip: clientIp(request), detail: JSON.stringify(deleted) }); return json({ deleted }); }
+    if (op === "reset-run" && method === "POST") {
+      const b = (await readJson(request)) as { areas?: unknown; confirm?: unknown };
+      const deleted = await resetData(user, b.areas, b.confirm);
+      await logSecurity("data_reset", { userId: user.id, email: user.email, ip: clientIp(request), detail: JSON.stringify(deleted) });
+      return json({ deleted });
+    }
     if (op === "bo-info" && method === "GET") return json({ info: await boInfo(user, idOf(url)) });
-    if (op === "bo-notice-send" && method === "POST") return json({ info: await sendBoNotice(user, idOf(url), (await readJson(request)) as Record<string, unknown>, originOf(request)) });
-    if (op === "bo-lead" && method === "POST") return json({ info: await setBoLead(user, idOf(url), ((await readJson(request)) as { days?: unknown }).days) });
+    if (op === "bo-notice-send" && method === "POST")
+      return json({ info: await sendBoNotice(user, idOf(url), (await readJson(request)) as Record<string, unknown>, originOf(request)) });
+    if (op === "bo-lead" && method === "POST")
+      return json({ info: await setBoLead(user, idOf(url), ((await readJson(request)) as { days?: unknown }).days) });
     if (op === "bo-settings" && method === "GET") return json({ settings: await loadBoSettings(getPool()) });
-    if (op === "bo-settings-save" && method === "POST") return json({ settings: await saveBoSettings(user, (await readJson(request)) as Record<string, unknown>) });
-    if (op === "bo-users" && method === "GET") return json({ users: (await getPool().query("select id, name, email, sap_user from users where active and role = 'bo' order by name")).rows.map(r => ({ id: r.id, name: r.name, email: r.email, sapUser: r.sap_user ?? "" })) });
+    if (op === "bo-settings-save" && method === "POST")
+      return json({ settings: await saveBoSettings(user, (await readJson(request)) as Record<string, unknown>) });
+    if (op === "bo-users" && method === "GET")
+      return json({
+        users: (await getPool().query("select id, name, email, sap_user from users where active and role = 'bo' order by name")).rows.map(
+          r => ({ id: r.id, name: r.name, email: r.email, sapUser: r.sap_user ?? "" }),
+        ),
+      });
     if (op === "my-work" && method === "GET") return json({ items: await myWork(user) });
     // ── Spesa dai file ordini SAP ──
     // ── Master Plan (budget per internal order) ──
     if (op === "budget-import" && method === "POST") {
       const name = decodeURIComponent(request.headers.get("x-file-name") ?? "") || "master-plan.xlsx";
-      return json(await importBudget(user, Number(url.searchParams.get("year")), url.searchParams.get("label") ?? "", name, new Uint8Array(await request.arrayBuffer())), { status: 201 });
+      return json(
+        await importBudget(
+          user,
+          Number(url.searchParams.get("year")),
+          url.searchParams.get("label") ?? "",
+          name,
+          new Uint8Array(await request.arrayBuffer()),
+        ),
+        { status: 201 },
+      );
     }
-    if (op === "budget-version" && method === "DELETE") { await deleteBudgetVersion(user, idOf(url)); return json({ ok: true }); }
-    if (op === "budget-demo" && method === "POST") { demoOnly(); return json(await loadBudgetDemo(user), { status: 201 }); }
-    if (op === "budget-demo" && method === "DELETE") { demoOnly(); return json(await deleteBudgetDemo(user)); }
+    if (op === "budget-version" && method === "DELETE") {
+      await deleteBudgetVersion(user, idOf(url));
+      return json({ ok: true });
+    }
+    if (op === "budget-demo" && method === "POST") {
+      demoOnly();
+      return json(await loadBudgetDemo(user), { status: 201 });
+    }
+    if (op === "budget-demo" && method === "DELETE") {
+      demoOnly();
+      return json(await deleteBudgetDemo(user));
+    }
     if (op === "budget-demo-file" && method === "GET") {
       const po = url.searchParams.get("kind") === "po";
-      return new Response(Buffer.from(po ? demoPoFile() : demoPrFile()), { headers: { ...noStore, "Content-Type": "application/vnd.ms-excel", "Content-Disposition": `attachment; filename="${po ? "PO_LAST_7D_PROVA.XLS" : "OPEN_PR_PROVA.XLS"}"` } });
+      return new Response(Buffer.from(po ? demoPoFile() : demoPrFile()), {
+        headers: {
+          ...noStore,
+          "Content-Type": "application/vnd.ms-excel",
+          "Content-Disposition": `attachment; filename="${po ? "PO_LAST_7D_PROVA.XLS" : "OPEN_PR_PROVA.XLS"}"`,
+        },
+      });
     }
-    if (op === "budget-template" && method === "GET") return new Response(BUDGET_TEMPLATE, { headers: { ...noStore, "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": 'attachment; filename="modello-master-plan.csv"' } });
-    if (op === "test-accesses" && method === "POST") { demoOnly(); return json({ accesses: await createTestAccesses(user) }); }
-    if (op === "test-accesses-remove" && method === "POST") { demoOnly(); return json({ removed: await removeTestAccesses(user) }); }
+    if (op === "budget-template" && method === "GET")
+      return new Response(BUDGET_TEMPLATE, {
+        headers: {
+          ...noStore,
+          "Content-Type": "text/csv; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="modello-master-plan.csv"',
+        },
+      });
+    if (op === "test-accesses" && method === "POST") {
+      demoOnly();
+      return json({ accesses: await createTestAccesses(user) });
+    }
+    if (op === "test-accesses-remove" && method === "POST") {
+      demoOnly();
+      return json({ removed: await removeTestAccesses(user) });
+    }
     if (op === "vendor-test-access" && method === "POST") return json(await resetTestSupplierAccess(user, idOf(url)));
-    if (op === "vendor-demo" && method === "POST") { demoOnly(); return json(await createDemoSupplier(user), { status: 201 }); }
+    if (op === "vendor-demo" && method === "POST") {
+      demoOnly();
+      return json(await createDemoSupplier(user), { status: 201 });
+    }
     if (op === "vendors" && method === "GET") return json({ vendors: await listVendors(user) });
     if (op === "vendor-checks" && method === "POST") {
-      const id = idOf(url); await getVendor(user, id);
+      const id = idOf(url);
+      await getVendor(user, id);
       await runExternalChecks(getPool(), id, "manual");
       return json({ supplier: await getVendor(user, id) });
     }
     if (op === "vendor-rating" && method === "GET") return json({ scorecard: await supplierScorecard(user, idOf(url)) });
-    if (op === "vendor-rating-add" && method === "POST") return json({ scorecard: await addRating(user, idOf(url), (await readJson(request)) as Record<string, unknown>) }, { status: 201 });
+    if (op === "vendor-rating-add" && method === "POST")
+      return json({ scorecard: await addRating(user, idOf(url), (await readJson(request)) as Record<string, unknown>) }, { status: 201 });
     if (op === "vendor-rating" && method === "DELETE") return json({ scorecard: await deleteRating(user, idOf(url)) });
     if (op === "vendor-ratings" && method === "GET") return json({ ratings: await ratingSummary(user) });
     if (op === "vendor" && method === "GET") return json({ supplier: await getVendor(user, idOf(url)) });
@@ -431,7 +690,9 @@ async function handle(request: Request): Promise<Response> {
     if (op === "config-save" && method === "POST") {
       if (!canConfigurePortal(user)) throw new HttpError(403, "Operazione non consentita");
       const body = (await readJson(request)) as { entity?: unknown; action?: unknown; item?: unknown };
-      const entity = String(body.entity ?? ""), action = String(body.action ?? ""), item = (body.item ?? {}) as Record<string, unknown>;
+      const entity = String(body.entity ?? ""),
+        action = String(body.action ?? ""),
+        item = (body.item ?? {}) as Record<string, unknown>;
       const before = await loadConfig();
       await saveConfig(entity, action, item);
       const after = await loadConfig();
@@ -450,11 +711,13 @@ async function handle(request: Request): Promise<Response> {
     }
     if (op === "vendor-export" && method === "GET") {
       if (user.role !== "manager") throw new HttpError(403, "Solo il Manager esporta i dati di un fornitore");
-      const id = idOf(url); await getVendor(user, id);
+      const id = idOf(url);
+      await getVendor(user, id);
       return download(await exportSupplier(getPool(), id), `fornitore-${id}.json`);
     }
     if (op === "vendor-anonymize" && method === "POST") {
-      const id = idOf(url); await getVendor(user, id);
+      const id = idOf(url);
+      await getVendor(user, id);
       const body = (await readJson(request)) as { reason?: unknown };
       await deleteDocuments(await anonymizeSupplier(user, id, typeof body.reason === "string" ? body.reason : ""));
       return json({ supplier: await getVendor(user, id) });

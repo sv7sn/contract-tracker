@@ -2,10 +2,14 @@
 // SAP non sempre produce XML ben formato (caratteri speciali non codificati), quindi si legge a espressioni regolari.
 
 const ENT: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
-const unescape = (s: string) => s.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, e: string) => {
-  if (e[0] === "#") { const n = e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10); return Number.isFinite(n) ? String.fromCodePoint(n) : m; }
-  return ENT[e.toLowerCase()] ?? m;
-});
+const unescape = (s: string) =>
+  s.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (m, e: string) => {
+    if (e[0] === "#") {
+      const n = e[1].toLowerCase() === "x" ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+      return Number.isFinite(n) ? String.fromCodePoint(n) : m;
+    }
+    return ENT[e.toLowerCase()] ?? m;
+  });
 
 /** Decodifica il file (UTF-16 con o senza BOM, oppure UTF-8) in testo. */
 export function decodeSap(buf: Uint8Array): string {
@@ -40,37 +44,112 @@ export function detectKind(header: (string | null)[]): SapKind | null {
   return null;
 }
 
-const num = (v: string | null | undefined) => { if (v == null) return 0; const n = Number(v.replace(",", ".")); return Number.isFinite(n) ? n : 0; };
-const date = (v: string | null | undefined) => { const m = /^(\d{4}-\d{2}-\d{2})/.exec(v ?? ""); return m ? m[1] : null; };
+const num = (v: string | null | undefined) => {
+  if (v == null) return 0;
+  const n = Number(v.replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+};
+const date = (v: string | null | undefined) => {
+  const m = /^(\d{4}-\d{2}-\d{2})/.exec(v ?? "");
+  return m ? m[1] : null;
+};
 /** Costruisce l'accesso per nome di colonna (a parità di nome vale la prima colonna). */
 function columns(header: (string | null)[]) {
   const idx = new Map<string, number>();
-  header.forEach((h, i) => { const k = (h ?? "").trim(); if (k && !idx.has(k)) idx.set(k, i); });
-  return (row: (string | null)[], name: string): string | null => { const i = idx.get(name); return i === undefined ? null : row[i] ?? null; };
+  header.forEach((h, i) => {
+    const k = (h ?? "").trim();
+    if (k && !idx.has(k)) idx.set(k, i);
+  });
+  return (row: (string | null)[], name: string): string | null => {
+    const i = idx.get(name);
+    return i === undefined ? null : (row[i] ?? null);
+  };
 }
 
-export interface PrLine { pr: string; item: string; pgr: string; shortText: string; qty: number; unit: string; price: number; per: number; currency: string; reqDate: string | null; delivDate: string | null; releaseDate: string | null; requestedBy: string; createdBy: string; plant: string; costCenter: string; glAccount: string; value: number;
+export interface PrLine {
+  pr: string;
+  item: string;
+  pgr: string;
+  shortText: string;
+  qty: number;
+  unit: string;
+  price: number;
+  per: number;
+  currency: string;
+  reqDate: string | null;
+  delivDate: string | null;
+  releaseDate: string | null;
+  requestedBy: string;
+  createdBy: string;
+  plant: string;
+  costCenter: string;
+  glAccount: string;
+  value: number;
   /** Internal order (riga del Master Plan) e tipo di imputazione SAP (F = ordine, K = centro di costo). */
-  internalOrder: string; accountAssignment: string }
+  internalOrder: string;
+  accountAssignment: string;
+}
 export function parsePrLines(rows: (string | null)[][]): PrLine[] {
   const col = columns(rows[0] ?? []);
   const out: PrLine[] = [];
   for (const r of rows.slice(1)) {
     const pr = col(r, "Purch.Req.");
     if (!pr) continue;
-    const qty = num(col(r, "Qty Requested")), price = num(col(r, "Valn Price")), per = num(col(r, "Per")) || 1;
-    out.push({ pr, item: col(r, "Item") ?? "0", pgr: col(r, "PGr") ?? "", shortText: col(r, "Short Text") ?? "", qty, unit: col(r, "Un") ?? "", price, per, currency: col(r, "Crcy") ?? "EUR",
-      reqDate: date(col(r, "Req.Date")), delivDate: date(col(r, "Deliv. Date")), releaseDate: date(col(r, "Release Dt")), requestedBy: col(r, "Requested By") ?? "", createdBy: col(r, "Created By") ?? "",
-      plant: col(r, "Plnt") ?? "", costCenter: col(r, "Cost Ctr") ?? "", glAccount: col(r, "G/L Acct") ?? "", value: Math.round((qty * price / per) * 100) / 100,
-      internalOrder: (col(r, "Order") ?? "").trim(), accountAssignment: (col(r, "A") ?? "").trim() });
+    const qty = num(col(r, "Qty Requested")),
+      price = num(col(r, "Valn Price")),
+      per = num(col(r, "Per")) || 1;
+    out.push({
+      pr,
+      item: col(r, "Item") ?? "0",
+      pgr: col(r, "PGr") ?? "",
+      shortText: col(r, "Short Text") ?? "",
+      qty,
+      unit: col(r, "Un") ?? "",
+      price,
+      per,
+      currency: col(r, "Crcy") ?? "EUR",
+      reqDate: date(col(r, "Req.Date")),
+      delivDate: date(col(r, "Deliv. Date")),
+      releaseDate: date(col(r, "Release Dt")),
+      requestedBy: col(r, "Requested By") ?? "",
+      createdBy: col(r, "Created By") ?? "",
+      plant: col(r, "Plnt") ?? "",
+      costCenter: col(r, "Cost Ctr") ?? "",
+      glAccount: col(r, "G/L Acct") ?? "",
+      value: Math.round(((qty * price) / per) * 100) / 100,
+      internalOrder: (col(r, "Order") ?? "").trim(),
+      accountAssignment: (col(r, "A") ?? "").trim(),
+    });
   }
   return out;
 }
 
-export interface PoLine { po: string; item: string; pr: string; supplierCode: string; supplierName: string; docDate: string | null; createdOn: string | null; pgr: string; createdBy: string; docType: string;
+export interface PoLine {
+  po: string;
+  item: string;
+  pr: string;
+  supplierCode: string;
+  supplierName: string;
+  docDate: string | null;
+  createdOn: string | null;
+  pgr: string;
+  createdBy: string;
+  docType: string;
   /** Valore della riga di RDA collegata, valore netto dell'ordine (solo se l'estrazione ha la colonna) e importo già ricevuto (entrata merci). */
-  prValue: number; netValue: number | null; grAmount: number; irAmount: number; currency: string;
-  matlGroup: string; matlGroupDesc: string; agreement: string; internalOrder: string; costCenter: string; glAccount: string; shortText: string; requestedBy: string }
+  prValue: number;
+  netValue: number | null;
+  grAmount: number;
+  irAmount: number;
+  currency: string;
+  matlGroup: string;
+  matlGroupDesc: string;
+  agreement: string;
+  internalOrder: string;
+  costCenter: string;
+  glAccount: string;
+  shortText: string;
+  requestedBy: string;
+}
 /** Colonne con il valore netto del PO: l'estrazione standard non lo ha, ma se IT lo aggiunge viene usato al posto del valore della RDA. */
 const NET_COLS = ["Net Order Value", "Net Value", "Net value", "Net Ord.Val.", "PO Value", "PO VALUE", "Valore netto"];
 /** Tutte le righe d'ordine: quelle con RDA servono anche ai task, tutte servono alla spesa. */
@@ -83,10 +162,31 @@ export function parsePoLines(rows: (string | null)[][]): PoLine[] {
     const po = col(r, "Purch.Doc.");
     if (!po) continue; // riga dei totali
     const t = (name: string) => (col(r, name) ?? "").trim();
-    out.push({ po, item: t("Item") || "0", pr: t("Purch.Req."), supplierCode: t("Supplier"), supplierName: t("Name 1"), docDate: date(col(r, "Doc. Date")), createdOn: date(col(r, "Created on")), pgr: t("PGr"), createdBy: t("Created by"), docType: t("Type"),
-      prValue: num(col(r, "PR VALUE")), netValue: net ? num(col(r, net)) : null, grAmount: num(col(r, "TOTAL GR Amount in Loc Curr")), irAmount: num(col(r, "TOTAL IR amount in loc curr")), currency: t("Crcy") || "EUR",
-      matlGroup: t("Matl Group") || t("Material Group"), matlGroupDesc: t("Material Group Desc."), agreement: t("Agmt"), internalOrder: t("Order Number"), costCenter: t("Cost Center"), glAccount: t("G/L Account Number"),
-      shortText: t("Short Text"), requestedBy: t("Requested By") });
+    out.push({
+      po,
+      item: t("Item") || "0",
+      pr: t("Purch.Req."),
+      supplierCode: t("Supplier"),
+      supplierName: t("Name 1"),
+      docDate: date(col(r, "Doc. Date")),
+      createdOn: date(col(r, "Created on")),
+      pgr: t("PGr"),
+      createdBy: t("Created by"),
+      docType: t("Type"),
+      prValue: num(col(r, "PR VALUE")),
+      netValue: net ? num(col(r, net)) : null,
+      grAmount: num(col(r, "TOTAL GR Amount in Loc Curr")),
+      irAmount: num(col(r, "TOTAL IR amount in loc curr")),
+      currency: t("Crcy") || "EUR",
+      matlGroup: t("Matl Group") || t("Material Group"),
+      matlGroupDesc: t("Material Group Desc."),
+      agreement: t("Agmt"),
+      internalOrder: t("Order Number"),
+      costCenter: t("Cost Center"),
+      glAccount: t("G/L Account Number"),
+      shortText: t("Short Text"),
+      requestedBy: t("Requested By"),
+    });
   }
   return out;
 }

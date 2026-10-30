@@ -8,7 +8,11 @@ export { handleUploadPresigned, issueSignedToken };
 
 export const FILE_PATH_RE = /^contracts\/[0-9a-f-]{36}\/[^/\\]{1,150}$/;
 export const MAX_FILE_BYTES = 25 * 1024 * 1024;
-export const ALLOWED_TYPES = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+export const ALLOWED_TYPES = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
 
 export const MIME_BY_EXT: Record<string, string> = {
   pdf: "application/pdf",
@@ -24,5 +28,9 @@ export async function openDocument(path: string) {
 /** Elimina i file non più referenziati. Un errore qui non deve far fallire l'operazione principale. */
 export async function deleteDocuments(paths: string[]) {
   if (!paths.length) return;
-  try { await del(paths); } catch (err) { console.error("Eliminazione documenti non riuscita", err); }
+  try {
+    await del(paths);
+  } catch (err) {
+    console.error("Eliminazione documenti non riuscita", err);
+  }
 }

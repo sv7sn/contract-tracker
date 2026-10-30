@@ -1,32 +1,114 @@
 import assert from "node:assert/strict";
 const B = process.env.API_BUILD + "/api/";
 process.env.DATABASE_URL = process.env.TEST_DB_URL;
-process.env.ADMIN_EMAIL = "admin@test.it"; process.env.ADMIN_PASSWORD = "Admin-pass-123!"; process.env.SESSION_SECRET = "x".repeat(40);
-const commit = await import(B + "commit.js"), state = await import(B + "state.js"), login = await import(B + "login.js"), users = await import(B + "users.js"), portal = await import(B + "portal.js"), db = await import(B + "_db.js");
-await db.ensureSchema(); const pool = db.getPool();
-let passed = 0; const ok = n => { passed++; console.log("  ✓", n); };
-const call = async (mod, cookie, method, body, qs = "") => { const r = new Request("https://a/x" + qs, { method, headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); const res = await mod[method](r); let data; try { data = await res.clone().json(); } catch { data = null; } return { status: res.status, data, cookie: res.headers.get("set-cookie")?.split(";")[0] }; };
+process.env.ADMIN_EMAIL = "admin@test.it";
+process.env.ADMIN_PASSWORD = "Admin-pass-123!";
+process.env.SESSION_SECRET = "x".repeat(40);
+const commit = await import(B + "commit.js"),
+  state = await import(B + "state.js"),
+  login = await import(B + "login.js"),
+  users = await import(B + "users.js"),
+  portal = await import(B + "portal.js"),
+  db = await import(B + "_db.js");
+await db.ensureSchema();
+const pool = db.getPool();
+let passed = 0;
+const ok = n => {
+  passed++;
+  console.log("  ✓", n);
+};
+const call = async (mod, cookie, method, body, qs = "") => {
+  const r = new Request("https://a/x" + qs, {
+    method,
+    headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const res = await mod[method](r);
+  let data;
+  try {
+    data = await res.clone().json();
+  } catch {
+    data = null;
+  }
+  return { status: res.status, data, cookie: res.headers.get("set-cookie")?.split(";")[0] };
+};
 const lg = async (email, password) => (await call(login, null, "POST", { email, password })).cookie;
 const admin = await lg("admin@test.it", "Admin-pass-123!");
 const mk = (email, name, role) => call(users, admin, "POST", { email, name, role, password: "Pass-12345-xx!" });
-assert.equal((await mk("v@t.it", "Carla CFO", "viewer")).status, 200); await mk("b1@t.it", "Buyer Uno", "buyer"); await mk("b2@t.it", "Buyer Due", "buyer");
-const cv = await lg("v@t.it", "Pass-12345-xx!"), c1 = await lg("b1@t.it", "Pass-12345-xx!"), c2 = await lg("b2@t.it", "Pass-12345-xx!");
-const base = { supplier: "ACME", object: "Test", category: "IT", country: "Italia", value: 100, currency: "EUR", start: "2026-01-01", end: "2027-12-31", owner: "Buyer Uno", boEmail: "", renewal: "Non definito", type: "Servizi", notes: "", ceased: false, fileName: null, filePath: null, noticeDays: null, noticeDate: "" };
+assert.equal((await mk("v@t.it", "Carla CFO", "viewer")).status, 200);
+await mk("b1@t.it", "Buyer Uno", "buyer");
+await mk("b2@t.it", "Buyer Due", "buyer");
+const cv = await lg("v@t.it", "Pass-12345-xx!"),
+  c1 = await lg("b1@t.it", "Pass-12345-xx!"),
+  c2 = await lg("b2@t.it", "Pass-12345-xx!");
+const base = {
+  supplier: "ACME",
+  object: "Test",
+  category: "IT",
+  country: "Italia",
+  value: 100,
+  currency: "EUR",
+  start: "2026-01-01",
+  end: "2027-12-31",
+  owner: "Buyer Uno",
+  boEmail: "",
+  renewal: "Non definito",
+  type: "Servizi",
+  notes: "",
+  ceased: false,
+  fileName: null,
+  filePath: null,
+  noticeDays: null,
+  noticeDate: "",
+};
 console.log("Controlling / CFO (sola lettura)");
-let r = await call(commit, c1, "POST", { contract: base }); assert.equal(r.status, 200, JSON.stringify(r.data)); const id = r.data.contractId;
-assert.equal((await pool.query("select owner_id from contracts where id = $1", [id])).rows[0].owner_id, (await pool.query("select id from users where email = 'b1@t.it'")).rows[0].id); ok("il contratto del buyer è collegato al suo utente");
-let s = (await call(state, cv, "GET")).data; assert.equal(s.contracts.length, 1); ok("vede tutti i contratti");
-r = await call(commit, cv, "POST", { contract: { ...base, id, value: 999 } }); assert([403, 404].includes(r.status)); r = await call(commit, cv, "POST", { contract: { ...base, supplier: "Nuovo" } }); assert.equal(r.status, 403); r = await call(commit, cv, "POST", { deleteContractId: id }); assert([403, 404].includes(r.status)); assert.equal((await pool.query("select value from contracts where id = $1", [id])).rows[0].value, 100); ok("non crea, non modifica, non elimina");
+let r = await call(commit, c1, "POST", { contract: base });
+assert.equal(r.status, 200, JSON.stringify(r.data));
+const id = r.data.contractId;
+assert.equal(
+  (await pool.query("select owner_id from contracts where id = $1", [id])).rows[0].owner_id,
+  (await pool.query("select id from users where email = 'b1@t.it'")).rows[0].id,
+);
+ok("il contratto del buyer è collegato al suo utente");
+let s = (await call(state, cv, "GET")).data;
+assert.equal(s.contracts.length, 1);
+ok("vede tutti i contratti");
+r = await call(commit, cv, "POST", { contract: { ...base, id, value: 999 } });
+assert([403, 404].includes(r.status));
+r = await call(commit, cv, "POST", { contract: { ...base, supplier: "Nuovo" } });
+assert.equal(r.status, 403);
+r = await call(commit, cv, "POST", { deleteContractId: id });
+assert([403, 404].includes(r.status));
+assert.equal((await pool.query("select value from contracts where id = $1", [id])).rows[0].value, 100);
+ok("non crea, non modifica, non elimina");
 const P = (c, m, op, body) => call(portal, c, m, body, `?op=${op}`);
-for (const op of ["budget", "spend", "categories"]) assert.equal((await P(cv, "GET", op)).status, 200, op); assert.equal((await P(cv, "GET", "kpis")).status, 403); ok("vede Master Plan, spesa e categorie, non gli indicatori");
-for (const op of ["tasks", "vendors", "my-work", "reset-preview", "rfqs"]) assert([401, 403].includes((await P(cv, "GET", op)).status), op); assert.equal((await P(cv, "POST", "budget-import")).status === 200, false); assert.equal((await P(cv, "POST", "reset-run", { areas: ["tasks"], confirm: "ELIMINA" })).status, 403); assert.equal((await P(cv, "POST", "category-save", { name: "X" })).status, 403); ok("niente task, fornitori, pulizia, import né modifiche alle categorie");
-assert.equal((await call(users, cv, "GET")).status, 403); ok("non gestisce utenti");
+for (const op of ["budget", "spend", "categories"]) assert.equal((await P(cv, "GET", op)).status, 200, op);
+assert.equal((await P(cv, "GET", "kpis")).status, 403);
+ok("vede Master Plan, spesa e categorie, non gli indicatori");
+for (const op of ["tasks", "vendors", "my-work", "reset-preview", "rfqs"]) assert([401, 403].includes((await P(cv, "GET", op)).status), op);
+assert.equal((await P(cv, "POST", "budget-import")).status === 200, false);
+assert.equal((await P(cv, "POST", "reset-run", { areas: ["tasks"], confirm: "ELIMINA" })).status, 403);
+assert.equal((await P(cv, "POST", "category-save", { name: "X" })).status, 403);
+ok("niente task, fornitori, pulizia, import né modifiche alle categorie");
+assert.equal((await call(users, cv, "GET")).status, 403);
+ok("non gestisce utenti");
 
 console.log("Collegamento del contratto all'utente");
-s = (await call(state, c1, "GET")).data; assert.equal(s.contracts.length, 1); assert.equal((await call(state, c2, "GET")).data.contracts.length, 0); ok("il buyer vede il suo contratto, l'altro buyer no");
-r = await call(commit, admin, "POST", { contract: { ...base, id, owner: "Buyer Due" } }); assert.equal(r.status, 200, JSON.stringify(r.data));
-assert.equal((await call(state, c2, "GET")).data.contracts.length, 1); assert.equal((await call(state, c1, "GET")).data.contracts.length, 0); ok("il Manager passa il contratto a un altro buyer: cambia chi lo vede");
-await pool.query("update contracts set owner_id = null where id = $1", [id]); assert.equal((await call(state, c2, "GET")).data.contracts.length, 1); ok("contratto non ancora collegato: vale ancora il nome");
-await pool.query("update users set name = 'Buyer Due Rinominato' where email = 'b2@t.it'"); await pool.query("update contracts set owner_id = (select id from users where email = 'b2@t.it'), owner = 'Buyer Due' where id = $1", [id]);
-assert.equal((await call(state, await lg("b2@t.it", "Pass-12345-xx!"), "GET")).data.contracts.length, 1); ok("collegato per utente: un cambio di nome non fa perdere il contratto");
-console.log(`\n${passed} controlli superati`); process.exit(0);
+s = (await call(state, c1, "GET")).data;
+assert.equal(s.contracts.length, 1);
+assert.equal((await call(state, c2, "GET")).data.contracts.length, 0);
+ok("il buyer vede il suo contratto, l'altro buyer no");
+r = await call(commit, admin, "POST", { contract: { ...base, id, owner: "Buyer Due" } });
+assert.equal(r.status, 200, JSON.stringify(r.data));
+assert.equal((await call(state, c2, "GET")).data.contracts.length, 1);
+assert.equal((await call(state, c1, "GET")).data.contracts.length, 0);
+ok("il Manager passa il contratto a un altro buyer: cambia chi lo vede");
+await pool.query("update contracts set owner_id = null where id = $1", [id]);
+assert.equal((await call(state, c2, "GET")).data.contracts.length, 1);
+ok("contratto non ancora collegato: vale ancora il nome");
+await pool.query("update users set name = 'Buyer Due Rinominato' where email = 'b2@t.it'");
+await pool.query("update contracts set owner_id = (select id from users where email = 'b2@t.it'), owner = 'Buyer Due' where id = $1", [id]);
+assert.equal((await call(state, await lg("b2@t.it", "Pass-12345-xx!"), "GET")).data.contracts.length, 1);
+ok("collegato per utente: un cambio di nome non fa perdere il contratto");
+console.log(`\n${passed} controlli superati`);
+process.exit(0);

@@ -1,8 +1,16 @@
 {
   "extends": "../tsconfig.api.json",
   "compilerOptions": {
-    "noEmit": false, "outDir": "./.build", "rootDir": "..", "module": "esnext", "moduleResolution": "bundler",
-    "allowImportingTsExtensions": false, "rewriteRelativeImportExtensions": true, "verbatimModuleSyntax": true, "tsBuildInfoFile": null, "incremental": false
+    "noEmit": false,
+    "outDir": "./.build",
+    "rootDir": "..",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": true,
+    "verbatimModuleSyntax": true,
+    "tsBuildInfoFile": null,
+    "incremental": false
   },
   "include": ["../api", "../src/types.ts"]
 }
