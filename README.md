@@ -94,11 +94,14 @@ Non esistono account predefiniti con password note: senza `ADMIN_*` il sito most
 
 ## Sviluppo
 
+Regole del progetto per chi modifica il codice (anche con un assistente come OpenCode): [`AGENTS.md`](AGENTS.md).
+
 ```bash
 npm install
 npm run dev      # frontend in modalità demo locale (senza API)
 npm run build    # typecheck (app + api) e build di produzione
 npm run lint     # ESLint
+npm run format   # formattazione (Prettier); in CI: npm run format:check
 ```
 
 Per provare anche le API in locale serve un PostgreSQL e `vercel dev` con `DATABASE_URL`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` impostate.
