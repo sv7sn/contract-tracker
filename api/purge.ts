@@ -12,7 +12,12 @@ export async function POST(request: Request) {
     if (body.confirm !== "ELIMINA") throw new HttpError(400, "Conferma mancante");
     const { deleted, staleFiles } = await purgeContracts();
     await deleteDocuments(staleFiles);
-    await logSecurity("contracts_purged", { userId: actor.id, email: actor.email, ip: clientIp(request), detail: `${deleted} contratti eliminati` });
+    await logSecurity("contracts_purged", {
+      userId: actor.id,
+      email: actor.email,
+      ip: clientIp(request),
+      detail: `${deleted} contratti eliminati`,
+    });
     return Response.json({ deleted });
   } catch (err) {
     return errorResponse(err);

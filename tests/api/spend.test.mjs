@@ -3,94 +3,288 @@ import { readFileSync } from "node:fs";
 const SAMPLES = process.env.SAP_SAMPLES;
 const B = process.env.API_BUILD + "/api/";
 process.env.DATABASE_URL = process.env.TEST_DB_URL;
-process.env.ADMIN_EMAIL = "admin@test.it"; process.env.ADMIN_PASSWORD = "Admin-pass-123!"; process.env.SESSION_SECRET = "x".repeat(40);
-const portal = await import(B + "portal.js"), login = await import(B + "login.js"), db = await import(B + "_db.js"), demo = await import(B + "_demo.js"), spend = await import(B + "_spend.js");
+process.env.ADMIN_EMAIL = "admin@test.it";
+process.env.ADMIN_PASSWORD = "Admin-pass-123!";
+process.env.SESSION_SECRET = "x".repeat(40);
+const portal = await import(B + "portal.js"),
+  login = await import(B + "login.js"),
+  db = await import(B + "_db.js"),
+  demo = await import(B + "_demo.js"),
+  spend = await import(B + "_spend.js");
 await db.ensureSchema();
-let passed = 0; const ok = n => { passed++; console.log("  ✓", n); };
-const call = async (cookie, method, qs, body, headers = {}, mod = portal) => { const raw = body instanceof Uint8Array; const r = new Request("https://a/x" + qs, { method, headers: { ...(raw ? {} : { "content-type": "application/json" }), cookie, ...headers }, body: body === undefined ? undefined : raw ? body : JSON.stringify(body) }); const res = await mod[method](r); const ab = await res.arrayBuffer(); let data = null; try { data = JSON.parse(Buffer.from(ab).toString()); } catch {} return { status: res.status, data, bytes: new Uint8Array(ab) }; };
-const admin = (await login.POST(new Request("https://a/x", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: "admin@test.it", password: "Admin-pass-123!" }) }))).headers.get("set-cookie").split(";")[0];
+let passed = 0;
+const ok = n => {
+  passed++;
+  console.log("  ✓", n);
+};
+const call = async (cookie, method, qs, body, headers = {}, mod = portal) => {
+  const raw = body instanceof Uint8Array;
+  const r = new Request("https://a/x" + qs, {
+    method,
+    headers: { ...(raw ? {} : { "content-type": "application/json" }), cookie, ...headers },
+    body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
+  });
+  const res = await mod[method](r);
+  const ab = await res.arrayBuffer();
+  let data = null;
+  try {
+    data = JSON.parse(Buffer.from(ab).toString());
+  } catch {}
+  return { status: res.status, data, bytes: new Uint8Array(ab) };
+};
+const admin = (
+  await login.POST(
+    new Request("https://a/x", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "admin@test.it", password: "Admin-pass-123!" }),
+    }),
+  )
+).headers
+  .get("set-cookie")
+  .split(";")[0];
 const pool = db.getPool();
 
-let r = await call(admin, "GET", "?op=spend"); assert.equal(r.status, 200); assert.equal(r.data.year, null); ok("nessun ordine: pagina vuota");
+let r = await call(admin, "GET", "?op=spend");
+assert.equal(r.status, 200);
+assert.equal(r.data.year, null);
+ok("nessun ordine: pagina vuota");
 const po = new Uint8Array(readFileSync(SAMPLES + "/po.xls"));
-r = await call(admin, "POST", "?op=rda-import", po, { "x-file-name": "PO_LAST_7D.XLS" }); assert.equal(r.status, 200, JSON.stringify(r.data)); assert.equal(r.data.poLines, 49); ok("file ordini reale: 49 righe salvate (anche quelle senza RDA)");
 r = await call(admin, "POST", "?op=rda-import", po, { "x-file-name": "PO_LAST_7D.XLS" });
-assert.equal((await pool.query("select count(*)::int n from po_lines")).rows[0].n, 49); ok("reimport dello stesso file: nessun doppione");
+assert.equal(r.status, 200, JSON.stringify(r.data));
+assert.equal(r.data.poLines, 49);
+ok("file ordini reale: 49 righe salvate (anche quelle senza RDA)");
+r = await call(admin, "POST", "?op=rda-import", po, { "x-file-name": "PO_LAST_7D.XLS" });
+assert.equal((await pool.query("select count(*)::int n from po_lines")).rows[0].n, 49);
+ok("reimport dello stesso file: nessun doppione");
 let v = (await call(admin, "GET", "?op=spend")).data;
-assert.equal(v.year, 2026); assert.equal(v.lines, 49);
+assert.equal(v.year, 2026);
+assert.equal(v.lines, 49);
 const expect = (await pool.query("select sum(case when pr_value > 0 then pr_value else gr_amount end)::float t from po_lines")).rows[0].t;
-assert.equal(Math.round(v.total), Math.round(expect)); assert(Math.abs(v.total - 1262927.03 - 0) < 1, `totale ${v.total}`); ok(`spesa = valore RDA delle righe (${v.total})`);
-assert.equal(v.valued.none, 12); assert.equal(v.valued.pr, 37); ok("righe senza valore (accordo quadro e stampi) contate a parte");
-assert.equal(v.bySupplier[0].name, "ROCKWELL AUTOMATION SRL"); assert(v.concentration.top1 > 60); ok(`concentrazione: primo fornitore ${v.concentration.top1}%`);
-const mondo = v.bySupplier.find(s => s.code === "8001113571"); assert(mondo && mondo.value === 0);
-assert.equal(v.noRda.lines, 8); assert(v.noRda.items.every(i => i.supplierName.startsWith("AEOLUS"))); ok("ordini senza RDA né contratto: le 8 righe stampi AEOLUS (Mondoffice è su accordo quadro)");
-assert.equal(v.coverage.coveredShare, 0); assert(v.byCategory.some(c => c.label === "Hard. & Soft. Maint.")); assert(v.byFunction.every(f => f.label === "Non attribuita")); assert(!v.overRda.available); ok("categorie da gruppo merci; funzione non attribuita senza Master Plan; niente controllo PO>RDA senza valore netto");
-assert(v.candidates.some(c => c.code === "8001110580")); ok("Rockwell candidato a contratto (oltre soglia senza contratto)");
+assert.equal(Math.round(v.total), Math.round(expect));
+assert(Math.abs(v.total - 1262927.03 - 0) < 1, `totale ${v.total}`);
+ok(`spesa = valore RDA delle righe (${v.total})`);
+assert.equal(v.valued.none, 12);
+assert.equal(v.valued.pr, 37);
+ok("righe senza valore (accordo quadro e stampi) contate a parte");
+assert.equal(v.bySupplier[0].name, "ROCKWELL AUTOMATION SRL");
+assert(v.concentration.top1 > 60);
+ok(`concentrazione: primo fornitore ${v.concentration.top1}%`);
+const mondo = v.bySupplier.find(s => s.code === "8001113571");
+assert(mondo && mondo.value === 0);
+assert.equal(v.noRda.lines, 8);
+assert(v.noRda.items.every(i => i.supplierName.startsWith("AEOLUS")));
+ok("ordini senza RDA né contratto: le 8 righe stampi AEOLUS (Mondoffice è su accordo quadro)");
+assert.equal(v.coverage.coveredShare, 0);
+assert(v.byCategory.some(c => c.label === "Hard. & Soft. Maint."));
+assert(v.byFunction.every(f => f.label === "Non attribuita"));
+assert(!v.overRda.available);
+ok("categorie da gruppo merci; funzione non attribuita senza Master Plan; niente controllo PO>RDA senza valore netto");
+assert(v.candidates.some(c => c.code === "8001110580"));
+ok("Rockwell candidato a contratto (oltre soglia senza contratto)");
 // Contratto in registro per Rockwell
 const manager = { id: 1, role: "manager", name: "Admin" };
-await pool.query("insert into buying_companies (code, name, sap_company_code, purch_org) values ('C1','Soc','1000','1000') on conflict do nothing");
+await pool.query(
+  "insert into buying_companies (code, name, sap_company_code, purch_org) values ('C1','Soc','1000','1000') on conflict do nothing",
+);
 await pool.query("insert into industry_codes (code, name) values ('I1','Ind') on conflict do nothing");
 const sup = await demo.createDemoSupplier(manager, { name: "Rockwell Automation Srl", sapCode: "8001110580" });
-await pool.query("insert into contracts (supplier, object, value, start_date, end_date, supplier_id) values ('Rockwell Automation Srl','MES',1000000,'2026-01-01','2029-12-31',$1)", [sup.id]);
+await pool.query(
+  "insert into contracts (supplier, object, value, start_date, end_date, supplier_id) values ('Rockwell Automation Srl','MES',1000000,'2026-01-01','2029-12-31',$1)",
+  [sup.id],
+);
 v = (await call(admin, "GET", "?op=spend")).data;
-const rock = v.bySupplier[0]; assert.equal(rock.supplierId, sup.id); assert.equal(rock.contract, rock.value); assert(v.coverage.coveredShare > 60); assert(!v.candidates.some(c => c.code === "8001110580")); ok(`contratto in registro: Rockwell coperto (${v.coverage.coveredShare}% della spesa)`);
+const rock = v.bySupplier[0];
+assert.equal(rock.supplierId, sup.id);
+assert.equal(rock.contract, rock.value);
+assert(v.coverage.coveredShare > 60);
+assert(!v.candidates.some(c => c.code === "8001110580"));
+ok(`contratto in registro: Rockwell coperto (${v.coverage.coveredShare}% della spesa)`);
 await pool.query("update contracts set start_date = '2026-10-03'");
-v = (await call(admin, "GET", "?op=spend")).data; assert.equal(v.bySupplier[0].contract, 0); assert.equal(v.bySupplier[0].none, v.bySupplier[0].value); ok("copertura alla data del PO: ordini prima dell'inizio del contratto restano scoperti"); await pool.query("update contracts set start_date = '2026-10-02'");
+v = (await call(admin, "GET", "?op=spend")).data;
+assert.equal(v.bySupplier[0].contract, 0);
+assert.equal(v.bySupplier[0].none, v.bySupplier[0].value);
+ok("copertura alla data del PO: ordini prima dell'inizio del contratto restano scoperti");
+await pool.query("update contracts set start_date = '2026-10-02'");
 // Funzione dal Master Plan
 const vid = (await pool.query("insert into mp_versions (year, version, label) values (2026, 1, 'MP26') returning id")).rows[0].id;
-await pool.query("insert into mp_lines (version_id, io, function, cost_center, amount) values ($1,'HQ2505828069','ICT','5828',1), ($1,'X','R&D','5832',1)", [vid]);
-v = (await call(admin, "GET", "?op=spend")).data; assert(v.byFunction.find(f => f.label === "ICT").value > 900000); assert(v.byFunction.some(f => f.label === "R&D")); ok("funzione per internal order e, in mancanza, per centro di costo");
+await pool.query(
+  "insert into mp_lines (version_id, io, function, cost_center, amount) values ($1,'HQ2505828069','ICT','5828',1), ($1,'X','R&D','5832',1)",
+  [vid],
+);
+v = (await call(admin, "GET", "?op=spend")).data;
+assert(v.byFunction.find(f => f.label === "ICT").value > 900000);
+assert(v.byFunction.some(f => f.label === "R&D"));
+ok("funzione per internal order e, in mancanza, per centro di costo");
 await pool.query("update mp_lines set category = 'IT', amount = 500000 where io = 'HQ2505828069'");
-v = (await call(admin, "GET", "?op=spend")).data; assert.equal(v.categoryBudget.length, 0); assert(v.unclassified.value > 1000000); ok("senza categorie: tutta la spesa risulta non classificata");
+v = (await call(admin, "GET", "?op=spend")).data;
+assert.equal(v.categoryBudget.length, 0);
+assert(v.unclassified.value > 1000000);
+ok("senza categorie: tutta la spesa risulta non classificata");
 
-let cv = (await call(admin, "GET", "?op=categories")).data; assert.equal(cv.categories.length, 0); assert(cv.sources.some(x => x.kind === "sap" && x.key === "080101007" && x.label === "Hard. & Soft. Maint.")); assert(cv.sources.some(x => x.kind === "mp" && x.key === "IT" && x.amount === 500000));
-cv = (await call(admin, "POST", "?op=category-seed", {})).data; assert.deepEqual(cv.categories.map(c => c.name), ["It"]); assert(cv.sources.find(x => x.kind === "mp" && x.key === "IT").categoryId);
-r = await call(admin, "POST", "?op=category-save", { id: cv.categories[0].id, name: "Software e IT" }); assert.equal(r.data.categories[0].name, "Software e IT");
+let cv = (await call(admin, "GET", "?op=categories")).data;
+assert.equal(cv.categories.length, 0);
+assert(cv.sources.some(x => x.kind === "sap" && x.key === "080101007" && x.label === "Hard. & Soft. Maint."));
+assert(cv.sources.some(x => x.kind === "mp" && x.key === "IT" && x.amount === 500000));
+cv = (await call(admin, "POST", "?op=category-seed", {})).data;
+assert.deepEqual(
+  cv.categories.map(c => c.name),
+  ["It"],
+);
+assert(cv.sources.find(x => x.kind === "mp" && x.key === "IT").categoryId);
+r = await call(admin, "POST", "?op=category-save", { id: cv.categories[0].id, name: "Software e IT" });
+assert.equal(r.data.categories[0].name, "Software e IT");
 assert.equal((await call(admin, "POST", "?op=category-save", { name: "software E it" })).status, 409);
 const catId = r.data.categories[0].id;
-cv = (await call(admin, "POST", "?op=category-map", { kind: "sap", key: "080101007", categoryId: catId })).data; assert.equal(cv.sources.find(x => x.kind === "sap" && x.key === "080101007").categoryId, catId); ok("categorie: creazione dal Master Plan, rinomina, nome duplicato rifiutato, collegamento gruppo merci");
-v = (await call(admin, "GET", "?op=spend")).data; assert(v.byCategory.some(c => c.label === "Software e IT")); assert(!v.byCategory.some(c => c.label === "Hard. & Soft. Maint."));
-const sw = v.categoryBudget.find(c => c.label === "Software e IT"); assert.equal(sw.budget, 500000); assert(sw.spend > 900000); assert(v.unclassified.value < 300000 && v.unclassified.value > 0); ok("spesa per categoria unificata e confronto con il budget del Master Plan");
+cv = (await call(admin, "POST", "?op=category-map", { kind: "sap", key: "080101007", categoryId: catId })).data;
+assert.equal(cv.sources.find(x => x.kind === "sap" && x.key === "080101007").categoryId, catId);
+ok("categorie: creazione dal Master Plan, rinomina, nome duplicato rifiutato, collegamento gruppo merci");
+v = (await call(admin, "GET", "?op=spend")).data;
+assert(v.byCategory.some(c => c.label === "Software e IT"));
+assert(!v.byCategory.some(c => c.label === "Hard. & Soft. Maint."));
+const sw = v.categoryBudget.find(c => c.label === "Software e IT");
+assert.equal(sw.budget, 500000);
+assert(sw.spend > 900000);
+assert(v.unclassified.value < 300000 && v.unclassified.value > 0);
+ok("spesa per categoria unificata e confronto con il budget del Master Plan");
 assert.equal((await pool.query("select count(*)::int n from config_audit where area = 'category'")).rows[0].n, 2);
 const cm = await import(B + "_categories.js");
-await assert.rejects(cm.saveCategory({ id: 5, role: "buyer", name: "b" }, null, "X"), e => e.status === 403); assert((await cm.listCategories({ id: 5, role: "finance", name: "f" })).categories.length === 1); await assert.rejects(cm.listCategories({ id: 5, role: "supplier", name: "s" }), e => e.status === 403); ok("solo il Manager modifica le categorie; Buyer e Finance le vedono");
-cv = (await call(admin, "DELETE", "?op=category&id=" + catId)).data; assert.equal(cv.categories.length, 0); assert.equal(cv.sources.find(x => x.key === "080101007").categoryId, null); ok("eliminazione categoria: i collegamenti si tolgono");
-r = await call(admin, "GET", "?op=spend-lines&year=2026&supplier=8001110580"); assert.equal(r.data.length, 5); ok("dettaglio righe del fornitore");
+await assert.rejects(cm.saveCategory({ id: 5, role: "buyer", name: "b" }, null, "X"), e => e.status === 403);
+assert((await cm.listCategories({ id: 5, role: "finance", name: "f" })).categories.length === 1);
+await assert.rejects(cm.listCategories({ id: 5, role: "supplier", name: "s" }), e => e.status === 403);
+ok("solo il Manager modifica le categorie; Buyer e Finance le vedono");
+cv = (await call(admin, "DELETE", "?op=category&id=" + catId)).data;
+assert.equal(cv.categories.length, 0);
+assert.equal(cv.sources.find(x => x.key === "080101007").categoryId, null);
+ok("eliminazione categoria: i collegamenti si tolgono");
+r = await call(admin, "GET", "?op=spend-lines&year=2026&supplier=8001110580");
+assert.equal(r.data.length, 5);
+ok("dettaglio righe del fornitore");
 // Valore netto
-const net = `﻿`; void net;
-const head = ["Supplier", "Doc. Date", "Type", "Crcy", "Item", "Purch.Doc.", "Name 1", "Purch.Req.", "PR VALUE", "Net Order Value", "Material Group Desc."];
+const net = `﻿`;
+void net;
+const head = [
+  "Supplier",
+  "Doc. Date",
+  "Type",
+  "Crcy",
+  "Item",
+  "Purch.Doc.",
+  "Name 1",
+  "Purch.Req.",
+  "PR VALUE",
+  "Net Order Value",
+  "Material Group Desc.",
+];
 const esc = s => String(s).replace(/&/g, "&amp;");
 const xml = `<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet><Table>${[head, ["V9", "2025-05-02", "EB", "EUR", "10", "77001", "ACME", "PR1", "1000.00", "1250.00", "Varie"], ["V9", "2025-05-03", "EB", "USD", "10", "77002", "ACME", "PR2", "500.00", "500.00", "Varie"]].map(r => `<Row>${r.map(c => `<Cell><Data ss:Type="String">${esc(c)}</Data></Cell>`).join("")}</Row>`).join("")}</Table></Worksheet></Workbook>`;
-r = await call(admin, "POST", "?op=rda-import", new TextEncoder().encode(xml), { "x-file-name": "po.xls" }); assert.equal(r.status, 200, JSON.stringify(r.data));
-v = (await call(admin, "GET", "?op=spend&year=2025")).data; assert.equal(v.year, 2025); assert.equal(v.total, 1250); assert.equal(v.valued.net, 1); assert.equal(v.otherCurrency.lines, 1); assert.deepEqual(v.otherCurrency.currencies, ["USD"]);
-assert(v.overRda.available); assert.equal(v.overRda.items[0].po, "77001"); ok("con la colonna Net Order Value: valore netto, controllo PO oltre la RDA, valute estere a parte");
+r = await call(admin, "POST", "?op=rda-import", new TextEncoder().encode(xml), { "x-file-name": "po.xls" });
+assert.equal(r.status, 200, JSON.stringify(r.data));
+v = (await call(admin, "GET", "?op=spend&year=2025")).data;
+assert.equal(v.year, 2025);
+assert.equal(v.total, 1250);
+assert.equal(v.valued.net, 1);
+assert.equal(v.otherCurrency.lines, 1);
+assert.deepEqual(v.otherCurrency.currencies, ["USD"]);
+assert(v.overRda.available);
+assert.equal(v.overRda.items[0].po, "77001");
+ok("con la colonna Net Order Value: valore netto, controllo PO oltre la RDA, valute estere a parte");
 assert.deepEqual(v.years, [2026, 2025]);
 // Permessi
 await assert.rejects(spend.spendView({ id: 9, role: "bo", name: "x" }), e => e.status === 403);
 await assert.rejects(spend.spendView({ id: 9, role: "supplier", name: "x" }), e => e.status === 403);
-await spend.spendView({ id: 9, role: "finance", name: "x" }); ok("visibile a Manager, Buyer e Finance; non a BO e fornitori");
+await spend.spendView({ id: 9, role: "finance", name: "x" });
+ok("visibile a Manager, Buyer e Finance; non a BO e fornitori");
 // Simulazione
 r = await call(admin, "POST", "?op=budget-demo", {});
 assert.equal(r.status, 409); // MP 2026 reale presente
-await pool.query("delete from mp_versions"); await pool.query("delete from contracts");
-r = await call(admin, "POST", "?op=budget-demo", {}); assert.equal(r.status, 201, JSON.stringify(r.data));
+await pool.query("delete from mp_versions");
+await pool.query("delete from contracts");
+r = await call(admin, "POST", "?op=budget-demo", {});
+assert.equal(r.status, 201, JSON.stringify(r.data));
 v = (await call(admin, "GET", "?op=spend&year=2026")).data;
 const name = n => v.bySupplier.find(s => s.name === n);
-assert.equal(name("PULITO SPA").contract, 93000); assert.equal(name("SICUREZZA NORD SRL").agreement, 52200); assert(name("SOFTWARE POINT SRL").none === 180000);
-assert(v.candidates.some(c => c.name === "SOFTWARE POINT SRL") && v.candidates.some(c => c.name === "ACADEMY SRL")); assert(!v.candidates.some(c => c.name === "PULITO SPA"));
-assert(v.noRda.items.some(i => i.supplierName === "FERRAMENTA ROSSI SNC")); assert(!v.noRda.items.some(i => i.supplierName === "PULITO SPA"));
-assert(v.overRda.items.some(i => i.shortText === "Fiera EIMA")); assert(v.byFunction.some(f => f.label === "ICT")); ok("simulazione: contratti, accordo quadro, candidati, ordini fuori processo, PO oltre RDA, funzioni");
+assert.equal(name("PULITO SPA").contract, 93000);
+assert.equal(name("SICUREZZA NORD SRL").agreement, 52200);
+assert(name("SOFTWARE POINT SRL").none === 180000);
+assert(v.candidates.some(c => c.name === "SOFTWARE POINT SRL") && v.candidates.some(c => c.name === "ACADEMY SRL"));
+assert(!v.candidates.some(c => c.name === "PULITO SPA"));
+assert(v.noRda.items.some(i => i.supplierName === "FERRAMENTA ROSSI SNC"));
+assert(!v.noRda.items.some(i => i.supplierName === "PULITO SPA"));
+assert(v.overRda.items.some(i => i.shortText === "Fiera EIMA"));
+assert(v.byFunction.some(f => f.label === "ICT"));
+ok("simulazione: contratti, accordo quadro, candidati, ordini fuori processo, PO oltre RDA, funzioni");
 const demoPo = (await call(admin, "GET", "?op=budget-demo-file&kind=po")).bytes;
-r = await call(admin, "POST", "?op=rda-import", demoPo, { "x-file-name": "PO_LAST_7D_PROVA.XLS" }); assert.equal(r.data.poLines, 3);
-const sim = (await pool.query("select * from po_lines where po = 'SIMPO3002'")).rows[0]; assert.equal(sim.agreement, "SIMAG0001"); assert.equal(Number(sim.value), 5800); assert.equal(sim.value_source, "gr"); ok("file ordini di prova: accordo quadro e importo ricevuto letti");
-const po1 = v.splits.cases.find(c => c.kind === "po" && c.who.startsWith("TIPOGRAFIA BIANCHI")); assert(po1); assert.equal(po1.items.length, 4); assert.equal(po1.total, 14700);
-assert(!v.splits.cases.some(c => c.who.startsWith("PULITO") || c.who.startsWith("SICUREZZA"))); ok("frazionamento ordini: 3 lotti ravvicinati dello stesso fornitore, esclusi i servizi a contratto");
+r = await call(admin, "POST", "?op=rda-import", demoPo, { "x-file-name": "PO_LAST_7D_PROVA.XLS" });
+assert.equal(r.data.poLines, 3);
+const sim = (await pool.query("select * from po_lines where po = 'SIMPO3002'")).rows[0];
+assert.equal(sim.agreement, "SIMAG0001");
+assert.equal(Number(sim.value), 5800);
+assert.equal(sim.value_source, "gr");
+ok("file ordini di prova: accordo quadro e importo ricevuto letti");
+const po1 = v.splits.cases.find(c => c.kind === "po" && c.who.startsWith("TIPOGRAFIA BIANCHI"));
+assert(po1);
+assert.equal(po1.items.length, 4);
+assert.equal(po1.total, 14700);
+assert(!v.splits.cases.some(c => c.who.startsWith("PULITO") || c.who.startsWith("SICUREZZA")));
+ok("frazionamento ordini: 3 lotti ravvicinati dello stesso fornitore, esclusi i servizi a contratto");
 const spl = await import(B + "_splits.js");
-const g = new Map([["a", [{ id: "1", date: "2026-01-01", value: 6000, label: "" }, { id: "2", date: "2026-01-20", value: 5000, label: "" }]], ["b", [{ id: "3", date: "2026-01-01", value: 6000, label: "" }, { id: "4", date: "2026-03-01", value: 6000, label: "" }]], ["c", [{ id: "5", date: "2026-01-01", value: 12000, label: "" }, { id: "6", date: "2026-01-02", value: 500, label: "" }]], ["d", [{ id: "7", date: "2026-01-01", value: 3000, label: "" }, { id: "8", date: "2026-01-10", value: 3000, label: "" }]]]);
-const sc = spl.findSplits(g, 10000); assert.deepEqual(sc.map(x => x.key), ["a"]); assert.equal(sc[0].total, 11000); ok("regola: somma oltre soglia entro 30 giorni; non se distanti, se una è già sopra soglia o se il totale resta sotto");
-const mk = (k, who, io, value, d) => pool.query("insert into tasks (source, source_key, title, meta, created_by) values ('rda',$1,$2,$3,'SAP')", [k, `RDA ${k} · voce ${k}`, JSON.stringify({ requestedBy: who, io: { [io]: value }, value, releaseDate: d })]);
-await mk("R1", "ROSSIM", "IO-A", 4000, "2026-05-02"); await mk("R2", "ROSSIM", "IO-A", 4000, "2026-05-12"); await mk("R3", "ROSSIM", "IO-A", 3000, "2026-05-20"); await mk("R4", "BIANCHI", "IO-A", 9000, "2026-05-12"); await mk("R5", "ROSSIM", "IO-B", 9000, "2026-05-13");
-v = (await call(admin, "GET", "?op=spend&year=2026")).data; const rd = v.splits.cases.find(c => c.kind === "rda"); assert(rd && rd.who === "ROSSIM · IO-A" && rd.items.length === 3 && rd.total === 11000); assert.equal(v.splits.cases.filter(c => c.kind === "rda").length, 1); ok("frazionamento RDA: stesso richiedente e internal order");
+const g = new Map([
+  [
+    "a",
+    [
+      { id: "1", date: "2026-01-01", value: 6000, label: "" },
+      { id: "2", date: "2026-01-20", value: 5000, label: "" },
+    ],
+  ],
+  [
+    "b",
+    [
+      { id: "3", date: "2026-01-01", value: 6000, label: "" },
+      { id: "4", date: "2026-03-01", value: 6000, label: "" },
+    ],
+  ],
+  [
+    "c",
+    [
+      { id: "5", date: "2026-01-01", value: 12000, label: "" },
+      { id: "6", date: "2026-01-02", value: 500, label: "" },
+    ],
+  ],
+  [
+    "d",
+    [
+      { id: "7", date: "2026-01-01", value: 3000, label: "" },
+      { id: "8", date: "2026-01-10", value: 3000, label: "" },
+    ],
+  ],
+]);
+const sc = spl.findSplits(g, 10000);
+assert.deepEqual(
+  sc.map(x => x.key),
+  ["a"],
+);
+assert.equal(sc[0].total, 11000);
+ok("regola: somma oltre soglia entro 30 giorni; non se distanti, se una è già sopra soglia o se il totale resta sotto");
+const mk = (k, who, io, value, d) =>
+  pool.query("insert into tasks (source, source_key, title, meta, created_by) values ('rda',$1,$2,$3,'SAP')", [
+    k,
+    `RDA ${k} · voce ${k}`,
+    JSON.stringify({ requestedBy: who, io: { [io]: value }, value, releaseDate: d }),
+  ]);
+await mk("R1", "ROSSIM", "IO-A", 4000, "2026-05-02");
+await mk("R2", "ROSSIM", "IO-A", 4000, "2026-05-12");
+await mk("R3", "ROSSIM", "IO-A", 3000, "2026-05-20");
+await mk("R4", "BIANCHI", "IO-A", 9000, "2026-05-12");
+await mk("R5", "ROSSIM", "IO-B", 9000, "2026-05-13");
+v = (await call(admin, "GET", "?op=spend&year=2026")).data;
+const rd = v.splits.cases.find(c => c.kind === "rda");
+assert(rd && rd.who === "ROSSIM · IO-A" && rd.items.length === 3 && rd.total === 11000);
+assert.equal(v.splits.cases.filter(c => c.kind === "rda").length, 1);
+ok("frazionamento RDA: stesso richiedente e internal order");
 await call(admin, "DELETE", "?op=budget-demo");
-assert.equal((await pool.query("select count(*)::int n from po_lines where po like 'SIMPO%'")).rows[0].n, 0); assert.equal((await pool.query("select count(*)::int n from po_lines")).rows[0].n, 51); ok("eliminazione simulazione: restano solo gli ordini veri");
-console.log(`\n${passed} controlli superati`); process.exit(0);
+assert.equal((await pool.query("select count(*)::int n from po_lines where po like 'SIMPO%'")).rows[0].n, 0);
+assert.equal((await pool.query("select count(*)::int n from po_lines")).rows[0].n, 51);
+ok("eliminazione simulazione: restano solo gli ordini veri");
+console.log(`\n${passed} controlli superati`);
+process.exit(0);

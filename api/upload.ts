@@ -10,12 +10,21 @@ export async function POST(request: Request) {
     const user = await requireUser(request);
     if (!canCreateContract(user)) throw new HttpError(403, "Operazione non consentita");
     const body = (await readJson(request)) as Parameters<typeof handleUploadPresigned>[0]["body"];
-    if (!body || typeof body !== "object" || typeof (body as { type?: unknown }).type !== "string") throw new HttpError(400, "Richiesta di caricamento non valida");
+    if (!body || typeof body !== "object" || typeof (body as { type?: unknown }).type !== "string")
+      throw new HttpError(400, "Richiesta di caricamento non valida");
     const result = await handleUploadPresigned({
-      request, body,
+      request,
+      body,
       getSignedToken: async pathname => {
         if (!FILE_PATH_RE.test(pathname)) throw new HttpError(400, "Percorso del documento non valido");
-        return { token: await issueSignedToken({ pathname, operations: ["put"], allowedContentTypes: ALLOWED_TYPES, maximumSizeInBytes: MAX_FILE_BYTES }) };
+        return {
+          token: await issueSignedToken({
+            pathname,
+            operations: ["put"],
+            allowedContentTypes: ALLOWED_TYPES,
+            maximumSizeInBytes: MAX_FILE_BYTES,
+          }),
+        };
       },
     });
     return Response.json(result);

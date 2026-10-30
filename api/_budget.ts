@@ -9,16 +9,46 @@ import { assignIoBuyers } from "./_tasks.js";
 import { isXlsx, parseCsvRows, parseXlsx } from "./_xlsx.js";
 
 type Row = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
-const bad = (msg: string): never => { throw new HttpError(400, msg); };
+const bad = (msg: string): never => {
+  throw new HttpError(400, msg);
+};
 const r2 = (n: number) => Math.round(n * 100) / 100;
 export const canSeeBudget = (u: User) => u.role === "manager" || u.role === "buyer" || u.role === "finance" || u.role === "viewer";
 export const canUploadBudget = (u: User) => u.role === "manager" || u.role === "finance";
 
 // ─── Lettura del file di Finance ─────────────────────────────
-const norm = (s: string | null | undefined) => (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const norm = (s: string | null | undefined) =>
+  (s ?? "")
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 const HEADERS: Record<string, string[]> = {
-  io: ["internalorder", "io", "ordineinterno", "order", "ordine", "codiceio", "internalordercode", "ordernumber", "rowlabels", "etichettediriga"],
-  amount: ["budget", "importo", "amount", "valore", "value", "totale", "total", "budgetannuale", "importobudget", "budgeteur", "importoeur"],
+  io: [
+    "internalorder",
+    "io",
+    "ordineinterno",
+    "order",
+    "ordine",
+    "codiceio",
+    "internalordercode",
+    "ordernumber",
+    "rowlabels",
+    "etichettediriga",
+  ],
+  amount: [
+    "budget",
+    "importo",
+    "amount",
+    "valore",
+    "value",
+    "totale",
+    "total",
+    "budgetannuale",
+    "importobudget",
+    "budgeteur",
+    "importoeur",
+  ],
   description: ["descrizione", "description", "desc", "oggetto", "descrizioneio", "iodescription", "name", "nome"],
   function: ["funzione", "function", "area", "dipartimento", "department", "direzione", "ente", "cdcname", "costcentername", "nomecdc"],
   costCenter: ["centrodicosto", "costcenter", "cdc", "costctr", "centrocosto"],
@@ -33,45 +63,82 @@ export function parseAmount(v: string | null): number | null {
   if (!v) return null;
   let s = v.replace(/[€\s]/g, "").replace(/^EUR|EUR$/i, "");
   if (!s || s === "-") return null;
-  const neg = /^\(.*\)$/.test(s) || s.startsWith("-"); s = s.replace(/[()-]/g, "");
-  if (s.includes(",") && s.includes(".")) s = s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
-  else if (/^\d{1,3}(,\d{3})+$/.test(s)) s = s.replace(/,/g, ""); // 61,000 = sessantunomila (separatore delle migliaia)
+  const neg = /^\(.*\)$/.test(s) || s.startsWith("-");
+  s = s.replace(/[()-]/g, "");
+  if (s.includes(",") && s.includes("."))
+    s = s.lastIndexOf(",") > s.lastIndexOf(".") ? s.replace(/\./g, "").replace(",", ".") : s.replace(/,/g, "");
+  else if (/^\d{1,3}(,\d{3})+$/.test(s))
+    s = s.replace(/,/g, ""); // 61,000 = sessantunomila (separatore delle migliaia)
   else if (s.includes(",")) s = s.replace(",", ".");
   else if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, "");
   const n = Number(s);
   return Number.isFinite(n) ? (neg ? -n : n) : null;
 }
-export interface ParsedLine { io: string; description: string; function: string; costCenter: string; glAccount: string; category: string; buyer: string; amount: number }
-export interface ParsedBudget { versions: { label: string; lines: ParsedLine[] }[]; year: number | null }
+export interface ParsedLine {
+  io: string;
+  description: string;
+  function: string;
+  costCenter: string;
+  glAccount: string;
+  category: string;
+  buyer: string;
+  amount: number;
+}
+export interface ParsedBudget {
+  versions: { label: string; lines: ParsedLine[] }[];
+  year: number | null;
+}
 const TOTAL_ROW = /^(totale|total|grandtotal|totalegenerale|totalecomplessivo)/;
 /**
  * Trova l'intestazione (entro le prime 20 righe) e legge le righe; più righe con lo stesso internal order si sommano.
  * Se ci sono colonne di versione (MP26, R3, R5…) ognuna diventa una versione; altrimenti si usa la colonna "Budget".
  */
 export function parseBudget(rows: (string | null)[][]): ParsedBudget {
-  let h = -1, cols: Record<string, number> = {}, vcols: { label: string; i: number }[] = [];
+  let h = -1,
+    cols: Record<string, number> = {},
+    vcols: { label: string; i: number }[] = [];
   for (let i = 0; i < Math.min(rows.length, 20) && h < 0; i++) {
-    const c: Record<string, number> = {}, vc: { label: string; i: number }[] = [];
+    const c: Record<string, number> = {},
+      vc: { label: string; i: number }[] = [];
     rows[i].forEach((cell, j) => {
       const k = norm(cell);
-      if (VERSION_COL.test(k)) { vc.push({ label: (cell ?? "").trim().toUpperCase().replace(/\s+/g, " "), i: j }); return; }
+      if (VERSION_COL.test(k)) {
+        vc.push({ label: (cell ?? "").trim().toUpperCase().replace(/\s+/g, " "), i: j });
+        return;
+      }
       for (const [key, names] of Object.entries(HEADERS)) if (c[key] === undefined && names.includes(k)) c[key] = j;
     });
-    if (c.io !== undefined && (vc.length || c.amount !== undefined)) { h = i; cols = c; vcols = vc; }
+    if (c.io !== undefined && (vc.length || c.amount !== undefined)) {
+      h = i;
+      cols = c;
+      vcols = vc;
+    }
   }
-  if (h < 0) bad("Non trovo le colonne: servono l'internal order (\"Internal order\" o \"Row Labels\") e il budget (\"Budget\", oppure le colonne MP26, R3, R5…). Scarica il modello per vedere il formato");
+  if (h < 0)
+    bad(
+      'Non trovo le colonne: servono l\'internal order ("Internal order" o "Row Labels") e il budget ("Budget", oppure le colonne MP26, R3, R5…). Scarica il modello per vedere il formato',
+    );
   const get = (r: (string | null)[], i: number | undefined) => (i === undefined ? "" : (r[i] ?? "").trim());
   const amountCols = vcols.length ? vcols : [{ label: "", i: cols.amount }];
   const by = amountCols.map(() => new Map<string, ParsedLine>());
   for (const r of rows.slice(h + 1)) {
     const io = get(r, cols.io).replace(/\s+/g, "");
     if (!io || TOTAL_ROW.test(norm(io))) continue;
-    const base = { io: io.slice(0, 40), description: get(r, cols.description).slice(0, 300), function: get(r, cols.function).slice(0, 120), costCenter: get(r, cols.costCenter).slice(0, 40), glAccount: get(r, cols.glAccount).slice(0, 40), buyer: get(r, cols.buyer).slice(0, 120), category: get(r, cols.category).slice(0, 120) };
+    const base = {
+      io: io.slice(0, 40),
+      description: get(r, cols.description).slice(0, 300),
+      function: get(r, cols.function).slice(0, 120),
+      costCenter: get(r, cols.costCenter).slice(0, 40),
+      glAccount: get(r, cols.glAccount).slice(0, 40),
+      buyer: get(r, cols.buyer).slice(0, 120),
+      category: get(r, cols.category).slice(0, 120),
+    };
     amountCols.forEach((c, k) => {
       const amount = parseAmount(get(r, c.i));
       if (amount === null) return;
       const cur = by[k].get(io);
-      if (cur) cur.amount = r2(cur.amount + amount); else by[k].set(io, { ...base, amount: r2(amount) });
+      if (cur) cur.amount = r2(cur.amount + amount);
+      else by[k].set(io, { ...base, amount: r2(amount) });
     });
   }
   const mp = vcols.find(v => /^MP\d/.test(v.label));
@@ -82,7 +149,9 @@ export function parseBudget(rows: (string | null)[][]): ParsedBudget {
   };
 }
 /** Compatibilità: righe della sola colonna di budget (o della prima versione). */
-export function parseBudgetRows(rows: (string | null)[][]): ParsedLine[] { return parseBudget(rows).versions[0]?.lines ?? []; }
+export function parseBudgetRows(rows: (string | null)[][]): ParsedLine[] {
+  return parseBudget(rows).versions[0]?.lines ?? [];
+}
 function readRows(data: Uint8Array): (string | null)[][] {
   if (isXlsx(data)) return parseXlsx(data);
   const head = new TextDecoder("utf-8").decode(data.subarray(0, 400));
@@ -91,7 +160,14 @@ function readRows(data: Uint8Array): (string | null)[][] {
   return parseCsvRows(new TextDecoder("utf-8").decode(data).replace(/^\uFEFF/, ""));
 }
 
-export interface BudgetImport { year: number; created: MpVersion[]; updated: MpVersion[]; buyersAssigned: number; buyersMoved: number; buyersUnmatched: string[] }
+export interface BudgetImport {
+  year: number;
+  created: MpVersion[];
+  updated: MpVersion[];
+  buyersAssigned: number;
+  buyersMoved: number;
+  buyersUnmatched: string[];
+}
 /**
  * Carica il file di Finance. Con le colonne di versione (MP26, R3, R5…) ogni colonna è una versione: quelle già presenti
  * si aggiornano, le nuove si aggiungono in ordine. Con una sola colonna "Budget" si aggiunge una nuova versione.
@@ -105,31 +181,80 @@ export async function importBudget(user: User, yearIn: number, label: string, fi
   const year = parsed.year ?? yearIn;
   if (!Number.isInteger(year) || year < 2020 || year > 2100) bad("Anno non valido");
   const multi = parsed.versions.some(v => v.label);
-  if (fileName !== "simulazione-master-plan.csv" && (await getPool().query("select 1 from mp_versions where year = $1 and file_name = 'simulazione-master-plan.csv' limit 1", [year])).rows.length)
-    throw HttpError.t(409, "Per il {year} è caricata la simulazione: eliminala (pulsante in alto) prima di caricare il Master Plan vero", { year });
+  if (
+    fileName !== "simulazione-master-plan.csv" &&
+    (await getPool().query("select 1 from mp_versions where year = $1 and file_name = 'simulazione-master-plan.csv' limit 1", [year])).rows
+      .length
+  )
+    throw HttpError.t(409, "Per il {year} è caricata la simulazione: eliminala (pulsante in alto) prima di caricare il Master Plan vero", {
+      year,
+    });
   return inTransaction(async db => {
     const out: BudgetImport = { year, created: [], updated: [], buyersAssigned: 0, buyersMoved: 0, buyersUnmatched: [] };
     for (const pv of parsed.versions) {
       const lab = (multi ? pv.label : label.trim()).slice(0, 60);
-      const existing = multi ? (await db.query("select * from mp_versions where year = $1 and upper(label) = upper($2)", [year, lab])).rows[0] : undefined;
+      const existing = multi
+        ? (await db.query("select * from mp_versions where year = $1 and upper(label) = upper($2)", [year, lab])).rows[0]
+        : undefined;
       let v: Row;
       if (existing) {
-        v = (await db.query("update mp_versions set file_name = $2, uploaded_by = $3, uploaded_at = now() where id = $1 returning *", [existing.id, fileName.slice(0, 200), user.name])).rows[0];
+        v = (
+          await db.query("update mp_versions set file_name = $2, uploaded_by = $3, uploaded_at = now() where id = $1 returning *", [
+            existing.id,
+            fileName.slice(0, 200),
+            user.name,
+          ])
+        ).rows[0];
         await db.query("delete from mp_lines where version_id = $1", [v.id]);
       } else {
-        const n = ((await db.query("select coalesce(max(version), 0)::int as n from mp_versions where year = $1", [year])).rows[0].n as number) + 1;
-        v = (await db.query("insert into mp_versions (year, version, label, file_name, uploaded_by) values ($1,$2,$3,$4,$5) returning *", [year, n, lab || `MP${String(year).slice(2)} v${n}`, fileName.slice(0, 200), user.name])).rows[0];
+        const n =
+          ((await db.query("select coalesce(max(version), 0)::int as n from mp_versions where year = $1", [year])).rows[0].n as number) + 1;
+        v = (
+          await db.query("insert into mp_versions (year, version, label, file_name, uploaded_by) values ($1,$2,$3,$4,$5) returning *", [
+            year,
+            n,
+            lab || `MP${String(year).slice(2)} v${n}`,
+            fileName.slice(0, 200),
+            user.name,
+          ])
+        ).rows[0];
       }
       for (let i = 0; i < pv.lines.length; i += 1000) {
         const p = pv.lines.slice(i, i + 1000);
-        await db.query(`insert into mp_lines (version_id, io, description, function, cost_center, gl_account, category, amount)
+        await db.query(
+          `insert into mp_lines (version_id, io, description, function, cost_center, gl_account, category, amount)
           select $1, * from unnest($2::text[], $3::text[], $4::text[], $5::text[], $6::text[], $7::text[], $8::numeric[])`,
-          [v.id, p.map(l => l.io), p.map(l => l.description), p.map(l => l.function), p.map(l => l.costCenter), p.map(l => l.glAccount), p.map(l => l.category), p.map(l => l.amount)]);
+          [
+            v.id,
+            p.map(l => l.io),
+            p.map(l => l.description),
+            p.map(l => l.function),
+            p.map(l => l.costCenter),
+            p.map(l => l.glAccount),
+            p.map(l => l.category),
+            p.map(l => l.amount),
+          ],
+        );
       }
       const total = r2(pv.lines.reduce((a, l) => a + l.amount, 0));
-      const info: MpVersion = { id: v.id, year, version: v.version, label: v.label, fileName: v.file_name, uploadedBy: user.name, uploadedAt: new Date(v.uploaded_at).toISOString(), lines: pv.lines.length, total };
+      const info: MpVersion = {
+        id: v.id,
+        year,
+        version: v.version,
+        label: v.label,
+        fileName: v.file_name,
+        uploadedBy: user.name,
+        uploadedAt: new Date(v.uploaded_at).toISOString(),
+        lines: pv.lines.length,
+        total,
+      };
       (existing ? out.updated : out.created).push(info);
-      await db.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'budget',$2,$3,$4)", [user.name, existing ? "update" : "create", v.label, `${existing ? "Aggiornata" : "Caricata"} la versione ${v.label} del Master Plan ${year} (n. ${v.version}): ${pv.lines.length} internal order, totale ${Math.round(total).toLocaleString("it-IT")} €`]);
+      await db.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'budget',$2,$3,$4)", [
+        user.name,
+        existing ? "update" : "create",
+        v.label,
+        `${existing ? "Aggiornata" : "Caricata"} la versione ${v.label} del Master Plan ${year} (n. ${v.version}): ${pv.lines.length} internal order, totale ${Math.round(total).toLocaleString("it-IT")} €`,
+      ]);
     }
     // Colonna "Buyer" del file: assegna le righe di budget ai buyer (per nome o email); le RDA aperte di quelle righe passano a loro.
     const wanted = new Map<string, string>();
@@ -137,11 +262,24 @@ export async function importBudget(user: User, yearIn: number, label: string, fi
     if (wanted.size) {
       const users = (await db.query("select id, name, email from users where active and role in ('buyer','manager')")).rows;
       const find = (t: string) => users.find(u => norm(u.name) === norm(t) || norm(u.email) === norm(t));
-      const pairs: { io: string; userId: number }[] = [], miss = new Set<string>();
-      for (const [io, b] of wanted) { const u = find(b); if (u) pairs.push({ io, userId: u.id }); else miss.add(b); }
+      const pairs: { io: string; userId: number }[] = [],
+        miss = new Set<string>();
+      for (const [io, b] of wanted) {
+        const u = find(b);
+        if (u) pairs.push({ io, userId: u.id });
+        else miss.add(b);
+      }
       const r = await assignIoBuyers(db, pairs, user.name);
-      out.buyersAssigned = r.assigned; out.buyersMoved = r.moved; out.buyersUnmatched = [...miss].slice(0, 20);
-      await db.query("insert into config_audit (actor, area, action, subject, detail) values ($1,'budget','update','buyer delle righe',$2)", [user.name, `Dal file: ${r.assigned} righe assegnate ai buyer, ${r.moved} RDA aperte passate a loro${miss.size ? `; non riconosciuti: ${[...miss].join(", ")}` : ""}`]);
+      out.buyersAssigned = r.assigned;
+      out.buyersMoved = r.moved;
+      out.buyersUnmatched = [...miss].slice(0, 20);
+      await db.query(
+        "insert into config_audit (actor, area, action, subject, detail) values ($1,'budget','update','buyer delle righe',$2)",
+        [
+          user.name,
+          `Dal file: ${r.assigned} righe assegnate ai buyer, ${r.moved} RDA aperte passate a loro${miss.size ? `; non riconosciuti: ${[...miss].join(", ")}` : ""}`,
+        ],
+      );
     }
     return out;
   });
@@ -154,11 +292,18 @@ export async function deleteBudgetVersion(user: User, id: number): Promise<void>
   const last = (await getPool().query("select max(version)::int as n from mp_versions where year = $1", [v.year])).rows[0].n;
   if (v.version !== last) throw new HttpError(409, "Si può eliminare solo l'ultima versione caricata");
   await getPool().query("delete from mp_versions where id = $1", [id]);
-  await getPool().query("insert into config_audit (actor, area, action, subject, detail) values ($1,'budget','delete',$2,$3)", [user.name, v.label, `Eliminata la versione ${v.version} del Master Plan ${v.year}`]);
+  await getPool().query("insert into config_audit (actor, area, action, subject, detail) values ($1,'budget','delete',$2,$3)", [
+    user.name,
+    v.label,
+    `Eliminata la versione ${v.version} del Master Plan ${v.year}`,
+  ]);
 }
 
 // ─── Impegni ─────────────────────────────────────────────────
-const yearOf = (d: unknown) => { const t = d ? new Date(d as string) : null; return t && !Number.isNaN(t.getTime()) ? t.getUTCFullYear() : null; };
+const yearOf = (d: unknown) => {
+  const t = d ? new Date(d as string) : null;
+  return t && !Number.isNaN(t.getTime()) ? t.getUTCFullYear() : null;
+};
 /** Valore della pratica per internal order: dalle righe SAP, oppure dall'internal order indicato a mano. */
 const ioSplit = (t: Row): Record<string, number> => {
   const m = t.meta ?? {};
@@ -171,16 +316,29 @@ function contractQuota(c: Row, year: number): number {
   const start = c.start_date ? new Date(`${c.start_date}T00:00:00Z`) : new Date(end.getTime() - 365 * 864e5);
   const total = (end.getTime() - start.getTime()) / 864e5 + 1;
   if (!(total > 0)) return 0;
-  const ys = Date.UTC(year, 0, 1), ye = Date.UTC(year, 11, 31);
+  const ys = Date.UTC(year, 0, 1),
+    ye = Date.UTC(year, 11, 31);
   const days = (Math.min(end.getTime(), ye) - Math.max(start.getTime(), ys)) / 864e5 + 1;
-  return days > 0 ? r2(Number(c.value) * days / total) : 0;
+  return days > 0 ? r2((Number(c.value) * days) / total) : 0;
 }
 
-interface Load { tasks: Row[]; rdaKeys: Set<string>; contracts: Row[] }
+interface Load {
+  tasks: Row[];
+  rdaKeys: Set<string>;
+  contracts: Row[];
+}
 async function loadCommitments(): Promise<Load> {
   const db = getPool();
-  const tasks = (await db.query("select id, source, kind, source_key, title, status, done_reason, meta, rda_numbers, due, created_at, new_contract_id from tasks where source in ('rda','manual') and not (source = 'manual' and kind <> 'purchase')")).rows;
-  const contracts = (await db.query("select id, supplier, object, value, start_date, end_date, internal_order, status from contracts where internal_order <> '' and status = 'active'")).rows;
+  const tasks = (
+    await db.query(
+      "select id, source, kind, source_key, title, status, done_reason, meta, rda_numbers, due, created_at, new_contract_id from tasks where source in ('rda','manual') and not (source = 'manual' and kind <> 'purchase')",
+    )
+  ).rows;
+  const contracts = (
+    await db.query(
+      "select id, supplier, object, value, start_date, end_date, internal_order, status from contracts where internal_order <> '' and status = 'active'",
+    )
+  ).rows;
   return { tasks, rdaKeys: new Set(tasks.filter(t => t.source === "rda").map(t => t.source_key as string)), contracts };
 }
 /** Classifica una pratica: impegnata (RDA approvata o acquisto chiuso), in previsione (acquisto aperto senza RDA) o da escludere. */
@@ -191,41 +349,125 @@ function classify(t: Row, rdaKeys: Set<string>): "committed" | "pipeline" | null
   if (t.new_contract_id) return null; // il contratto firmato conta tramite il registro contratti
   return t.status === "done" ? "committed" : "pipeline";
 }
-const taskYear = (t: Row) => (t.source === "rda" ? yearOf(t.meta?.releaseDate) ?? yearOf(t.created_at) : yearOf(t.due) ?? yearOf(t.created_at));
+const taskYear = (t: Row) =>
+  t.source === "rda" ? (yearOf(t.meta?.releaseDate) ?? yearOf(t.created_at)) : (yearOf(t.due) ?? yearOf(t.created_at));
 
 export async function budgetView(user: User, yearIn?: number): Promise<BudgetView> {
   if (!canSeeBudget(user)) throw new HttpError(403, "Operazione non consentita");
   const db = getPool();
   const currentYear = new Date().getUTCFullYear();
-  const versionsRows = (await db.query(`select v.*, count(l.id)::int as n, coalesce(sum(l.amount), 0) as total from mp_versions v left join mp_lines l on l.version_id = v.id group by v.id order by v.year desc, v.version`)).rows;
+  const versionsRows = (
+    await db.query(
+      `select v.*, count(l.id)::int as n, coalesce(sum(l.amount), 0) as total from mp_versions v left join mp_lines l on l.version_id = v.id group by v.id order by v.year desc, v.version`,
+    )
+  ).rows;
   const years = [...new Set([currentYear, ...versionsRows.map(v => v.year as number)])].sort((a, b) => b - a);
-  const year = yearIn && Number.isInteger(yearIn) ? yearIn : (versionsRows.some(v => v.year === currentYear) ? currentYear : versionsRows[0]?.year ?? currentYear);
-  const versions: MpVersion[] = versionsRows.filter(v => v.year === year).map(v => ({ id: v.id, year: v.year, version: v.version, label: v.label, fileName: v.file_name, uploadedBy: v.uploaded_by, uploadedAt: new Date(v.uploaded_at).toISOString(), lines: v.n, total: r2(Number(v.total)) }));
-  const base = versions[0], cur = versions[versions.length - 1];
+  const year =
+    yearIn && Number.isInteger(yearIn)
+      ? yearIn
+      : versionsRows.some(v => v.year === currentYear)
+        ? currentYear
+        : (versionsRows[0]?.year ?? currentYear);
+  const versions: MpVersion[] = versionsRows
+    .filter(v => v.year === year)
+    .map(v => ({
+      id: v.id,
+      year: v.year,
+      version: v.version,
+      label: v.label,
+      fileName: v.file_name,
+      uploadedBy: v.uploaded_by,
+      uploadedAt: new Date(v.uploaded_at).toISOString(),
+      lines: v.n,
+      total: r2(Number(v.total)),
+    }));
+  const base = versions[0],
+    cur = versions[versions.length - 1];
   const linesOf = async (id?: number) => (id ? (await db.query("select * from mp_lines where version_id = $1", [id])).rows : []);
   const [bl, cl] = await Promise.all([linesOf(base?.id), linesOf(cur?.id)]);
   const map = new Map<string, BudgetLine>();
   const line = (io: string): BudgetLine => {
     let l = map.get(io);
-    if (!l) { l = { io, description: "", function: "", costCenter: "", glAccount: "", category: "", baseline: null, current: null, committed: 0, pipeline: 0, contracts: 0, residual: null, vsBaseline: null, items: 0, buyerId: null, buyerName: "", buyerVia: "" }; map.set(io, l); }
+    if (!l) {
+      l = {
+        io,
+        description: "",
+        function: "",
+        costCenter: "",
+        glAccount: "",
+        category: "",
+        baseline: null,
+        current: null,
+        committed: 0,
+        pipeline: 0,
+        contracts: 0,
+        residual: null,
+        vsBaseline: null,
+        items: 0,
+        buyerId: null,
+        buyerName: "",
+        buyerVia: "",
+      };
+      map.set(io, l);
+    }
     return l;
   };
-  for (const r of bl) { const l = line(r.io); l.baseline = r2(Number(r.amount)); Object.assign(l, { description: r.description, function: r.function, costCenter: r.cost_center, glAccount: r.gl_account, category: r.category }); }
-  for (const r of cl) { const l = line(r.io); l.current = r2(Number(r.amount)); if (r.description) Object.assign(l, { description: r.description, function: r.function || l.function, costCenter: r.cost_center || l.costCenter, glAccount: r.gl_account || l.glAccount, category: r.category || l.category }); }
+  for (const r of bl) {
+    const l = line(r.io);
+    l.baseline = r2(Number(r.amount));
+    Object.assign(l, {
+      description: r.description,
+      function: r.function,
+      costCenter: r.cost_center,
+      glAccount: r.gl_account,
+      category: r.category,
+    });
+  }
+  for (const r of cl) {
+    const l = line(r.io);
+    l.current = r2(Number(r.amount));
+    if (r.description)
+      Object.assign(l, {
+        description: r.description,
+        function: r.function || l.function,
+        costCenter: r.cost_center || l.costCenter,
+        glAccount: r.gl_account || l.glAccount,
+        category: r.category || l.category,
+      });
+  }
 
   const { tasks, rdaKeys, contracts } = await loadCommitments();
   const unassigned: BudgetView["unassigned"] = [];
   for (const t of tasks) {
     if (taskYear(t) !== year) continue;
-    const kind = classify(t, rdaKeys); if (!kind) continue;
+    const kind = classify(t, rdaKeys);
+    if (!kind) continue;
     const split = ioSplit(t);
     if (!Object.keys(split).length) {
-      if (t.source === "rda" || t.status === "open") unassigned.push({ taskId: t.id, title: t.title, value: Number(t.meta?.value ?? 0), costCenter: t.meta?.costCenter ?? "", sourceKey: t.source_key });
+      if (t.source === "rda" || t.status === "open")
+        unassigned.push({
+          taskId: t.id,
+          title: t.title,
+          value: Number(t.meta?.value ?? 0),
+          costCenter: t.meta?.costCenter ?? "",
+          sourceKey: t.source_key,
+        });
       continue;
     }
-    for (const [io, v] of Object.entries(split)) { const l = line(io); l[kind] = r2(l[kind] + Number(v)); l.items++; }
+    for (const [io, v] of Object.entries(split)) {
+      const l = line(io);
+      l[kind] = r2(l[kind] + Number(v));
+      l.items++;
+    }
   }
-  for (const c of contracts) { const q = contractQuota(c, year); if (q > 0) { const l = line(c.internal_order); l.contracts = r2(l.contracts + q); l.items++; } }
+  for (const c of contracts) {
+    const q = contractQuota(c, year);
+    if (q > 0) {
+      const l = line(c.internal_order);
+      l.contracts = r2(l.contracts + q);
+      l.items++;
+    }
+  }
   // Residuo: budget corrente meno impegnato e in previsione; per gli anni futuri contano anche le quote dei contratti.
   for (const l of map.values()) {
     const used = l.committed + l.pipeline + (year > currentYear ? l.contracts : 0);
@@ -233,45 +475,113 @@ export async function budgetView(user: User, yearIn?: number): Promise<BudgetVie
     l.vsBaseline = l.baseline === null ? null : r2(l.baseline - used);
   }
   // Prima le righe del Master Plan (per funzione), poi gli internal order impegnati ma non a budget.
-  const lines = [...map.values()].sort((a, b) => Number(a.current === null) - Number(b.current === null) || (a.function || "~").localeCompare(b.function || "~") || a.io.localeCompare(b.io));
+  const lines = [...map.values()].sort(
+    (a, b) =>
+      Number(a.current === null) - Number(b.current === null) ||
+      (a.function || "~").localeCompare(b.function || "~") ||
+      a.io.localeCompare(b.io),
+  );
   // Buyer di ogni riga: assegnato a mano oppure ricavato dalla categoria (se ne ha uno solo).
-  const explicit = new Map((await db.query("select b.io, b.user_id, u.name from io_buyers b join users u on u.id = b.user_id")).rows.map(r => [r.io as string, { id: r.user_id as number, name: r.name as string }]));
-  const catBuyers = (await db.query("select cm.key, array_agg(distinct u.id) as ids, array_agg(distinct u.name) as names from category_map cm join category_buyers cb on cb.category_id = cm.category_id join users u on u.id = cb.user_id and u.active where cm.kind = 'mp' group by cm.key")).rows;
+  const explicit = new Map(
+    (await db.query("select b.io, b.user_id, u.name from io_buyers b join users u on u.id = b.user_id")).rows.map(r => [
+      r.io as string,
+      { id: r.user_id as number, name: r.name as string },
+    ]),
+  );
+  const catBuyers = (
+    await db.query(
+      "select cm.key, array_agg(distinct u.id) as ids, array_agg(distinct u.name) as names from category_map cm join category_buyers cb on cb.category_id = cm.category_id join users u on u.id = cb.user_id and u.active where cm.kind = 'mp' group by cm.key",
+    )
+  ).rows;
   for (const l of lines) {
     const e = explicit.get(l.io);
-    if (e) { l.buyerId = e.id; l.buyerName = e.name; l.buyerVia = "io"; continue; }
+    if (e) {
+      l.buyerId = e.id;
+      l.buyerName = e.name;
+      l.buyerVia = "io";
+      continue;
+    }
     const c = catBuyers.find(x => x.key === l.category);
-    if (c && c.ids.length === 1) { l.buyerId = c.ids[0]; l.buyerName = c.names[0]; l.buyerVia = "category"; }
+    if (c && c.ids.length === 1) {
+      l.buyerId = c.ids[0];
+      l.buyerName = c.names[0];
+      l.buyerVia = "category";
+    }
   }
   // Un buyer con categorie assegnate vede solo le righe del Master Plan delle sue categorie (e nessuna RDA senza internal order).
   const scope = await categoryScope(user);
-  let visible = lines, unassignedVisible = unassigned;
+  let visible = lines,
+    unassignedVisible = unassigned;
   if (scope) {
-    const mapped = new Map((await db.query("select cm.key, c.name from category_map cm join categories c on c.id = cm.category_id where cm.kind = 'mp'")).rows.map(r => [r.key as string, r.name as string]));
-    visible = lines.filter(l => { const n = mapped.get(l.category); return !!n && scope.has(n); });
+    const mapped = new Map(
+      (
+        await db.query("select cm.key, c.name from category_map cm join categories c on c.id = cm.category_id where cm.kind = 'mp'")
+      ).rows.map(r => [r.key as string, r.name as string]),
+    );
+    visible = lines.filter(l => {
+      const n = mapped.get(l.category);
+      return !!n && scope.has(n);
+    });
     unassignedVisible = [];
   }
   const demo = (await db.query("select 1 from mp_versions where file_name = 'simulazione-master-plan.csv' limit 1")).rows.length > 0;
-  return { demo, year, currentYear, years, versions, baselineId: base?.id ?? null, currentId: cur?.id ?? null, lines: visible, unassigned: unassignedVisible.sort((a, b) => b.value - a.value), canUpload: canUploadBudget(user) };
+  return {
+    demo,
+    year,
+    currentYear,
+    years,
+    versions,
+    baselineId: base?.id ?? null,
+    currentId: cur?.id ?? null,
+    lines: visible,
+    unassigned: unassignedVisible.sort((a, b) => b.value - a.value),
+    canUpload: canUploadBudget(user),
+  };
 }
 
 /** Dettaglio di un internal order: budget e pratiche/contratti che lo impegnano. */
-export async function budgetIo(user: User, io: string, yearIn?: number): Promise<{ line: BudgetLine | null; items: BudgetItem[]; year: number }> {
+export async function budgetIo(
+  user: User,
+  io: string,
+  yearIn?: number,
+): Promise<{ line: BudgetLine | null; items: BudgetItem[]; year: number }> {
   const view = await budgetView(user, yearIn);
   const { tasks, rdaKeys, contracts } = await loadCommitments();
   const items: BudgetItem[] = [];
   for (const t of tasks) {
     if (taskYear(t) !== view.year) continue;
-    const kind = classify(t, rdaKeys); if (!kind) continue;
-    const v = ioSplit(t)[io]; if (v === undefined) continue;
-    items.push({ kind: t.source === "rda" ? "rda" : "purchase", id: t.id, title: t.title, value: r2(Number(v)), status: kind === "pipeline" ? "In previsione" : t.status === "open" ? "Approvata, in lavorazione" : "Ordinata / chiusa", date: t.meta?.releaseDate ?? (t.due ? new Date(t.due).toISOString().slice(0, 10) : null) });
+    const kind = classify(t, rdaKeys);
+    if (!kind) continue;
+    const v = ioSplit(t)[io];
+    if (v === undefined) continue;
+    items.push({
+      kind: t.source === "rda" ? "rda" : "purchase",
+      id: t.id,
+      title: t.title,
+      value: r2(Number(v)),
+      status: kind === "pipeline" ? "In previsione" : t.status === "open" ? "Approvata, in lavorazione" : "Ordinata / chiusa",
+      date: t.meta?.releaseDate ?? (t.due ? new Date(t.due).toISOString().slice(0, 10) : null),
+    });
   }
-  for (const c of contracts) if (c.internal_order === io) { const q = contractQuota(c, view.year); if (q > 0) items.push({ kind: "contract", id: c.id, title: `${c.supplier} · ${c.object}`, value: q, status: `Quota ${view.year} del contratto (scad. ${c.end_date})`, date: c.end_date }); }
+  for (const c of contracts)
+    if (c.internal_order === io) {
+      const q = contractQuota(c, view.year);
+      if (q > 0)
+        items.push({
+          kind: "contract",
+          id: c.id,
+          title: `${c.supplier} · ${c.object}`,
+          value: q,
+          status: `Quota ${view.year} del contratto (scad. ${c.end_date})`,
+          date: c.end_date,
+        });
+    }
   const line = view.lines.find(l => l.io === io) ?? null;
   // Fuori dal perimetro del buyer non si mostra nemmeno il dettaglio.
-  if (!line && !(await categoryScope(user) === null)) return { line: null, items: [], year: view.year };
+  if (!line && !((await categoryScope(user)) === null)) return { line: null, items: [], year: view.year };
   return { line, items: items.sort((a, b) => b.value - a.value), year: view.year };
 }
 
 /** Modello da compilare (CSV con ";", si apre con Excel). */
-export const BUDGET_TEMPLATE = "\uFEFFRow Labels;CDC;CDC NAME;NAME;CATEGORIA;BUYER;MP26;R3;R5\nHQ2505245001;5245;R&D Agro;MARTANI - CONTRATTO;OTHERS;Mario Bianchi;61000;61000;58000\n";
+export const BUDGET_TEMPLATE =
+  "\uFEFFRow Labels;CDC;CDC NAME;NAME;CATEGORIA;BUYER;MP26;R3;R5\nHQ2505245001;5245;R&D Agro;MARTANI - CONTRATTO;OTHERS;Mario Bianchi;61000;61000;58000\n";

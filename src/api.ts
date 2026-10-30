@@ -1,11 +1,75 @@
 import { fill, t } from "./i18n/index.ts";
-import { DOCUMENT_EXTENSIONS, MAX_DOCUMENT_BYTES, type NegotiationBundle, type NegotiationSummary, type Obligation, type ReadinessCheck, type SecurityEvent, type ClmKpis, type ReviewRule, type ClauseView, type ClmAuditEntry, type ClmBundle, type ClmDiff, type ClmFindings, type ClmTemplateInfo, type FuncKey, type MyReview, type ReviewStatus, type AppState, type CommitPayload, type ConfigAuditEntry, type CommitResult, type BudgetImport, type BudgetItem, type BudgetLine, type BudgetView, type ImportResult, type CategoriesView, type BoInfo, type BoSettings, type BoMessage, type CoverView, type Kpis, type Requests, type ResetArea, type ResetPreview, type WorkItem, type Scorecard, type Rfq, type SupplierRfq, type SpendPo, type SpendView, type InviteInput, type MonitorData, type NewUserInput, type PortalConfig, type Supplier, type SupplierData, type SupplierSummary, type EligibleSupplier, type RdaSuggestion, type Task, type TaskDetail, type TestAccess, type TaskList, type TaskSummary, type UpdateUserInput, type User, type VendorAction } from "./types.ts";
+import {
+  DOCUMENT_EXTENSIONS,
+  MAX_DOCUMENT_BYTES,
+  type NegotiationBundle,
+  type NegotiationSummary,
+  type Obligation,
+  type ReadinessCheck,
+  type SecurityEvent,
+  type ClmKpis,
+  type ReviewRule,
+  type ClauseView,
+  type ClmAuditEntry,
+  type ClmBundle,
+  type ClmDiff,
+  type ClmFindings,
+  type ClmTemplateInfo,
+  type FuncKey,
+  type MyReview,
+  type ReviewStatus,
+  type AppState,
+  type CommitPayload,
+  type ConfigAuditEntry,
+  type CommitResult,
+  type BudgetImport,
+  type BudgetItem,
+  type BudgetLine,
+  type BudgetView,
+  type ImportResult,
+  type CategoriesView,
+  type BoInfo,
+  type BoSettings,
+  type BoMessage,
+  type CoverView,
+  type Kpis,
+  type Requests,
+  type ResetArea,
+  type ResetPreview,
+  type WorkItem,
+  type Scorecard,
+  type Rfq,
+  type SupplierRfq,
+  type SpendPo,
+  type SpendView,
+  type InviteInput,
+  type MonitorData,
+  type NewUserInput,
+  type PortalConfig,
+  type Supplier,
+  type SupplierData,
+  type SupplierSummary,
+  type EligibleSupplier,
+  type RdaSuggestion,
+  type Task,
+  type TaskDetail,
+  type TestAccess,
+  type TaskList,
+  type TaskSummary,
+  type UpdateUserInput,
+  type User,
+  type VendorAction,
+} from "./types.ts";
 import { DOC_MIME } from "./supplierRules.ts";
 
 export class ApiError extends Error {
   status: number;
   data: Record<string, unknown>;
-  constructor(status: number, message: string, data: Record<string, unknown> = {}) { super(message); this.status = status; this.data = data; }
+  constructor(status: number, message: string, data: Record<string, unknown> = {}) {
+    super(message);
+    this.status = status;
+    this.data = data;
+  }
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -57,15 +121,28 @@ export async function uploadDocument(file: File): Promise<string> {
   try {
     // Il tipo dichiarato dal browser per i file Word può mancare o essere generico: l'archivio accetta solo i tipi dell'elenco, quindi lo ricaviamo dall'estensione.
     const ext = file.name.toLowerCase().split(".").pop() ?? "";
-    const mime = ({ pdf: "application/pdf", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" } as Record<string, string>)[ext];
-    const result = await uploadPresigned(`contracts/${crypto.randomUUID()}/${safeName}`, mime ? new File([file], safeName, { type: mime }) : file, { access: "private", handleUploadUrl: "/api/upload" });
+    const mime = (
+      {
+        pdf: "application/pdf",
+        doc: "application/msword",
+        docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      } as Record<string, string>
+    )[ext];
+    const result = await uploadPresigned(
+      `contracts/${crypto.randomUUID()}/${safeName}`,
+      mime ? new File([file], safeName, { type: mime }) : file,
+      { access: "private", handleUploadUrl: "/api/upload" },
+    );
     return result.pathname;
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
     if (/content.?type|not allowed/i.test(message)) throw new Error(t("Tipo di file non accettato dall'archivio: usa PDF, DOC o DOCX"));
     if (/private/i.test(message)) throw new Error(t("L'archivio Blob su Vercel deve essere creato in modalità PRIVATA"));
     // Il dettaglio tecnico resta visibile per capire subito cosa manca nella configurazione.
-    if (/token|store|credential|oidc|presigned|not.?found|suspended|configur/i.test(message)) throw new Error(t("Archivio documenti non configurato su Vercel ({detail})", { detail: message.replace(/^Vercel Blob: /, "").slice(0, 180) }));
+    if (/token|store|credential|oidc|presigned|not.?found|suspended|configur/i.test(message))
+      throw new Error(
+        t("Archivio documenti non configurato su Vercel ({detail})", { detail: message.replace(/^Vercel Blob: /, "").slice(0, 180) }),
+      );
     throw new Error(message || t("Caricamento del documento non riuscito"));
   }
 }
@@ -75,113 +152,204 @@ export const documentUrl = (contractId: number, download = false) => `/api/docum
 // ─── Portale fornitori ───────────────────────────────────────
 const portal = (op: string, extra = "") => `/api/portal?op=${op}${extra}`;
 export const portalApi = {
-  inviteInfo: (token: string) => request<{ name: string; email: string; companies: string[]; privacyNotice: string }>(portal("invite-info", `&token=${encodeURIComponent(token)}`)),
+  inviteInfo: (token: string) =>
+    request<{ name: string; email: string; companies: string[]; privacyNotice: string }>(
+      portal("invite-info", `&token=${encodeURIComponent(token)}`),
+    ),
   activate: (token: string, password: string) => post<{ user: User }>(portal("activate"), { token, password }),
   // Area del fornitore
   myself: () => request<{ supplier: Supplier }>(portal("supplier-me")).then(r => r.supplier),
   save: (data: SupplierData) => post<{ supplier: Supplier }>(portal("supplier-save"), data).then(r => r.supplier),
   submit: () => post<{ supplier: Supplier }>(portal("supplier-submit"), {}).then(r => r.supplier),
-  addDocument: (doc: { type: string; fileName: string; filePath: string; size: number; validUntil: string | null }) => post<{ supplier: Supplier; docId: number }>(portal("supplier-doc-add"), doc),
-  removeDocument: (id: number) => request<{ supplier: Supplier }>(portal("supplier-doc", `&id=${id}`), { method: "DELETE" }).then(r => r.supplier),
+  addDocument: (doc: { type: string; fileName: string; filePath: string; size: number; validUntil: string | null }) =>
+    post<{ supplier: Supplier; docId: number }>(portal("supplier-doc-add"), doc),
+  removeDocument: (id: number) =>
+    request<{ supplier: Supplier }>(portal("supplier-doc", `&id=${id}`), { method: "DELETE" }).then(r => r.supplier),
   // Staff
   kpis: () => request<Kpis>(portal("kpis")),
-  sanctionsRefresh: () => post<{ updated: string[]; errors: string[]; rescreened: number; newHits: number; config: PortalConfig }>(portal("sanctions-refresh"), {}),
+  sanctionsRefresh: () =>
+    post<{ updated: string[]; errors: string[]; rescreened: number; newHits: number; config: PortalConfig }>(
+      portal("sanctions-refresh"),
+      {},
+    ),
   testAccess: (id: number) => post<{ email: string; password: string }>(portal("vendor-test-access", `&id=${id}`), {}),
   testAccesses: () => post<{ accesses: TestAccess[] }>(portal("test-accesses"), {}).then(r => r.accesses),
   removeTestAccesses: () => post<{ removed: number }>(portal("test-accesses-remove"), {}).then(r => r.removed),
   demoSupplier: () => post<{ id: number; name: string; email: string; password: string }>(portal("vendor-demo"), {}),
   scorecard: (id: number) => request<{ scorecard: Scorecard }>(portal("vendor-rating", `&id=${id}`)).then(r => r.scorecard),
-  addRating: (id: number, input: { quality: number; delivery: number; service: number; price: number; comment: string; po: string }) => post<{ scorecard: Scorecard }>(portal("vendor-rating-add", `&id=${id}`), input).then(r => r.scorecard),
-  deleteRating: (id: number) => request<{ scorecard: Scorecard }>(portal("vendor-rating", `&id=${id}`), { method: "DELETE" }).then(r => r.scorecard),
+  addRating: (id: number, input: { quality: number; delivery: number; service: number; price: number; comment: string; po: string }) =>
+    post<{ scorecard: Scorecard }>(portal("vendor-rating-add", `&id=${id}`), input).then(r => r.scorecard),
+  deleteRating: (id: number) =>
+    request<{ scorecard: Scorecard }>(portal("vendor-rating", `&id=${id}`), { method: "DELETE" }).then(r => r.scorecard),
   ratings: () => request<{ ratings: Record<number, { overall: number; count: number }> }>(portal("vendor-ratings")).then(r => r.ratings),
   myRequests: () => request<{ requests: Requests }>(portal("my-requests")).then(r => r.requests),
   boMessages: (contractId: number) => request<{ messages: BoMessage[] }>(portal("bo-messages", `&id=${contractId}`)).then(r => r.messages),
-  sendBoMessage: (contractId: number, body: string) => post<{ messages: BoMessage[] }>(portal("bo-message-send", `&id=${contractId}`), { body }).then(r => r.messages),
+  sendBoMessage: (contractId: number, body: string) =>
+    post<{ messages: BoMessage[] }>(portal("bo-message-send", `&id=${contractId}`), { body }).then(r => r.messages),
   boUsers: () => request<{ users: { id: number; name: string; email: string; sapUser: string }[] }>(portal("bo-users")).then(r => r.users),
   cover: () => request<CoverView>(portal("cover")),
   addCover: (input: { userId?: number; substituteId: number; from: string; to: string }) => post<CoverView>(portal("cover-add"), input),
   deleteCover: (id: number) => request<CoverView>(portal("cover", `&id=${id}`), { method: "DELETE" }),
   setCategoryBuyers: (categoryId: number, userIds: number[]) => post<CategoriesView>(portal("category-buyers"), { categoryId, userIds }),
   boInfo: (contractId: number) => request<{ info: BoInfo }>(portal("bo-info", `&id=${contractId}`)).then(r => r.info),
-  sendBoNotice: (contractId: number, input: { message?: string; restart?: boolean } = {}) => post<{ info: BoInfo }>(portal("bo-notice-send", `&id=${contractId}`), input).then(r => r.info),
-  setBoLead: (contractId: number, days: number) => post<{ info: BoInfo }>(portal("bo-lead", `&id=${contractId}`), { days }).then(r => r.info),
+  sendBoNotice: (contractId: number, input: { message?: string; restart?: boolean } = {}) =>
+    post<{ info: BoInfo }>(portal("bo-notice-send", `&id=${contractId}`), input).then(r => r.info),
+  setBoLead: (contractId: number, days: number) =>
+    post<{ info: BoInfo }>(portal("bo-lead", `&id=${contractId}`), { days }).then(r => r.info),
   boSettings: () => request<{ settings: BoSettings }>(portal("bo-settings")).then(r => r.settings),
   saveBoSettings: (input: Partial<BoSettings>) => post<{ settings: BoSettings }>(portal("bo-settings-save"), input).then(r => r.settings),
   resetPreview: () => request<{ counts: ResetPreview }>(portal("reset-preview")).then(r => r.counts),
-  resetRun: (areas: ResetArea[]) => post<{ deleted: Partial<Record<ResetArea, number>> }>(portal("reset-run"), { areas, confirm: "ELIMINA" }).then(r => r.deleted),
+  resetRun: (areas: ResetArea[]) =>
+    post<{ deleted: Partial<Record<ResetArea, number>> }>(portal("reset-run"), { areas, confirm: "ELIMINA" }).then(r => r.deleted),
   myWork: () => request<{ items: WorkItem[] }>(portal("my-work")).then(r => r.items),
   rfqs: (taskId: number) => request<{ rfqs: Rfq[] }>(portal("rfqs", `&taskId=${taskId}`)).then(r => r.rfqs),
-  createRfq: (input: { taskId: number; title: string; description: string; deadline: string; supplierIds: number[]; specName?: string; specPath?: string }) => post<{ rfqs: Rfq[] }>(portal("rfq-create"), input).then(r => r.rfqs),
+  createRfq: (input: {
+    taskId: number;
+    title: string;
+    description: string;
+    deadline: string;
+    supplierIds: number[];
+    specName?: string;
+    specPath?: string;
+  }) => post<{ rfqs: Rfq[] }>(portal("rfq-create"), input).then(r => r.rfqs),
   closeRfq: (id: number) => post<{ rfqs: Rfq[] }>(portal("rfq-close", `&id=${id}`), {}).then(r => r.rfqs),
-  useRfq: (id: number, input: { supplierId: number; justification: string }) => post<{ task: TaskDetail }>(portal("rfq-use", `&id=${id}`), input).then(r => r.task),
+  useRfq: (id: number, input: { supplierId: number; justification: string }) =>
+    post<{ task: TaskDetail }>(portal("rfq-use", `&id=${id}`), input).then(r => r.task),
   myRfqs: () => request<{ rfqs: SupplierRfq[] }>(portal("supplier-rfqs")).then(r => r.rfqs),
-  quoteRfq: (id: number, input: { amount?: number; notes?: string; declined?: boolean; fileName?: string; filePath?: string; removeFile?: boolean }) => post<{ rfqs: SupplierRfq[] }>(portal("supplier-rfq-quote", `&id=${id}`), input).then(r => r.rfqs),
+  quoteRfq: (
+    id: number,
+    input: { amount?: number; notes?: string; declined?: boolean; fileName?: string; filePath?: string; removeFile?: boolean },
+  ) => post<{ rfqs: SupplierRfq[] }>(portal("supplier-rfq-quote", `&id=${id}`), input).then(r => r.rfqs),
   categories: () => request<CategoriesView>(portal("categories")),
   saveCategory: (name: string, id?: number) => post<CategoriesView>(portal("category-save"), { id, name }),
   deleteCategory: (id: number) => request<CategoriesView>(portal("category", `&id=${id}`), { method: "DELETE" }),
-  mapCategory: (kind: "sap" | "mp", key: string, categoryId: number | null) => post<CategoriesView>(portal("category-map"), { kind, key, categoryId }),
+  mapCategory: (kind: "sap" | "mp", key: string, categoryId: number | null) =>
+    post<CategoriesView>(portal("category-map"), { kind, key, categoryId }),
   seedCategories: () => post<CategoriesView>(portal("category-seed"), {}),
   spend: (year?: number) => request<SpendView>(portal("spend", year ? `&year=${year}` : "")),
-  spendLines: (year: number, supplier: string) => request<SpendPo[]>(portal("spend-lines", `&year=${year}&supplier=${encodeURIComponent(supplier)}`)),
+  spendLines: (year: number, supplier: string) =>
+    request<SpendPo[]>(portal("spend-lines", `&year=${year}&supplier=${encodeURIComponent(supplier)}`)),
   budget: (year?: number) => request<BudgetView>(portal("budget", year ? `&year=${year}` : "")),
-  budgetIo: (io: string, year?: number) => request<{ line: BudgetLine | null; items: BudgetItem[]; year: number }>(portal("budget-io", `&io=${encodeURIComponent(io)}${year ? `&year=${year}` : ""}`)),
+  budgetIo: (io: string, year?: number) =>
+    request<{ line: BudgetLine | null; items: BudgetItem[]; year: number }>(
+      portal("budget-io", `&io=${encodeURIComponent(io)}${year ? `&year=${year}` : ""}`),
+    ),
   loadBudgetDemo: () => post<{ years: number[]; tasks: number; contracts: number; suppliers: number }>(portal("budget-demo"), {}),
   deleteBudgetDemo: () => request<{ deleted: number }>(portal("budget-demo"), { method: "DELETE" }),
   deleteBudgetVersion: (id: number) => request<{ ok: true }>(portal("budget-version", `&id=${id}`), { method: "DELETE" }),
   configAudit: () => request<{ entries: ConfigAuditEntry[] }>(portal("config-audit")).then(r => r.entries),
-  anonymize: (id: number, reason: string) => post<{ supplier: Supplier }>(portal("vendor-anonymize", `&id=${id}`), { reason }).then(r => r.supplier),
+  anonymize: (id: number, reason: string) =>
+    post<{ supplier: Supplier }>(portal("vendor-anonymize", `&id=${id}`), { reason }).then(r => r.supplier),
   vendors: () => request<{ vendors: SupplierSummary[] }>(portal("vendors")).then(r => r.vendors),
   vendor: (id: number) => request<{ supplier: Supplier }>(portal("vendor", `&id=${id}`)).then(r => r.supplier),
-  invite: (input: InviteInput & { confirmDuplicates?: boolean }) => post<{ supplier: Supplier; link: string }>(portal("vendor-invite"), input),
+  invite: (input: InviteInput & { confirmDuplicates?: boolean }) =>
+    post<{ supplier: Supplier; link: string }>(portal("vendor-invite"), input),
   reinvite: (id: number) => post<{ supplier: Supplier; link: string }>(portal("vendor-reinvite", `&id=${id}`), {}),
   deleteInvite: (id: number) => request<{ ok: true }>(portal("vendor-invite", `&id=${id}`), { method: "DELETE" }),
-  action: (id: number, action: VendorAction, extra: Record<string, unknown> = {}) => post<{ supplier: Supplier }>(portal("vendor-action", `&id=${id}`), { action, ...extra }).then(r => r.supplier),
+  action: (id: number, action: VendorAction, extra: Record<string, unknown> = {}) =>
+    post<{ supplier: Supplier }>(portal("vendor-action", `&id=${id}`), { action, ...extra }).then(r => r.supplier),
   vendorChecks: (id: number) => post<{ supplier: Supplier }>(portal("vendor-checks", `&id=${id}`), {}).then(r => r.supplier),
-  checkDocument: (id: number) => request<{ supplier: Supplier }>(portal("supplier-doc-check", `&id=${id}`), { method: "POST", body: "{}" }).then(r => r.supplier),
-  recheckDocument: (id: number) => request<{ supplier: Supplier }>(portal("doc-check", `&id=${id}`), { method: "POST", body: "{}" }).then(r => r.supplier),
+  checkDocument: (id: number) =>
+    request<{ supplier: Supplier }>(portal("supplier-doc-check", `&id=${id}`), { method: "POST", body: "{}" }).then(r => r.supplier),
+  recheckDocument: (id: number) =>
+    request<{ supplier: Supplier }>(portal("doc-check", `&id=${id}`), { method: "POST", body: "{}" }).then(r => r.supplier),
   monitor: () => request<MonitorData>(portal("doc-monitor")),
-  remind: (supplierId: number, channel: "email" | "phone", note = "") => post<{ sent: number }>(portal("doc-remind"), { supplierId, channel, note }),
+  remind: (supplierId: number, channel: "email" | "phone", note = "") =>
+    post<{ sent: number }>(portal("doc-remind"), { supplierId, channel, note }),
   runRiskChecks: () => post<{ due: number; checked: number; worsened: number; errors: number }>(portal("risk-run"), {}),
   runReminders: () => post<{ suppliers: number; emails: number; items: number; alerts: number }>(portal("reminders-run"), {}),
   tasks: () => request<TaskList>(portal("tasks")),
   taskSummary: () => request<TaskSummary>(portal("task-summary")),
   task: (id: number) => request<{ task: TaskDetail }>(portal("task", `&id=${id}`)).then(r => r.task),
-  createTask: (input: { title: string; detail?: string; due?: string | null; priority?: string; assigneeId?: number; kind?: "activity" | "purchase"; value?: number; currency?: string; supplier?: string; supplierId?: number | null; rdaNumbers?: string[] }) => post<{ task: TaskDetail }>(portal("task-create"), input).then(r => r.task),
-  updateTask: (id: number, patch: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-update", `&id=${id}`), patch).then(r => r.task),
-  saveSourcing: (id: number, input: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-sourcing", `&id=${id}`), input).then(r => r.task),
-  decideSourcing: (id: number, approve: boolean, note: string) => post<{ task: TaskDetail }>(portal("task-sourcing-approve", `&id=${id}`), { approve, note }).then(r => r.task),
-  setOutcome: (id: number, input: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-outcome", `&id=${id}`), input).then(r => r.task),
-  registerContract: (id: number, input: Record<string, unknown>) => post<{ task: TaskDetail }>(portal("task-contract", `&id=${id}`), input).then(r => r.task),
+  createTask: (input: {
+    title: string;
+    detail?: string;
+    due?: string | null;
+    priority?: string;
+    assigneeId?: number;
+    kind?: "activity" | "purchase";
+    value?: number;
+    currency?: string;
+    supplier?: string;
+    supplierId?: number | null;
+    rdaNumbers?: string[];
+  }) => post<{ task: TaskDetail }>(portal("task-create"), input).then(r => r.task),
+  updateTask: (id: number, patch: Record<string, unknown>) =>
+    post<{ task: TaskDetail }>(portal("task-update", `&id=${id}`), patch).then(r => r.task),
+  saveSourcing: (id: number, input: Record<string, unknown>) =>
+    post<{ task: TaskDetail }>(portal("task-sourcing", `&id=${id}`), input).then(r => r.task),
+  decideSourcing: (id: number, approve: boolean, note: string) =>
+    post<{ task: TaskDetail }>(portal("task-sourcing-approve", `&id=${id}`), { approve, note }).then(r => r.task),
+  setOutcome: (id: number, input: Record<string, unknown>) =>
+    post<{ task: TaskDetail }>(portal("task-outcome", `&id=${id}`), input).then(r => r.task),
+  registerContract: (id: number, input: Record<string, unknown>) =>
+    post<{ task: TaskDetail }>(portal("task-contract", `&id=${id}`), input).then(r => r.task),
   setIoBuyer: (io: string, userId: number | null) => post<{ moved: number }>(portal("io-buyer"), { io, userId }),
-  registerTaskContract: (id: number, body: { contract: unknown }) => post<{ task: TaskDetail }>(portal("task-contract-register", `&id=${id}`), body).then(r => r.task),
+  registerTaskContract: (id: number, body: { contract: unknown }) =>
+    post<{ task: TaskDetail }>(portal("task-contract-register", `&id=${id}`), body).then(r => r.task),
   tasksArchive: (q: string) => request<{ tasks: Task[] }>(portal("tasks-archive", `&q=${encodeURIComponent(q)}`)).then(r => r.tasks),
   eligibleSuppliers: () => request<{ suppliers: EligibleSupplier[] }>(portal("task-suppliers")).then(r => r.suppliers),
-  setTaskSupplier: (id: number, supplierId: number | null) => post<{ task: TaskDetail }>(portal("task-supplier", `&id=${id}`), { supplierId }).then(r => r.task),
+  setTaskSupplier: (id: number, supplierId: number | null) =>
+    post<{ task: TaskDetail }>(portal("task-supplier", `&id=${id}`), { supplierId }).then(r => r.task),
   suggestRdas: (id: number) => request<{ suggestions: RdaSuggestion[] }>(portal("task-rda-suggest", `&id=${id}`)).then(r => r.suggestions),
-  setTaskLinks: (id: number, input: { poNumbers?: string[]; rdaNumbers?: string[]; noPoReason?: string; internalOrder?: string; delivDate?: string; contractStatus?: string; contractNote?: string }) => post<{ task: TaskDetail }>(portal("task-links", `&id=${id}`), input).then(r => r.task),
-  addTaskDoc: (id: number, doc: { kind: string; fileName: string; filePath: string; size: number }) => post<{ task: TaskDetail }>(portal("task-doc", `&id=${id}`), doc).then(r => r.task),
-  removeTaskDoc: (id: number, docId: number) => request<{ task: TaskDetail }>(portal("task-doc", `&id=${id}&doc=${docId}`), { method: "DELETE" }).then(r => r.task),
+  setTaskLinks: (
+    id: number,
+    input: {
+      poNumbers?: string[];
+      rdaNumbers?: string[];
+      noPoReason?: string;
+      internalOrder?: string;
+      delivDate?: string;
+      contractStatus?: string;
+      contractNote?: string;
+    },
+  ) => post<{ task: TaskDetail }>(portal("task-links", `&id=${id}`), input).then(r => r.task),
+  addTaskDoc: (id: number, doc: { kind: string; fileName: string; filePath: string; size: number }) =>
+    post<{ task: TaskDetail }>(portal("task-doc", `&id=${id}`), doc).then(r => r.task),
+  removeTaskDoc: (id: number, docId: number) =>
+    request<{ task: TaskDetail }>(portal("task-doc", `&id=${id}&doc=${docId}`), { method: "DELETE" }).then(r => r.task),
   security: {
     readiness: () => request<{ checks: ReadinessCheck[] }>(portal("readiness")).then(r => r.checks),
     events: () => request<{ events: SecurityEvent[] }>(portal("security-events")).then(r => r.events),
   },
   clm: {
-    bundle: (taskId: number, draftId?: number) => request<ClmBundle>(portal("drafts", `&id=${taskId}${draftId ? `&draft=${draftId}` : ""}`)),
-    upload: (taskId: number, d: { fileName: string; filePath: string; size: number; note?: string }) => post<ClmBundle>(portal("draft-upload", `&id=${taskId}`), d),
-    invite: (taskId: number, funcs: { func: FuncKey; userId?: number; due?: string }[], message: string) => post<ClmBundle>(portal("draft-invite", `&id=${taskId}`), { funcs, message }),
-    comment: (taskId: number, c: { draftId: number; body: string; para?: number | null; start?: number | null; end?: number | null; quote?: string; parentId?: number | null; external?: boolean }) => post<ClmBundle>(portal("draft-comment", `&id=${taskId}`), c),
+    bundle: (taskId: number, draftId?: number) =>
+      request<ClmBundle>(portal("drafts", `&id=${taskId}${draftId ? `&draft=${draftId}` : ""}`)),
+    upload: (taskId: number, d: { fileName: string; filePath: string; size: number; note?: string }) =>
+      post<ClmBundle>(portal("draft-upload", `&id=${taskId}`), d),
+    invite: (taskId: number, funcs: { func: FuncKey; userId?: number; due?: string }[], message: string) =>
+      post<ClmBundle>(portal("draft-invite", `&id=${taskId}`), { funcs, message }),
+    comment: (
+      taskId: number,
+      c: {
+        draftId: number;
+        body: string;
+        para?: number | null;
+        start?: number | null;
+        end?: number | null;
+        quote?: string;
+        parentId?: number | null;
+        external?: boolean;
+      },
+    ) => post<ClmBundle>(portal("draft-comment", `&id=${taskId}`), c),
     resolve: (commentId: number, resolved: boolean) => post<ClmBundle>(portal("draft-comment-resolve", `&id=${commentId}`), { resolved }),
-    decide: (taskId: number, decision: ReviewStatus, note: string) => post<ClmBundle>(portal("draft-decide", `&id=${taskId}`), { decision, note }),
-    templates: (taskId: number) => request<{ templates: ClmTemplateInfo[] }>(portal("draft-templates", `&id=${taskId}`)).then(r => r.templates),
-    fromTemplate: (taskId: number, template: string, langs: string[], answers: Record<string, unknown>) => post<ClmBundle>(portal("draft-from-template", `&id=${taskId}`), { template, langs, answers }),
+    decide: (taskId: number, decision: ReviewStatus, note: string) =>
+      post<ClmBundle>(portal("draft-decide", `&id=${taskId}`), { decision, note }),
+    templates: (taskId: number) =>
+      request<{ templates: ClmTemplateInfo[] }>(portal("draft-templates", `&id=${taskId}`)).then(r => r.templates),
+    fromTemplate: (taskId: number, template: string, langs: string[], answers: Record<string, unknown>) =>
+      post<ClmBundle>(portal("draft-from-template", `&id=${taskId}`), { template, langs, answers }),
     diff: (taskId: number, from: number, to: number) => request<ClmDiff>(portal("draft-diff", `&id=${taskId}&from=${from}&to=${to}`)),
     findings: (taskId: number, draftId: number) => request<ClmFindings>(portal("draft-findings", `&id=${taskId}&draft=${draftId}`)),
-    acceptDeviation: (taskId: number, para: number, code: string, note: string) => post<ClmFindings>(portal("draft-deviation", `&id=${taskId}`), { para, code, note }),
+    acceptDeviation: (taskId: number, para: number, code: string, note: string) =>
+      post<ClmFindings>(portal("draft-deviation", `&id=${taskId}`), { para, code, note }),
     audit: (taskId: number) => request<{ entries: ClmAuditEntry[] }>(portal("draft-audit", `&id=${taskId}`)).then(r => r.entries),
     clauses: () => request<{ clauses: ClauseView[] }>(portal("clauses")).then(r => r.clauses),
     saveClause: (c: Record<string, unknown>) => post<{ clauses: ClauseView[] }>(portal("clause-save"), c).then(r => r.clauses),
-    decideClause: (versionId: number, approve: boolean, note: string) => post<{ clauses: ClauseView[] }>(portal("clause-decide", `&id=${versionId}`), { approve, note }).then(r => r.clauses),
-    share: (taskId: number, draftId: number, share: boolean, message = "") => post<ClmBundle>(portal("draft-share", `&id=${taskId}`), { draftId, share, message }),
+    decideClause: (versionId: number, approve: boolean, note: string) =>
+      post<{ clauses: ClauseView[] }>(portal("clause-decide", `&id=${versionId}`), { approve, note }).then(r => r.clauses),
+    share: (taskId: number, draftId: number, share: boolean, message = "") =>
+      post<ClmBundle>(portal("draft-share", `&id=${taskId}`), { draftId, share, message }),
     rules: () => request<{ rules: ReviewRule[] }>(portal("review-rules")).then(r => r.rules),
     saveRule: (rule: Record<string, unknown>) => post<{ rules: ReviewRule[] }>(portal("review-rule-save"), rule).then(r => r.rules),
     deleteRule: (id: number) => post<{ rules: ReviewRule[] }>(portal("review-rule-delete", `&id=${id}`), {}).then(r => r.rules),
@@ -189,21 +357,35 @@ export const portalApi = {
     mine: () => request<{ reviews: MyReview[] }>(portal("my-reviews")).then(r => r.reviews),
   },
   negotiations: () => request<{ negotiations: NegotiationSummary[] }>(portal("supplier-negotiations")).then(r => r.negotiations),
-  negotiation: (taskId: number, draftId?: number) => request<NegotiationBundle>(portal("supplier-negotiation", `&id=${taskId}${draftId ? `&draft=${draftId}` : ""}`)),
-  negotiationComment: (taskId: number, c: { draftId: number; body: string; para?: number | null; start?: number | null; end?: number | null; quote?: string }) => post<NegotiationBundle>(portal("supplier-negotiation-comment", `&id=${taskId}`), c),
-  negotiationUpload: (taskId: number, d: { fileName: string; filePath: string; size: number }) => post<NegotiationBundle>(portal("supplier-negotiation-upload", `&id=${taskId}`), d),
-  obligations: (contractId: number) => request<{ obligations: Obligation[] }>(portal("obligations", `&id=${contractId}`)).then(r => r.obligations),
-  saveObligation: (contractId: number, o: Record<string, unknown>) => post<{ obligations: Obligation[] }>(portal("obligation-save", `&id=${contractId}`), o).then(r => r.obligations),
-  completeObligation: (id: number) => post<{ obligations: Obligation[] }>(portal("obligation-done", `&id=${id}`), {}).then(r => r.obligations),
-  deleteObligation: (id: number) => post<{ obligations: Obligation[] }>(portal("obligation-delete", `&id=${id}`), {}).then(r => r.obligations),
+  negotiation: (taskId: number, draftId?: number) =>
+    request<NegotiationBundle>(portal("supplier-negotiation", `&id=${taskId}${draftId ? `&draft=${draftId}` : ""}`)),
+  negotiationComment: (
+    taskId: number,
+    c: { draftId: number; body: string; para?: number | null; start?: number | null; end?: number | null; quote?: string },
+  ) => post<NegotiationBundle>(portal("supplier-negotiation-comment", `&id=${taskId}`), c),
+  negotiationUpload: (taskId: number, d: { fileName: string; filePath: string; size: number }) =>
+    post<NegotiationBundle>(portal("supplier-negotiation-upload", `&id=${taskId}`), d),
+  obligations: (contractId: number) =>
+    request<{ obligations: Obligation[] }>(portal("obligations", `&id=${contractId}`)).then(r => r.obligations),
+  saveObligation: (contractId: number, o: Record<string, unknown>) =>
+    post<{ obligations: Obligation[] }>(portal("obligation-save", `&id=${contractId}`), o).then(r => r.obligations),
+  completeObligation: (id: number) =>
+    post<{ obligations: Obligation[] }>(portal("obligation-done", `&id=${id}`), {}).then(r => r.obligations),
+  deleteObligation: (id: number) =>
+    post<{ obligations: Obligation[] }>(portal("obligation-delete", `&id=${id}`), {}).then(r => r.obligations),
   deleteTask: (id: number) => request<{ ok: true }>(portal("task", `&id=${id}`), { method: "DELETE" }),
   config: () => request<{ config: PortalConfig }>(portal("config")).then(r => r.config),
-  saveConfig: (entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders" | "rda" | "pgr" | "privacy" | "risk", action: "save" | "delete", item: unknown) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
+  saveConfig: (
+    entity: "company" | "industry" | "payment_term" | "sap" | "doc_type" | "reminders" | "rda" | "pgr" | "privacy" | "risk",
+    action: "save" | "delete",
+    item: unknown,
+  ) => post<{ config: PortalConfig }>(portal("config-save"), { entity, action, item }).then(r => r.config),
 };
 
 export const demoSapFileUrl = (kind: "pr" | "po") => `/api/portal?op=budget-demo-file&kind=${kind}`;
 export const budgetTemplateUrl = "/api/portal?op=budget-template";
-export const rfqFileUrl = (id: number, kind: "spec" | "quote", supplierId?: number) => `/api/portal?op=rfq-file&id=${id}&kind=${kind}${supplierId ? `&supplier=${supplierId}` : ""}`;
+export const rfqFileUrl = (id: number, kind: "spec" | "quote", supplierId?: number) =>
+  `/api/portal?op=rfq-file&id=${id}&kind=${kind}${supplierId ? `&supplier=${supplierId}` : ""}`;
 export const supplierRfqSpecUrl = (id: number) => `/api/portal?op=supplier-rfq-spec&id=${id}`;
 export const supplierNegotiationFileUrl = (draftId: number) => `/api/portal?op=supplier-negotiation-file&id=${draftId}`;
 export const draftAuditUrl = (taskId: number) => `/api/portal?op=draft-audit-export&id=${taskId}`;
@@ -220,18 +402,27 @@ export async function uploadSupplierDocument(file: File): Promise<string> {
   try {
     // Come per i contratti: il tipo dichiarato dal browser (Word, immagini) può mancare o non essere quello atteso dall'archivio, quindi lo ricaviamo dall'estensione.
     const mime = DOC_MIME[file.name.toLowerCase().split(".").pop() ?? ""];
-    const result = await uploadPresigned(`suppliers/${crypto.randomUUID()}/${safeName}`, mime ? new File([file], safeName, { type: mime }) : file, { access: "private", handleUploadUrl: "/api/portal?op=supplier-upload-token" });
+    const result = await uploadPresigned(
+      `suppliers/${crypto.randomUUID()}/${safeName}`,
+      mime ? new File([file], safeName, { type: mime }) : file,
+      { access: "private", handleUploadUrl: "/api/portal?op=supplier-upload-token" },
+    );
     return result.pathname;
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
-    if (/content.?type|not allowed/i.test(message)) throw new Error(t("Formato non supportato: usa PDF, Word, PowerPoint o immagini (JPG, PNG)"));
+    if (/content.?type|not allowed/i.test(message))
+      throw new Error(t("Formato non supportato: usa PDF, Word, PowerPoint o immagini (JPG, PNG)"));
     throw new Error(message ? message.replace(/^Vercel Blob: /, "").slice(0, 200) : t("Caricamento del documento non riuscito"));
   }
 }
 
 /** Importa un file Excel di SAP (RDA aperte o ordini) così com'è: il server riconosce il tipo dal contenuto. */
 export async function importSapFile(file: File, force = false): Promise<ImportResult> {
-  const res = await fetch(`/api/portal?op=rda-import${force ? "&force=1" : ""}`, { method: "POST", headers: { "x-file-name": encodeURIComponent(file.name) }, body: file });
+  const res = await fetch(`/api/portal?op=rda-import${force ? "&force=1" : ""}`, {
+    method: "POST",
+    headers: { "x-file-name": encodeURIComponent(file.name) },
+    body: file,
+  });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, serverMessage(data, res.status), data);
   return data as ImportResult;
@@ -239,7 +430,11 @@ export async function importSapFile(file: File, force = false): Promise<ImportRe
 
 /** Carica una versione del Master Plan (Excel .xlsx, CSV o XML di Excel) per l'anno indicato. */
 export async function importBudgetFile(file: File, year: number, label: string): Promise<BudgetImport> {
-  const res = await fetch(`/api/portal?op=budget-import&year=${year}&label=${encodeURIComponent(label)}`, { method: "POST", headers: { "x-file-name": encodeURIComponent(file.name) }, body: file });
+  const res = await fetch(`/api/portal?op=budget-import&year=${year}&label=${encodeURIComponent(label)}`, {
+    method: "POST",
+    headers: { "x-file-name": encodeURIComponent(file.name) },
+    body: file,
+  });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, serverMessage(data, res.status), data);
   return data as BudgetImport;

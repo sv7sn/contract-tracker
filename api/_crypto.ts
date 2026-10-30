@@ -5,16 +5,36 @@ import { HttpError } from "./_http.js";
 const scrypt = promisify(scryptCb) as (password: string, salt: Buffer, keylen: number) => Promise<Buffer>;
 
 export const MIN_PASSWORD = 12;
-const COMMON = ["password", "passw0rd", "qwerty", "123456", "12345678", "111111", "abc123", "letmein", "welcome", "admin", "iloveyou", "monkey", "dragon", "azerty", "procurement", "prometeon"];
+const COMMON = [
+  "password",
+  "passw0rd",
+  "qwerty",
+  "123456",
+  "12345678",
+  "111111",
+  "abc123",
+  "letmein",
+  "welcome",
+  "admin",
+  "iloveyou",
+  "monkey",
+  "dragon",
+  "azerty",
+  "procurement",
+  "prometeon",
+];
 /** Regole per le nuove password: lunghezza minima, niente password banali né l'email o il nome utente. Restituisce il problema, o null se va bene. */
 export function passwordProblem(password: string, email = ""): string | null {
   if (password.length < MIN_PASSWORD) return `La password deve avere almeno ${MIN_PASSWORD} caratteri`;
   if (password.length > 200) return "La password è troppo lunga";
-  const low = password.toLowerCase(), local = email.split("@")[0]?.toLowerCase() ?? "";
+  const low = password.toLowerCase(),
+    local = email.split("@")[0]?.toLowerCase() ?? "";
   if (local.length >= 4 && low.includes(local)) return "La password non deve contenere il tuo indirizzo email";
-  if ([/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter(re => re.test(password)).length < 3) return "Usa almeno tre tipi di caratteri tra maiuscole, minuscole, numeri e simboli";
+  if ([/[a-z]/, /[A-Z]/, /\d/, /[^A-Za-z0-9]/].filter(re => re.test(password)).length < 3)
+    return "Usa almeno tre tipi di caratteri tra maiuscole, minuscole, numeri e simboli";
   if (new Set(low).size < 5) return "La password è troppo semplice: usa caratteri diversi";
-  if (COMMON.some(w => low.replace(/[^a-z0-9]/g, "").startsWith(w)) || /^(.{1,4})\1+$/.test(low)) return "La password è troppo comune: scegline un'altra";
+  if (COMMON.some(w => low.replace(/[^a-z0-9]/g, "").startsWith(w)) || /^(.{1,4})\1+$/.test(low))
+    return "La password è troppo comune: scegline un'altra";
   return null;
 }
 export const SESSION_DAYS = 7;
@@ -57,9 +77,15 @@ export function sealValue(value: object, ttlSeconds: number, now = Date.now()): 
 export function openValue<T extends object>(token: string | null | undefined, now = Date.now()): (T & { exp: number }) | null {
   const [body, sig] = (token ?? "").split(".");
   if (!body || !sig) return null;
-  const expected = Buffer.from(sign(`sealed:${body}`)), given = Buffer.from(sig);
+  const expected = Buffer.from(sign(`sealed:${body}`)),
+    given = Buffer.from(sig);
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
-  try { const v = JSON.parse(Buffer.from(body, "base64url").toString()) as T & { exp: number }; return v.exp > now ? v : null; } catch { return null; }
+  try {
+    const v = JSON.parse(Buffer.from(body, "base64url").toString()) as T & { exp: number };
+    return v.exp > now ? v : null;
+  } catch {
+    return null;
+  }
 }
 
 export function createSessionToken(userId: number, version = 0, now = Date.now()): string {
@@ -71,13 +97,15 @@ export function createSessionToken(userId: number, version = 0, now = Date.now()
 export function verifySessionToken(token: string, now = Date.now()): { id: number; version: number } | null {
   const parts = token.split(".");
   if (parts.length !== 3 && parts.length !== 4) return null;
-  const sig = parts[parts.length - 1], body = parts.slice(0, -1).join(".");
+  const sig = parts[parts.length - 1],
+    body = parts.slice(0, -1).join(".");
   const [id, exp, ver] = parts;
   if (!id || !exp || !sig) return null;
   const expected = Buffer.from(sign(body));
   const given = Buffer.from(sig);
   if (expected.length !== given.length || !timingSafeEqual(expected, given)) return null;
-  const userId = Number(id), version = parts.length === 4 ? Number(ver) : 0;
+  const userId = Number(id),
+    version = parts.length === 4 ? Number(ver) : 0;
   return Number.isInteger(userId) && Number.isInteger(version) && Number(exp) > now ? { id: userId, version } : null;
 }
 

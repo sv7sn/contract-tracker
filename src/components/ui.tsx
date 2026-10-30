@@ -6,92 +6,447 @@ import { t } from "../i18n/index.ts";
 import { BarChart3, Check, ChevronDown, ClipboardCheck, Flag, Handshake, History, Inbox, Mail, PenLine, Target } from "./icons.tsx";
 
 export function UrgencyDot({ level, size = 8 }: { level: Urgency; size?: number }) {
-  return <span style={{ display: "inline-block", width: size, height: size, borderRadius: "50%", background: URGENCY_COLORS[level], flexShrink: 0 }} />;
+  return (
+    <span
+      style={{ display: "inline-block", width: size, height: size, borderRadius: "50%", background: URGENCY_COLORS[level], flexShrink: 0 }}
+    />
+  );
 }
 
 const RENEWAL_COLORS: Record<string, { bg: string; color: string }> = {
-  "In negoziazione": { bg: C.blueBg, color: C.blue }, "Rinnovo automatico": { bg: C.greenBg, color: C.green },
-  "Da rescindere": { bg: C.redBg, color: C.red }, "Da rilanciare a gara": { bg: C.yellowBg, color: C.yellow }, "Non definito": { bg: C.grayBg, color: C.muted },
+  "In negoziazione": { bg: C.blueBg, color: C.blue },
+  "Rinnovo automatico": { bg: C.greenBg, color: C.green },
+  "Da rescindere": { bg: C.redBg, color: C.red },
+  "Da rilanciare a gara": { bg: C.yellowBg, color: C.yellow },
+  "Non definito": { bg: C.grayBg, color: C.muted },
 };
 /** Etichetta a pillola con un puntino: il significato non dipende dal solo colore perché il testo è sempre presente. */
 export function RenewalBadge({ status }: { status: string }) {
   const s = RENEWAL_COLORS[status] || RENEWAL_COLORS["Non definito"];
-  return <span style={{ ...sans, display: "inline-flex", alignItems: "center", gap: 6, background: s.bg, color: s.color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap" }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: s.color }} />{status ? t(status) : t("Non definito")}</span>;
+  return (
+    <span
+      style={{
+        ...sans,
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        background: s.bg,
+        color: s.color,
+        borderRadius: 999,
+        padding: "3px 10px",
+        fontSize: 11.5,
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: "50%", background: s.color }} />
+      {status ? t(status) : t("Non definito")}
+    </span>
+  );
 }
 
 /** Giorni alla scadenza in una pillola colorata. */
 export function DaysChip({ days, level, ceased }: { days: number; level: Urgency; ceased?: boolean | string }) {
   const color = URGENCY_COLORS[level];
-  const label = ceased ? (typeof ceased === "string" ? ceased : t("Cessato")) : days < 0 ? t("Scaduto da {n} gg", { n: Math.abs(days) }) : days === 0 ? t("Scade oggi") : t("{n} gg", { n: days });
-  return <span className="tabular" style={{ ...sans, background: `${color}18`, color, borderRadius: 999, padding: "3px 10px", fontSize: 11.5, fontWeight: 700, whiteSpace: "nowrap" }}>{label}</span>;
+  const label = ceased
+    ? typeof ceased === "string"
+      ? ceased
+      : t("Cessato")
+    : days < 0
+      ? t("Scaduto da {n} gg", { n: Math.abs(days) })
+      : days === 0
+        ? t("Scade oggi")
+        : t("{n} gg", { n: days });
+  return (
+    <span
+      className="tabular"
+      style={{
+        ...sans,
+        background: `${color}18`,
+        color,
+        borderRadius: 999,
+        padding: "3px 10px",
+        fontSize: 11.5,
+        fontWeight: 700,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </span>
+  );
 }
 
 export function Avatar({ name, size = 36 }: { name: string; size?: number }) {
-  return <div aria-hidden style={{ width: size, height: size, borderRadius: "50%", background: colorFor(name), color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.36, fontWeight: 650, flexShrink: 0, letterSpacing: 0, boxShadow: "0 0 0 2px rgba(255,255,255,.9)", ...sans }}>{initials(name)}</div>;
+  return (
+    <div
+      aria-hidden
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        background: colorFor(name),
+        color: "#fff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: size * 0.36,
+        fontWeight: 650,
+        flexShrink: 0,
+        letterSpacing: 0,
+        boxShadow: "0 0 0 2px rgba(255,255,255,.9)",
+        ...sans,
+      }}
+    >
+      {initials(name)}
+    </div>
+  );
 }
 
 export function RoleBadge({ role }: { role: Role }) {
-  return <span style={{ ...sans, background: `${ROLE_COLORS[role]}1c`, color: ROLE_COLORS[role], borderRadius: 999, padding: "3px 10px", fontSize: 11, fontWeight: 650 }}>{t(ROLE_LABELS[role])}</span>;
+  return (
+    <span
+      style={{
+        ...sans,
+        background: `${ROLE_COLORS[role]}1c`,
+        color: ROLE_COLORS[role],
+        borderRadius: 999,
+        padding: "3px 10px",
+        fontSize: 11,
+        fontWeight: 650,
+      }}
+    >
+      {t(ROLE_LABELS[role])}
+    </span>
+  );
 }
 
 /** Tessera con numero in evidenza e icona: stessa altezza per tutte, il valore non esce mai dal riquadro. */
-export function StatCard({ label, value, sub, color = C.accent, icon, title }: { label: string; value: ReactNode; sub?: string; color?: string; icon?: ReactNode; title?: string }) {
+export function StatCard({
+  label,
+  value,
+  sub,
+  color = C.accent,
+  icon,
+  title,
+}: {
+  label: string;
+  value: ReactNode;
+  sub?: string;
+  color?: string;
+  icon?: ReactNode;
+  title?: string;
+}) {
   return (
-    <div className="lift stat-card" title={title} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: radius.lg, padding: "16px 18px 15px", boxShadow: shadow.sm, display: "flex", flexDirection: "column", gap: 10, minWidth: 0, height: "100%", boxSizing: "border-box" }}>
+    <div
+      className="lift stat-card"
+      title={title}
+      style={{
+        background: C.card,
+        border: `1px solid ${C.border}`,
+        borderRadius: radius.lg,
+        padding: "16px 18px 15px",
+        boxShadow: shadow.sm,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        minWidth: 0,
+        height: "100%",
+        boxSizing: "border-box",
+      }}
+    >
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-        <div style={{ ...sans, fontSize: 12.5, color: C.muted, fontWeight: 600, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}</div>
-        {icon && <div aria-hidden className="stat-icon" style={{ width: 34, height: 34, borderRadius: 10, background: `${color}14`, color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{icon}</div>}
+        <div
+          style={{
+            ...sans,
+            fontSize: 12.5,
+            color: C.muted,
+            fontWeight: 600,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {label}
+        </div>
+        {icon && (
+          <div
+            aria-hidden
+            className="stat-icon"
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              background: `${color}14`,
+              color,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            {icon}
+          </div>
+        )}
       </div>
-      <div className="tabular stat-value" style={{ ...font, fontSize: "clamp(24px, 2.2vw, 30px)", fontWeight: 700, color: C.text, lineHeight: 1.1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{value}</div>
-      <div className="stat-sub" style={{ ...sans, fontSize: 12, color: C.subtle, marginTop: "auto", minHeight: 16 }}>{sub ?? "\u00a0"}</div>
+      <div
+        className="tabular stat-value"
+        style={{
+          ...font,
+          fontSize: "clamp(24px, 2.2vw, 30px)",
+          fontWeight: 700,
+          color: C.text,
+          lineHeight: 1.1,
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {value}
+      </div>
+      <div className="stat-sub" style={{ ...sans, fontSize: 12, color: C.subtle, marginTop: "auto", minHeight: 16 }}>
+        {sub ?? "\u00a0"}
+      </div>
     </div>
   );
 }
 
 /** Griglia che passa da 1 colonna (telefono) a più colonne (desktop) senza media query. */
-export function Grid({ min = 320, gap = 14, children, style, fill = false }: { min?: number; gap?: number; children: ReactNode; style?: CSSProperties; fill?: boolean }) {
+export function Grid({
+  min = 320,
+  gap = 14,
+  children,
+  style,
+  fill = false,
+}: {
+  min?: number;
+  gap?: number;
+  children: ReactNode;
+  style?: CSSProperties;
+  fill?: boolean;
+}) {
   // fill: le colonne si allargano per occupare tutta la riga (auto-fit) e le schede hanno tutte la stessa altezza.
-  return <div className="auto-grid" style={{ display: "grid", gridTemplateColumns: `repeat(${fill ? "auto-fit" : "auto-fill"}, minmax(min(100%, ${min}px), 1fr))`, gap, alignItems: fill ? "stretch" : "start", ...style }}>{children}</div>;
+  return (
+    <div
+      className="auto-grid"
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${fill ? "auto-fit" : "auto-fill"}, minmax(min(100%, ${min}px), 1fr))`,
+        gap,
+        alignItems: fill ? "stretch" : "start",
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
 }
 
 /** Pulsante quadrato accanto alla ricerca nelle liste del telefono (Filtri, Nuovo): uguale in Task, Contratti e Fornitori. */
-export function HeadButton({ onClick, label, active, primary, disabled, children }: { onClick: () => void; label: string; active?: boolean; primary?: boolean; disabled?: boolean; children: ReactNode }) {
-  return <button className="mobile-only" onClick={onClick} disabled={disabled} aria-label={label} title={label} aria-expanded={primary ? undefined : !!active}
-    style={{ flexShrink: 0, background: primary ? C.accent : "#fff", border: primary ? "none" : `1px solid ${active ? C.accent : C.border}`, borderRadius: 10, width: 42, height: 42, display: "inline-flex", alignItems: "center", justifyContent: "center", color: primary ? "#fff" : active ? C.accent : C.muted, cursor: "pointer", padding: 0 }}>{children}</button>;
+export function HeadButton({
+  onClick,
+  label,
+  active,
+  primary,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  label: string;
+  active?: boolean;
+  primary?: boolean;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      className="mobile-only"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      aria-expanded={primary ? undefined : !!active}
+      style={{
+        flexShrink: 0,
+        background: primary ? C.accent : "#fff",
+        border: primary ? "none" : `1px solid ${active ? C.accent : C.border}`,
+        borderRadius: 10,
+        width: 42,
+        height: 42,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: primary ? "#fff" : active ? C.accent : C.muted,
+        cursor: "pointer",
+        padding: 0,
+      }}
+    >
+      {children}
+    </button>
+  );
 }
 
-export function Card({ children, style, onClick, ...rest }: { children: ReactNode; style?: CSSProperties; onClick?: () => void } & Omit<React.HTMLAttributes<HTMLDivElement>, "style" | "onClick">) {
+export function Card({
+  children,
+  style,
+  onClick,
+  ...rest
+}: { children: ReactNode; style?: CSSProperties; onClick?: () => void } & Omit<React.HTMLAttributes<HTMLDivElement>, "style" | "onClick">) {
   const inFold = useContext(FoldContext);
-  return <div onClick={onClick} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: radius.lg, padding: 18, boxShadow: shadow.sm, ...(inFold ? { background: "transparent", border: "none", boxShadow: "none", padding: "2px 2px 2px" } : {}), ...style }} {...rest}>{children}</div>;
+  return (
+    <div
+      onClick={onClick}
+      style={{
+        background: C.card,
+        border: `1px solid ${C.border}`,
+        borderRadius: radius.lg,
+        padding: 18,
+        boxShadow: shadow.sm,
+        ...(inFold ? { background: "transparent", border: "none", boxShadow: "none", padding: "2px 2px 2px" } : {}),
+        ...style,
+      }}
+      {...rest}
+    >
+      {children}
+    </div>
+  );
 }
 
 /** Quadrante di un passaggio (o sezione) che si apre e si chiude. Con `status` mostra se il passaggio è fatto, in corso o ancora da fare. */
-export function Fold({ id, title, badge, hint, summary, status, defaultOpen, children }: { id?: string; title: string; badge?: { label: string; color: string; bg: string } | null; hint?: string; summary?: string; status?: "done" | "current" | "todo"; defaultOpen: boolean; children: ReactNode }) {
+export function Fold({
+  id,
+  title,
+  badge,
+  hint,
+  summary,
+  status,
+  defaultOpen,
+  children,
+}: {
+  id?: string;
+  title: string;
+  badge?: { label: string; color: string; bg: string } | null;
+  hint?: string;
+  summary?: string;
+  status?: "done" | "current" | "todo";
+  defaultOpen: boolean;
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(defaultOpen);
   useEffect(() => {
     if (!id) return;
-    const h = (e: Event) => { if ((e as CustomEvent).detail === id) setOpen(true); };
+    const h = (e: Event) => {
+      if ((e as CustomEvent).detail === id) setOpen(true);
+    };
     window.addEventListener("fold-open", h);
     return () => window.removeEventListener("fold-open", h);
   }, [id]);
-  const tone = status === "done" ? { bar: C.green, head: "#f1faf5", badge: { label: t("Fatto"), color: C.green, bg: C.greenBg } }
-    : status === "current" ? { bar: C.accent, head: C.accentLight, badge: { label: t("Qui adesso"), color: C.accent, bg: "#fff" } }
-    : status === "todo" ? { bar: C.border, head: "#fff", badge: { label: t("Da fare"), color: C.muted, bg: C.grayBg } } : null;
+  const tone =
+    status === "done"
+      ? { bar: C.green, head: "#f1faf5", badge: { label: t("Fatto"), color: C.green, bg: C.greenBg } }
+      : status === "current"
+        ? { bar: C.accent, head: C.accentLight, badge: { label: t("Qui adesso"), color: C.accent, bg: "#fff" } }
+        : status === "todo"
+          ? { bar: C.border, head: "#fff", badge: { label: t("Da fare"), color: C.muted, bg: C.grayBg } }
+          : null;
   const b = badge ?? tone?.badge ?? null;
   return (
-    <section id={id} style={{ background: C.card, border: `1px solid ${status === "current" ? C.accent : C.border}`, borderLeft: `5px solid ${tone?.bar ?? C.border}`, borderRadius: radius.lg, boxShadow: status === "current" ? shadow.md : shadow.sm, scrollMarginTop: 130, overflow: "hidden" }}>
-      <button onClick={() => setOpen(o => !o)} aria-expanded={open} style={{ ...sans, display: "flex", alignItems: "center", gap: 10, width: "100%", minHeight: 40, padding: "4px 12px 4px 10px", background: tone?.head ?? "none", border: "none", cursor: "pointer", textAlign: "left", color: C.text }}>
-        {status && <span aria-hidden style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", width: 22, height: 22, borderRadius: "50%", flexShrink: 0, boxSizing: "border-box", background: status === "done" ? C.green : status === "current" ? C.accent : "#fff", border: `2px solid ${status === "done" ? C.green : status === "current" ? C.accent : C.border}` }}>
-          {status === "done" ? <Check size={12} color="#fff" /> : status === "current" ? <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#fff" }} /> : null}
-        </span>}
+    <section
+      id={id}
+      style={{
+        background: C.card,
+        border: `1px solid ${status === "current" ? C.accent : C.border}`,
+        borderLeft: `5px solid ${tone?.bar ?? C.border}`,
+        borderRadius: radius.lg,
+        boxShadow: status === "current" ? shadow.md : shadow.sm,
+        scrollMarginTop: 130,
+        overflow: "hidden",
+      }}
+    >
+      <button
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+        style={{
+          ...sans,
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          width: "100%",
+          minHeight: 40,
+          padding: "4px 12px 4px 10px",
+          background: tone?.head ?? "none",
+          border: "none",
+          cursor: "pointer",
+          textAlign: "left",
+          color: C.text,
+        }}
+      >
+        {status && (
+          <span
+            aria-hidden
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 22,
+              height: 22,
+              borderRadius: "50%",
+              flexShrink: 0,
+              boxSizing: "border-box",
+              background: status === "done" ? C.green : status === "current" ? C.accent : "#fff",
+              border: `2px solid ${status === "done" ? C.green : status === "current" ? C.accent : C.border}`,
+            }}
+          >
+            {status === "done" ? (
+              <Check size={12} color="#fff" />
+            ) : status === "current" ? (
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#fff" }} />
+            ) : null}
+          </span>
+        )}
         <span style={{ flex: 1, minWidth: 0, display: "flex", alignItems: "center", columnGap: 8, rowGap: 0, flexWrap: "wrap" }}>
           <span style={{ ...font, fontSize: 14.5, fontWeight: 650, opacity: status === "todo" ? 0.85 : 1 }}>{title}</span>
-          {b && <span style={{ fontSize: 11, fontWeight: 700, color: b.color, background: b.bg, border: status === "current" && !badge ? `1px solid ${C.accent}` : "none", borderRadius: 999, padding: "1px 8px", whiteSpace: "nowrap" }}>{b.label}</span>}
-          {(summary || hint) && <span className="one-line" style={{ flex: "1 1 120px", fontSize: 12, color: C.muted }}>{summary ?? hint}</span>}
+          {b && (
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                color: b.color,
+                background: b.bg,
+                border: status === "current" && !badge ? `1px solid ${C.accent}` : "none",
+                borderRadius: 999,
+                padding: "1px 8px",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {b.label}
+            </span>
+          )}
+          {(summary || hint) && (
+            <span className="one-line" style={{ flex: "1 1 120px", fontSize: 12, color: C.muted }}>
+              {summary ?? hint}
+            </span>
+          )}
         </span>
-        <ChevronDown size={18} color={C.subtle} style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s ease" }} />
+        <ChevronDown
+          size={18}
+          color={C.subtle}
+          style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform .15s ease" }}
+        />
       </button>
-      {open && <div style={{ padding: "6px 12px 8px", display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 6, borderTop: `1px solid ${C.borderLight}` }}><FoldContext.Provider value={true}>{children}</FoldContext.Provider></div>}
+      {open && (
+        <div
+          style={{
+            padding: "6px 12px 8px",
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr)",
+            gap: 6,
+            borderTop: `1px solid ${C.borderLight}`,
+          }}
+        >
+          <FoldContext.Provider value={true}>{children}</FoldContext.Provider>
+        </div>
+      )}
     </section>
   );
 }
@@ -101,19 +456,42 @@ export function CardTitle({ children, icon, action }: { children: ReactNode; ico
   if (inFold) return action ? <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 10 }}>{action}</div> : null;
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-      {icon && <span aria-hidden style={{ color: C.subtle, display: "flex" }}>{icon}</span>}
+      {icon && (
+        <span aria-hidden style={{ color: C.subtle, display: "flex" }}>
+          {icon}
+        </span>
+      )}
       <h3 style={{ ...font, margin: 0, fontSize: 15, fontWeight: 650, color: C.text, flex: 1 }}>{children}</h3>
       {action}
     </div>
   );
 }
 
-export function Field({ label, children, req, error, htmlFor }: { label: string; children: ReactNode; req?: boolean; error?: string; htmlFor?: string }) {
+export function Field({
+  label,
+  children,
+  req,
+  error,
+  htmlFor,
+}: {
+  label: string;
+  children: ReactNode;
+  req?: boolean;
+  error?: string;
+  htmlFor?: string;
+}) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <label htmlFor={htmlFor} style={{ ...sans, display: "block", fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 6 }}>{label}{req && <span style={{ color: C.red }}> *</span>}</label>
+      <label htmlFor={htmlFor} style={{ ...sans, display: "block", fontSize: 12, color: C.muted, fontWeight: 600, marginBottom: 6 }}>
+        {label}
+        {req && <span style={{ color: C.red }}> *</span>}
+      </label>
       {children}
-      {error && <div role="alert" style={{ ...sans, fontSize: 12, color: C.red, marginTop: 5 }}>{error}</div>}
+      {error && (
+        <div role="alert" style={{ ...sans, fontSize: 12, color: C.red, marginTop: 5 }}>
+          {error}
+        </div>
+      )}
     </div>
   );
 }
@@ -128,10 +506,25 @@ export function AuditTrail({ entries }: { entries: { ts: string; user: string; a
         <div style={{ position: "absolute", left: 4, top: 6, bottom: 6, width: 2, background: C.borderLight, borderRadius: 2 }} />
         {[...entries].reverse().map((log, i) => (
           <div key={i} style={{ position: "relative", padding: "0 0 14px" }}>
-            <div style={{ position: "absolute", left: -18, top: 5, width: 10, height: 10, borderRadius: "50%", background: i === 0 ? C.accent : "#fff", border: `2px solid ${i === 0 ? C.accent : "#cfd4e0"}` }} />
+            <div
+              style={{
+                position: "absolute",
+                left: -18,
+                top: 5,
+                width: 10,
+                height: 10,
+                borderRadius: "50%",
+                background: i === 0 ? C.accent : "#fff",
+                border: `2px solid ${i === 0 ? C.accent : "#cfd4e0"}`,
+              }}
+            />
             <div style={{ ...sans, fontSize: 13, fontWeight: 600, color: C.text }}>{log.action}</div>
-            {log.detail && <div style={{ ...sans, fontSize: 12, color: C.muted, marginTop: 1, overflowWrap: "anywhere" }}>{log.detail}</div>}
-            <div style={{ ...sans, fontSize: 11, color: C.subtle, marginTop: 2 }}>{log.user} · {log.ts}</div>
+            {log.detail && (
+              <div style={{ ...sans, fontSize: 12, color: C.muted, marginTop: 1, overflowWrap: "anywhere" }}>{log.detail}</div>
+            )}
+            <div style={{ ...sans, fontSize: 11, color: C.subtle, marginTop: 2 }}>
+              {log.user} · {log.ts}
+            </div>
           </div>
         ))}
       </div>
@@ -143,7 +536,22 @@ export function AuditTrail({ entries }: { entries: { ts: string; user: string; a
 export function EmptyState({ title, text, action, icon }: { title: string; text?: string; action?: ReactNode; icon?: ReactNode }) {
   return (
     <div style={{ textAlign: "center", padding: "44px 20px", background: C.card, border: `1px dashed #cfd4e0`, borderRadius: radius.lg }}>
-      <div aria-hidden style={{ width: 56, height: 56, borderRadius: 18, background: C.blueBg, color: C.blue, display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>{icon ?? <Inbox size={26} />}</div>
+      <div
+        aria-hidden
+        style={{
+          width: 56,
+          height: 56,
+          borderRadius: 18,
+          background: C.blueBg,
+          color: C.blue,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          marginBottom: 14,
+        }}
+      >
+        {icon ?? <Inbox size={26} />}
+      </div>
       <div style={{ ...font, fontSize: 16, fontWeight: 650, color: C.text }}>{title}</div>
       {text && <div style={{ ...sans, fontSize: 13, color: C.muted, margin: "6px auto 0", maxWidth: 420, lineHeight: 1.55 }}>{text}</div>}
       {action && <div style={{ marginTop: 18 }}>{action}</div>}
@@ -154,7 +562,13 @@ export function EmptyState({ title, text, action, icon }: { title: string; text?
 /** Logo dell'applicazione (lo stesso della favicon). */
 export function BrandMark({ size = 40 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden style={{ flexShrink: 0, filter: "drop-shadow(0 4px 10px rgba(200,82,42,.35))" }}>
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      aria-hidden
+      style={{ flexShrink: 0, filter: "drop-shadow(0 4px 10px rgba(200,82,42,.35))" }}
+    >
       <rect width="64" height="64" rx="15" fill="#c8522a" />
       <path d="M20 14h17l9 9v27a3 3 0 0 1-3 3H20a3 3 0 0 1-3-3V17a3 3 0 0 1 3-3z" fill="#fff" />
       <path d="M37 14v9h9" fill="#f3c9ba" />
@@ -163,7 +577,15 @@ export function BrandMark({ size = 40 }: { size?: number }) {
   );
 }
 
-const STEP_ICONS = { analysis: BarChart3, bo_notify: Mail, bo_response: ClipboardCheck, action: Target, negotiation: Handshake, signature: PenLine, expiry: Flag } as const;
+const STEP_ICONS = {
+  analysis: BarChart3,
+  bo_notify: Mail,
+  bo_response: ClipboardCheck,
+  action: Target,
+  negotiation: Handshake,
+  signature: PenLine,
+  expiry: Flag,
+} as const;
 /** Icona di un passaggio del piano di rinnovo. */
 export function StepIcon({ id, size = 16 }: { id: string; size?: number }) {
   const I = STEP_ICONS[id as keyof typeof STEP_ICONS] ?? Flag;

@@ -13,28 +13,84 @@ export function BoMessages({ contractId, isBo }: { contractId: number; isBo: boo
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { let off = false; portalApi.boMessages(contractId).then(x => { if (!off) setMsgs(x); }).catch(() => { if (!off) setMsgs([]); }); return () => { off = true; }; }, [contractId]);
+  useEffect(() => {
+    let off = false;
+    portalApi
+      .boMessages(contractId)
+      .then(x => {
+        if (!off) setMsgs(x);
+      })
+      .catch(() => {
+        if (!off) setMsgs([]);
+      });
+    return () => {
+      off = true;
+    };
+  }, [contractId]);
   const send = useCallback(async () => {
-    setBusy(true); setErr(null);
-    try { setMsgs(await portalApi.sendBoMessage(contractId, text)); setText(""); } catch (e) { setErr(e instanceof Error ? e.message : t("Invio non riuscito")); }
+    setBusy(true);
+    setErr(null);
+    try {
+      setMsgs(await portalApi.sendBoMessage(contractId, text));
+      setText("");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : t("Invio non riuscito"));
+    }
     setBusy(false);
   }, [contractId, text]);
   if (!msgs) return null;
   return (
     <Card>
-      <div style={{ ...sans, display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 650, marginBottom: 10 }}><MessageSquare size={16} />{isBo ? t("Scrivi al buyer") : t("Messaggi con il Business Owner")}</div>
+      <div style={{ ...sans, display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 650, marginBottom: 10 }}>
+        <MessageSquare size={16} />
+        {isBo ? t("Scrivi al buyer") : t("Messaggi con il Business Owner")}
+      </div>
       {err && <Notice kind="error">{err}</Notice>}
-      {msgs.length === 0 && <div style={{ ...sans, fontSize: 13, color: C.subtle, marginBottom: 8 }}>{isBo ? t("Hai dubbi prima di decidere? Scrivi qui: il buyer riceve un'email.") : t("Nessun messaggio. Il Business Owner può scriverti da qui; puoi scrivergli anche tu.")}</div>}
+      {msgs.length === 0 && (
+        <div style={{ ...sans, fontSize: 13, color: C.subtle, marginBottom: 8 }}>
+          {isBo
+            ? t("Hai dubbi prima di decidere? Scrivi qui: il buyer riceve un'email.")
+            : t("Nessun messaggio. Il Business Owner può scriverti da qui; puoi scrivergli anche tu.")}
+        </div>
+      )}
       <div style={{ display: "grid", gap: 8, marginBottom: 10 }}>
         {msgs.map(m => (
-          <div key={m.id} style={{ ...sans, background: m.fromMe ? C.accentLight : C.bg, borderRadius: 12, padding: "9px 12px", fontSize: 13, marginLeft: m.fromMe ? 28 : 0, marginRight: m.fromMe ? 0 : 28 }}>
-            <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 2 }}><b>{m.fromMe ? t("Tu") : m.authorName}</b> · {new Date(m.createdAt).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" })}</div>
+          <div
+            key={m.id}
+            style={{
+              ...sans,
+              background: m.fromMe ? C.accentLight : C.bg,
+              borderRadius: 12,
+              padding: "9px 12px",
+              fontSize: 13,
+              marginLeft: m.fromMe ? 28 : 0,
+              marginRight: m.fromMe ? 0 : 28,
+            }}
+          >
+            <div style={{ fontSize: 11.5, color: C.muted, marginBottom: 2 }}>
+              <b>{m.fromMe ? t("Tu") : m.authorName}</b> ·{" "}
+              {new Date(m.createdAt).toLocaleString(locale(), { dateStyle: "short", timeStyle: "short" })}
+            </div>
             <div style={{ whiteSpace: "pre-wrap" }}>{m.body}</div>
           </div>
         ))}
       </div>
-      <textarea value={text} onChange={e => setText(e.target.value)} rows={2} placeholder={isBo ? t("Il tuo messaggio per il buyer") : t("Il tuo messaggio per il Business Owner")} aria-label={t("Messaggio")} style={{ ...iStyle, resize: "vertical", marginBottom: 8 }} />
-      <button onClick={send} disabled={busy || text.trim().length < 2} style={{ ...btnPrimary, padding: "8px 16px", display: "inline-flex", alignItems: "center", gap: 6 }}>{busy && <Loader2 className="spin" size={14} />}{t("Invia")}</button>
+      <textarea
+        value={text}
+        onChange={e => setText(e.target.value)}
+        rows={2}
+        placeholder={isBo ? t("Il tuo messaggio per il buyer") : t("Il tuo messaggio per il Business Owner")}
+        aria-label={t("Messaggio")}
+        style={{ ...iStyle, resize: "vertical", marginBottom: 8 }}
+      />
+      <button
+        onClick={send}
+        disabled={busy || text.trim().length < 2}
+        style={{ ...btnPrimary, padding: "8px 16px", display: "inline-flex", alignItems: "center", gap: 6 }}
+      >
+        {busy && <Loader2 className="spin" size={14} />}
+        {t("Invia")}
+      </button>
     </Card>
   );
 }

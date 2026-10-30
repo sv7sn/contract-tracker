@@ -1,51 +1,183 @@
 import assert from "node:assert/strict";
 const B = process.env.API_BUILD + "/api/";
 process.env.DATABASE_URL = process.env.TEST_DB_URL;
-process.env.ADMIN_EMAIL = "admin@test.it"; process.env.ADMIN_PASSWORD = "Admin-pass-123!"; process.env.SESSION_SECRET = "x".repeat(40);
-const portal = await import(B + "portal.js"), login = await import(B + "login.js"), users = await import(B + "users.js"), state = await import(B + "state.js"), db = await import(B + "_db.js"), plan = await import(B + "_plan-rules.js");
-await db.ensureSchema(); const pool = db.getPool();
-let passed = 0; const ok = n => { passed++; console.log("  ✓", n); };
-const call = async (mod, cookie, method, qs, body) => { const r = new Request("https://a/x" + qs, { method, headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) }); const res = await mod[method](r); let data; try { data = await res.clone().json(); } catch { data = null; } return { status: res.status, data, cookie: res.headers.get("set-cookie")?.split(";")[0] }; };
+process.env.ADMIN_EMAIL = "admin@test.it";
+process.env.ADMIN_PASSWORD = "Admin-pass-123!";
+process.env.SESSION_SECRET = "x".repeat(40);
+const portal = await import(B + "portal.js"),
+  login = await import(B + "login.js"),
+  users = await import(B + "users.js"),
+  state = await import(B + "state.js"),
+  db = await import(B + "_db.js"),
+  plan = await import(B + "_plan-rules.js");
+await db.ensureSchema();
+const pool = db.getPool();
+let passed = 0;
+const ok = n => {
+  passed++;
+  console.log("  ✓", n);
+};
+const call = async (mod, cookie, method, qs, body) => {
+  const r = new Request("https://a/x" + qs, {
+    method,
+    headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}) },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const res = await mod[method](r);
+  let data;
+  try {
+    data = await res.clone().json();
+  } catch {
+    data = null;
+  }
+  return { status: res.status, data, cookie: res.headers.get("set-cookie")?.split(";")[0] };
+};
 const P = (c, m, op, body, extra = "") => call(portal, c, m, `?op=${op}${extra}`, body);
 const lg = async (e, p) => (await call(login, null, "POST", "", { email: e, password: p })).cookie;
 const admin = await lg("admin@test.it", "Admin-pass-123!");
-const mk = async (email, name, role) => (await call(users, admin, "POST", "", { email, name, role, password: "Pass-12345-xx!" })).data.user.id;
-const b1 = await mk("b1@t.it", "Buyer Uno", "buyer"), b2 = await mk("b2@t.it", "Buyer Due", "buyer"); await mk("bo@t.it", "Mario Rossi", "bo");
-const c1 = await lg("b1@t.it", "Pass-12345-xx!"), c2 = await lg("b2@t.it", "Pass-12345-xx!");
+const mk = async (email, name, role) =>
+  (await call(users, admin, "POST", "", { email, name, role, password: "Pass-12345-xx!" })).data.user.id;
+const b1 = await mk("b1@t.it", "Buyer Uno", "buyer"),
+  b2 = await mk("b2@t.it", "Buyer Due", "buyer");
+await mk("bo@t.it", "Mario Rossi", "bo");
+const c1 = await lg("b1@t.it", "Pass-12345-xx!"),
+  c2 = await lg("b2@t.it", "Pass-12345-xx!");
 const day = n => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
-const task = (await pool.query("insert into tasks (source, kind, title, assignee_id, meta, created_by) values ('manual','purchase','Acquisto di Uno',$1,'{\"value\":500}','x') returning id", [b1])).rows[0].id;
-const cid = (await pool.query("insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, owner_id, bo_email, renewal, type, notes) values ('Alfa Srl','Servizio','x','IT',1000,'EUR','2025-01-01',$1,'Buyer Uno',$2,'bo@t.it','Non definito','Servizi','') returning id", [day(200), b1])).rows[0].id;
+const task = (
+  await pool.query(
+    "insert into tasks (source, kind, title, assignee_id, meta, created_by) values ('manual','purchase','Acquisto di Uno',$1,'{\"value\":500}','x') returning id",
+    [b1],
+  )
+).rows[0].id;
+const cid = (
+  await pool.query(
+    "insert into contracts (supplier, object, category, country, value, currency, start_date, end_date, owner, owner_id, bo_email, renewal, type, notes) values ('Alfa Srl','Servizio','x','IT',1000,'EUR','2025-01-01',$1,'Buyer Uno',$2,'bo@t.it','Non definito','Servizi','') returning id",
+    [day(200), b1],
+  )
+).rows[0].id;
 await db.replacePlan(pool, cid, plan.makePlan(cid, day(200)));
 
 console.log("Assenze e sostituti");
-assert.equal((await P(c2, "GET", "tasks")).data.tasks.length, 0); assert.equal((await call(state, c2, "GET", "")).data.contracts.length, 0); ok("senza assenza il collega non vede le pratiche di Uno");
-let r = await P(c1, "POST", "cover-add", { substituteId: b2, from: day(-1), to: day(5) }); assert.equal(r.status, 200, JSON.stringify(r.data)); assert.equal(r.data.entries.length, 1); assert.equal(r.data.entries[0].active, true);
-assert.equal((await P(c1, "POST", "cover-add", { substituteId: b2, from: day(3), to: day(9) })).status, 409); assert.equal((await P(c1, "POST", "cover-add", { substituteId: b1, from: day(20), to: day(25) })).status, 400); assert.equal((await P(c1, "POST", "cover-add", { substituteId: b2, from: day(9), to: day(3) })).status, 400); assert.equal((await P(c1, "POST", "cover-add", { substituteId: b2, from: day(-9), to: day(-3) })).status, 400); ok("assenza registrata; sovrapposizioni, sostituto uguale e date sbagliate rifiutati");
-assert.equal((await P(c2, "GET", "tasks")).data.tasks.length, 1); assert.equal((await call(state, c2, "GET", "")).data.contracts.length, 1); ok("il sostituto vede task e contratti dell'assente");
-r = await P(c2, "POST", "bo-notice-send", {}, `&id=${cid}`); assert.equal(r.status, 200, JSON.stringify(r.data)); assert.equal((await P(c2, "GET", "my-work")).status, 200); ok("e può agire: invia l'avviso al Business Owner");
-const me = (await call((await import(B + "me.js")), c2, "GET", "")).data.user; assert.deepEqual(me.acting.covering.map(x => x.name), ["Buyer Uno"]); ok("la sessione del sostituto dice chi sta sostituendo");
-const sup = (await pool.query("insert into suppliers (email, name, status, reference_buyer_id, industry_code, company_codes, lifecycle) values ('f@x.it','Fornitore X','registered',$1,'I1',$2,'active') returning id", [b1, []]).catch(async () => { await pool.query("insert into industry_codes (code, name) values ('I1','Ind') on conflict do nothing"); return pool.query("insert into suppliers (email, name, status, reference_buyer_id, industry_code, company_codes, lifecycle) values ('f@x.it','Fornitore X','registered',$1,'I1',$2,'active') returning id", [b1, []]); })).rows[0].id;
-assert((await P(c2, "GET", "vendors")).data.vendors.some(v => v.id === sup)); ok("anche i fornitori dell'assente");
+assert.equal((await P(c2, "GET", "tasks")).data.tasks.length, 0);
+assert.equal((await call(state, c2, "GET", "")).data.contracts.length, 0);
+ok("senza assenza il collega non vede le pratiche di Uno");
+let r = await P(c1, "POST", "cover-add", { substituteId: b2, from: day(-1), to: day(5) });
+assert.equal(r.status, 200, JSON.stringify(r.data));
+assert.equal(r.data.entries.length, 1);
+assert.equal(r.data.entries[0].active, true);
+assert.equal((await P(c1, "POST", "cover-add", { substituteId: b2, from: day(3), to: day(9) })).status, 409);
+assert.equal((await P(c1, "POST", "cover-add", { substituteId: b1, from: day(20), to: day(25) })).status, 400);
+assert.equal((await P(c1, "POST", "cover-add", { substituteId: b2, from: day(9), to: day(3) })).status, 400);
+assert.equal((await P(c1, "POST", "cover-add", { substituteId: b2, from: day(-9), to: day(-3) })).status, 400);
+ok("assenza registrata; sovrapposizioni, sostituto uguale e date sbagliate rifiutati");
+assert.equal((await P(c2, "GET", "tasks")).data.tasks.length, 1);
+assert.equal((await call(state, c2, "GET", "")).data.contracts.length, 1);
+ok("il sostituto vede task e contratti dell'assente");
+r = await P(c2, "POST", "bo-notice-send", {}, `&id=${cid}`);
+assert.equal(r.status, 200, JSON.stringify(r.data));
+assert.equal((await P(c2, "GET", "my-work")).status, 200);
+ok("e può agire: invia l'avviso al Business Owner");
+const me = (await call(await import(B + "me.js"), c2, "GET", "")).data.user;
+assert.deepEqual(
+  me.acting.covering.map(x => x.name),
+  ["Buyer Uno"],
+);
+ok("la sessione del sostituto dice chi sta sostituendo");
+const sup = (
+  await pool
+    .query(
+      "insert into suppliers (email, name, status, reference_buyer_id, industry_code, company_codes, lifecycle) values ('f@x.it','Fornitore X','registered',$1,'I1',$2,'active') returning id",
+      [b1, []],
+    )
+    .catch(async () => {
+      await pool.query("insert into industry_codes (code, name) values ('I1','Ind') on conflict do nothing");
+      return pool.query(
+        "insert into suppliers (email, name, status, reference_buyer_id, industry_code, company_codes, lifecycle) values ('f@x.it','Fornitore X','registered',$1,'I1',$2,'active') returning id",
+        [b1, []],
+      );
+    })
+).rows[0].id;
+assert((await P(c2, "GET", "vendors")).data.vendors.some(v => v.id === sup));
+ok("anche i fornitori dell'assente");
 const cov = (await P(c1, "GET", "cover")).data.entries[0];
-assert.equal((await P(c2, "DELETE", "cover", undefined, `&id=${cov.id}`)).status, 404); assert.equal((await P(c1, "DELETE", "cover", undefined, `&id=${cov.id}`)).status, 200); assert.equal((await P(c2, "GET", "tasks")).data.tasks.length, 0); ok("solo l'assente (o il Manager) toglie l'assenza; poi il sostituto non vede più nulla");
-r = await P(admin, "POST", "cover-add", { userId: b1, substituteId: b2, from: day(-10), to: day(-5) }); assert.equal(r.status, 400); r = await P(admin, "POST", "cover-add", { userId: b1, substituteId: b2, from: day(1), to: day(7) }); assert.equal(r.status, 200); assert.equal((await P(c2, "GET", "tasks")).data.tasks.length, 0); await pool.query("update buyer_cover set from_date = current_date - 1"); assert.equal((await P(c2, "GET", "tasks")).data.tasks.length, 1); await pool.query("update buyer_cover set from_date = current_date - 8, to_date = current_date - 1"); assert.equal((await P(c2, "GET", "tasks")).data.tasks.length, 0); ok("il Manager la registra per un altro; vale solo nel periodo (prima e dopo no)");
+assert.equal((await P(c2, "DELETE", "cover", undefined, `&id=${cov.id}`)).status, 404);
+assert.equal((await P(c1, "DELETE", "cover", undefined, `&id=${cov.id}`)).status, 200);
+assert.equal((await P(c2, "GET", "tasks")).data.tasks.length, 0);
+ok("solo l'assente (o il Manager) toglie l'assenza; poi il sostituto non vede più nulla");
+r = await P(admin, "POST", "cover-add", { userId: b1, substituteId: b2, from: day(-10), to: day(-5) });
+assert.equal(r.status, 400);
+r = await P(admin, "POST", "cover-add", { userId: b1, substituteId: b2, from: day(1), to: day(7) });
+assert.equal(r.status, 200);
+assert.equal((await P(c2, "GET", "tasks")).data.tasks.length, 0);
+await pool.query("update buyer_cover set from_date = current_date - 1");
+assert.equal((await P(c2, "GET", "tasks")).data.tasks.length, 1);
+await pool.query("update buyer_cover set from_date = current_date - 8, to_date = current_date - 1");
+assert.equal((await P(c2, "GET", "tasks")).data.tasks.length, 0);
+ok("il Manager la registra per un altro; vale solo nel periodo (prima e dopo no)");
 await pool.query("delete from buyer_cover");
 
 console.log("Categorie del buyer");
 const cat = async name => (await P(admin, "POST", "category-save", { name })).data.categories.find(c => c.name === name).id;
-const it = await cat("IT"), fac = await cat("Facility");
-for (const [g, d, c] of [["G-IT", "Software", it], ["G-FAC", "Pulizie", fac]]) await P(admin, "POST", "category-map", { kind: "sap", key: g, categoryId: c });
-await pool.query("insert into po_lines (po, item, doc_date, supplier_code, supplier_name, value, matl_group, matl_group_desc) values ('P1','10', current_date - 5,'S1','Soft Srl', 8000,'G-IT','Software'), ('P2','10', current_date - 4,'S2','Pulito Srl', 3000,'G-FAC','Pulizie'), ('P3','10', current_date - 3,'S3','Vari Srl', 500,'G-X','Altro')");
-const vid = (await pool.query("insert into mp_versions (year, version, label) values (extract(year from now()), 1, 'MP') returning id")).rows[0].id;
-await pool.query("insert into mp_lines (version_id, io, description, category, amount) values ($1,'IO-IT','Licenze','SOFTWARE',10000), ($1,'IO-FAC','Pulizie','FACILITY',5000), ($1,'IO-X','Altro','',100)", [vid]);
-await P(admin, "POST", "category-map", { kind: "mp", key: "SOFTWARE", categoryId: it }); await P(admin, "POST", "category-map", { kind: "mp", key: "FACILITY", categoryId: fac });
-let sp = (await P(c1, "GET", "spend")).data; assert.equal(sp.total, 11500); ok("senza categorie assegnate il buyer vede tutta la spesa");
-let cv = (await P(admin, "GET", "categories")).data; assert.deepEqual(cv.unscoped.sort(), ["Buyer Due", "Buyer Uno"]);
-r = await P(admin, "POST", "category-buyers", { categoryId: it, userIds: [b1] }); assert.equal(r.status, 200); assert.deepEqual(r.data.unscoped, ["Buyer Due"]); assert.equal((await P(c1, "POST", "category-buyers", { categoryId: it, userIds: [b1] })).status, 403); assert.equal((await P(admin, "POST", "category-buyers", { categoryId: it, userIds: [999] })).status, 400); ok("il Manager assegna le categorie ai buyer; chi non ne ha è segnalato");
-sp = (await P(c1, "GET", "spend")).data; assert.equal(sp.total, 8000); assert.deepEqual(sp.byCategory.map(c => c.label), ["IT"]); assert.equal(sp.unclassified.value, 0); assert.deepEqual(sp.bySupplier.map(s => s.code), ["S1"]); ok("spesa limitata alla sua categoria, senza la spesa non classificata");
-assert.equal((await P(c1, "GET", "spend-lines", undefined, `&year=${new Date().getFullYear()}&supplier=S2`)).data.length, 0); assert.equal((await P(c1, "GET", "spend-lines", undefined, `&year=${new Date().getFullYear()}&supplier=S1`)).data.length, 1); ok("anche il dettaglio per fornitore");
-let bv = (await P(c1, "GET", "budget")).data; assert.deepEqual(bv.lines.map(l => l.io), ["IO-IT"]); assert.deepEqual(bv.unassigned, []); assert.equal((await P(c1, "GET", "budget-io", undefined, `&io=IO-FAC`)).data.line, null); assert.equal((await P(c1, "GET", "budget-io", undefined, `&io=IO-IT`)).data.line.io, "IO-IT"); ok("Master Plan limitato alle sue righe; fuori perimetro nemmeno il dettaglio");
-assert.equal((await P(c2, "GET", "spend")).data.total, 11500); assert.equal((await P(admin, "GET", "spend")).data.total, 11500); ok("Buyer Due (senza categorie) e Manager vedono tutto");
+const it = await cat("IT"),
+  fac = await cat("Facility");
+for (const [g, d, c] of [
+  ["G-IT", "Software", it],
+  ["G-FAC", "Pulizie", fac],
+])
+  await P(admin, "POST", "category-map", { kind: "sap", key: g, categoryId: c });
+await pool.query(
+  "insert into po_lines (po, item, doc_date, supplier_code, supplier_name, value, matl_group, matl_group_desc) values ('P1','10', current_date - 5,'S1','Soft Srl', 8000,'G-IT','Software'), ('P2','10', current_date - 4,'S2','Pulito Srl', 3000,'G-FAC','Pulizie'), ('P3','10', current_date - 3,'S3','Vari Srl', 500,'G-X','Altro')",
+);
+const vid = (await pool.query("insert into mp_versions (year, version, label) values (extract(year from now()), 1, 'MP') returning id"))
+  .rows[0].id;
+await pool.query(
+  "insert into mp_lines (version_id, io, description, category, amount) values ($1,'IO-IT','Licenze','SOFTWARE',10000), ($1,'IO-FAC','Pulizie','FACILITY',5000), ($1,'IO-X','Altro','',100)",
+  [vid],
+);
+await P(admin, "POST", "category-map", { kind: "mp", key: "SOFTWARE", categoryId: it });
+await P(admin, "POST", "category-map", { kind: "mp", key: "FACILITY", categoryId: fac });
+let sp = (await P(c1, "GET", "spend")).data;
+assert.equal(sp.total, 11500);
+ok("senza categorie assegnate il buyer vede tutta la spesa");
+let cv = (await P(admin, "GET", "categories")).data;
+assert.deepEqual(cv.unscoped.sort(), ["Buyer Due", "Buyer Uno"]);
+r = await P(admin, "POST", "category-buyers", { categoryId: it, userIds: [b1] });
+assert.equal(r.status, 200);
+assert.deepEqual(r.data.unscoped, ["Buyer Due"]);
+assert.equal((await P(c1, "POST", "category-buyers", { categoryId: it, userIds: [b1] })).status, 403);
+assert.equal((await P(admin, "POST", "category-buyers", { categoryId: it, userIds: [999] })).status, 400);
+ok("il Manager assegna le categorie ai buyer; chi non ne ha è segnalato");
+sp = (await P(c1, "GET", "spend")).data;
+assert.equal(sp.total, 8000);
+assert.deepEqual(
+  sp.byCategory.map(c => c.label),
+  ["IT"],
+);
+assert.equal(sp.unclassified.value, 0);
+assert.deepEqual(
+  sp.bySupplier.map(s => s.code),
+  ["S1"],
+);
+ok("spesa limitata alla sua categoria, senza la spesa non classificata");
+assert.equal((await P(c1, "GET", "spend-lines", undefined, `&year=${new Date().getFullYear()}&supplier=S2`)).data.length, 0);
+assert.equal((await P(c1, "GET", "spend-lines", undefined, `&year=${new Date().getFullYear()}&supplier=S1`)).data.length, 1);
+ok("anche il dettaglio per fornitore");
+let bv = (await P(c1, "GET", "budget")).data;
+assert.deepEqual(
+  bv.lines.map(l => l.io),
+  ["IO-IT"],
+);
+assert.deepEqual(bv.unassigned, []);
+assert.equal((await P(c1, "GET", "budget-io", undefined, `&io=IO-FAC`)).data.line, null);
+assert.equal((await P(c1, "GET", "budget-io", undefined, `&io=IO-IT`)).data.line.io, "IO-IT");
+ok("Master Plan limitato alle sue righe; fuori perimetro nemmeno il dettaglio");
+assert.equal((await P(c2, "GET", "spend")).data.total, 11500);
+assert.equal((await P(admin, "GET", "spend")).data.total, 11500);
+ok("Buyer Due (senza categorie) e Manager vedono tutto");
 await P(admin, "POST", "category-buyers", { categoryId: fac, userIds: [b2] });
-assert.equal((await P(c2, "GET", "spend")).data.total, 3000); await P(admin, "POST", "cover-add", { userId: b1, substituteId: b2, from: day(-1), to: day(3) }); assert.equal((await P(c2, "GET", "spend")).data.total, 11000); ok("il sostituto vede le categorie dell'assente oltre alle sue");
-console.log(`\n${passed} controlli superati`); process.exit(0);
+assert.equal((await P(c2, "GET", "spend")).data.total, 3000);
+await P(admin, "POST", "cover-add", { userId: b1, substituteId: b2, from: day(-1), to: day(3) });
+assert.equal((await P(c2, "GET", "spend")).data.total, 11000);
+ok("il sostituto vede le categorie dell'assente oltre alle sue");
+console.log(`\n${passed} controlli superati`);
+process.exit(0);

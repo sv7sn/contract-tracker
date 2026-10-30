@@ -6,6 +6,11 @@ import { getPool } from "./_db.js";
 export async function categoryScope(user: User): Promise<Set<string> | null> {
   if (user.role !== "buyer") return null;
   const ids = user.acting?.ids ?? [user.id];
-  const rows = (await getPool().query("select distinct c.name from category_buyers b join categories c on c.id = b.category_id where b.user_id = any($1)", [ids])).rows;
+  const rows = (
+    await getPool().query(
+      "select distinct c.name from category_buyers b join categories c on c.id = b.category_id where b.user_id = any($1)",
+      [ids],
+    )
+  ).rows;
   return rows.length ? new Set(rows.map(r => r.name as string)) : null;
 }

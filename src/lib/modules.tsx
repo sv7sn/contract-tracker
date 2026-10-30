@@ -4,7 +4,11 @@ import { Inbox, PiggyBank, Wallet, Building2, ClipboardCheck, FileText, Scale, B
 import { t } from "../i18n/index.ts";
 
 /** Una voce della navigazione: una pagina sola, uguale nella barra laterale (PC) e nella barra in basso (telefono). */
-export interface NavTab { key: View; label: string; icon: (size: number) => ReactNode }
+export interface NavTab {
+  key: View;
+  label: string;
+  icon: (size: number) => ReactNode;
+}
 
 /**
  * Voci per ruolo. Al massimo cinque, così sul telefono stanno tutte nella barra fissa in basso.
@@ -19,22 +23,43 @@ export function navTabsFor(user: User, apiMode: boolean): NavTab[] {
   const budget = tab("budget", t("Budget"), s => <PiggyBank size={s} />);
   const spend = tab("spend", t("Spesa"), s => <Wallet size={s} />);
   switch (user.role) {
-    case "manager": case "buyer": return [tasks, contracts, vendors, budget, spend];
-    case "finance": return [vendors, budget, spend];
-    case "viewer": return [contracts, budget, spend];
-    case "bo": return [tab("bo", t("Richieste"), s => <ClipboardCheck size={s} />), tab("requests", t("Le mie RDA"), s => <Inbox size={s} />), contracts, tab("reviews", t("Revisioni"), s => <Scale size={s} />)];
-    case "legal": case "compliance": case "itsec": return [tab("reviews", t("Revisioni"), s => <Scale size={s} />), tab("clauses", t("Clausole"), s => <BookOpen size={s} />)];
-    default: return [];
+    case "manager":
+    case "buyer":
+      return [tasks, contracts, vendors, budget, spend];
+    case "finance":
+      return [vendors, budget, spend];
+    case "viewer":
+      return [contracts, budget, spend];
+    case "bo":
+      return [
+        tab("bo", t("Richieste"), s => <ClipboardCheck size={s} />),
+        tab("requests", t("Le mie RDA"), s => <Inbox size={s} />),
+        contracts,
+        tab("reviews", t("Revisioni"), s => <Scale size={s} />),
+      ];
+    case "legal":
+    case "compliance":
+    case "itsec":
+      return [tab("reviews", t("Revisioni"), s => <Scale size={s} />), tab("clauses", t("Clausole"), s => <BookOpen size={s} />)];
+    default:
+      return [];
   }
 }
 
 /** Voce della navigazione da evidenziare per una pagina (le pagine "interne" ricadono sulla voce da cui si aprono). */
 export function tabOfView(v: View, role: string): View | null {
   switch (v) {
-    case "detail": return "list";
-    case "clauses": return role === "legal" || role === "compliance" || role === "itsec" ? "clauses" : "list";
-    case "expiries": return "vendors";
-    case "kpi": case "config": case "users": return null;
-    default: return v;
+    case "detail":
+      return "list";
+    case "clauses":
+      return role === "legal" || role === "compliance" || role === "itsec" ? "clauses" : "list";
+    case "expiries":
+      return "vendors";
+    case "kpi":
+    case "config":
+    case "users":
+      return null;
+    default:
+      return v;
   }
 }
