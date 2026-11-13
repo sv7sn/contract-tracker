@@ -205,6 +205,10 @@ const tokenReq = await P(sup, "POST", "supplier-upload-token", {
 });
 assert.equal(tokenReq.status, 200);
 ok("token upload fornitore");
+const kindVercel = await P(sup, "POST", "supplier-upload-token", { type: "storage.kind" });
+assert.equal(kindVercel.status, 200);
+assert.equal(kindVercel.data.provider, "vercel");
+ok("archivio predefinito: Vercel Blob");
 assert.equal((await P(sup, "POST", "supplier-upload-token", { type: "t", payload: { pathname: `contracts/${uuid}/x.pdf` } })).status, 400);
 ok("percorso contratti non ammesso");
 assert.equal((await P(sup, "POST", "supplier-upload-token", { type: "t", payload: { pathname: `suppliers/${uuid}/x.exe` } })).status, 400);

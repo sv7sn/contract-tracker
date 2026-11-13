@@ -114,25 +114,51 @@ export function checkDocument(file: File): string | null {
   return null;
 }
 
+// Archivio dei documenti scelto dal server: "vercel" (Vercel Blob, predefinito) o "gcs" (Google Cloud Storage).
+// Lo si chiede una volta sola, allo stesso endpoint di caricamento (che richiede già l'accesso).
+let storageKind: Promise<"vercel" | "gcs"> | undefined;
+const getStorageKind = (signUrl: string) =>
+  (storageKind ??= post<{ provider?: string }>(signUrl, { type: "storage.kind" })
+    .then(d => (d.provider === "gcs" ? ("gcs" as const) : ("vercel" as const)))
+    .catch(() => {
+      storageKind = undefined;
+      return "vercel" as const;
+    }));
+
+/** Google Cloud Storage: il server firma un URL per UN file (percorso, tipo, dimensione) e il browser lo carica con PUT. */
+async function uploadToGcs(signUrl: string, pathname: string, file: File, contentType: string): Promise<string> {
+  const { url, headers } = await post<{ url: string; headers: Record<string, string> }>(signUrl, {
+    type: "gcs.sign",
+    pathname,
+    contentType,
+    size: file.size,
+  });
+  const res = await fetch(url, { method: "PUT", headers, body: file });
+  if (!res.ok) throw new Error(t("Caricamento nell'archivio non riuscito (errore {status})", { status: res.status }));
+  return pathname;
+}
+
 /** Carica il documento direttamente nell'archivio privato (autorizzato da /api/upload) e restituisce il percorso salvato. */
 export async function uploadDocument(file: File): Promise<string> {
-  const { uploadPresigned } = await import("@vercel/blob/client");
   const safeName = file.name.replace(/[^\p{L}\p{N}._ ()-]+/gu, "_").slice(-120);
+  // Il tipo dichiarato dal browser per i file Word può mancare o essere generico: l'archivio accetta solo i tipi dell'elenco, quindi lo ricaviamo dall'estensione.
+  const ext = file.name.toLowerCase().split(".").pop() ?? "";
+  const mime = (
+    {
+      pdf: "application/pdf",
+      doc: "application/msword",
+      docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    } as Record<string, string>
+  )[ext];
+  const pathname = `contracts/${crypto.randomUUID()}/${safeName}`;
+  // Google Cloud Storage: gli errori arrivano già chiari dal server; i messaggi qui sotto riguardano solo Vercel Blob.
+  if ((await getStorageKind("/api/upload")) === "gcs") return uploadToGcs("/api/upload", pathname, file, mime ?? file.type);
   try {
-    // Il tipo dichiarato dal browser per i file Word può mancare o essere generico: l'archivio accetta solo i tipi dell'elenco, quindi lo ricaviamo dall'estensione.
-    const ext = file.name.toLowerCase().split(".").pop() ?? "";
-    const mime = (
-      {
-        pdf: "application/pdf",
-        doc: "application/msword",
-        docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-      } as Record<string, string>
-    )[ext];
-    const result = await uploadPresigned(
-      `contracts/${crypto.randomUUID()}/${safeName}`,
-      mime ? new File([file], safeName, { type: mime }) : file,
-      { access: "private", handleUploadUrl: "/api/upload" },
-    );
+    const { uploadPresigned } = await import("@vercel/blob/client");
+    const result = await uploadPresigned(pathname, mime ? new File([file], safeName, { type: mime }) : file, {
+      access: "private",
+      handleUploadUrl: "/api/upload",
+    });
     return result.pathname;
   } catch (err) {
     const message = err instanceof Error ? err.message : "";
@@ -397,16 +423,18 @@ export const supplierDocUrl = (id: number, download = false) => `/api/portal?op=
 
 /** Carica un documento di qualifica nell'archivio privato e restituisce il percorso salvato. */
 export async function uploadSupplierDocument(file: File): Promise<string> {
-  const { uploadPresigned } = await import("@vercel/blob/client");
   const safeName = file.name.replace(/[^\p{L}\p{N}._ ()-]+/gu, "_").slice(-120);
   try {
     // Come per i contratti: il tipo dichiarato dal browser (Word, immagini) può mancare o non essere quello atteso dall'archivio, quindi lo ricaviamo dall'estensione.
     const mime = DOC_MIME[file.name.toLowerCase().split(".").pop() ?? ""];
-    const result = await uploadPresigned(
-      `suppliers/${crypto.randomUUID()}/${safeName}`,
-      mime ? new File([file], safeName, { type: mime }) : file,
-      { access: "private", handleUploadUrl: "/api/portal?op=supplier-upload-token" },
-    );
+    const pathname = `suppliers/${crypto.randomUUID()}/${safeName}`;
+    if ((await getStorageKind("/api/portal?op=supplier-upload-token")) === "gcs")
+      return await uploadToGcs("/api/portal?op=supplier-upload-token", pathname, file, mime ?? file.type);
+    const { uploadPresigned } = await import("@vercel/blob/client");
+    const result = await uploadPresigned(pathname, mime ? new File([file], safeName, { type: mime }) : file, {
+      access: "private",
+      handleUploadUrl: "/api/portal?op=supplier-upload-token",
+    });
     return result.pathname;
   } catch (err) {
     const message = err instanceof Error ? err.message : "";

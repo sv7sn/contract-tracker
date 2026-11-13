@@ -42,6 +42,9 @@ Prima di considerare finita una modifica devono passare tutti: `format:check`, `
 - Nessun segreto nel codice: le impostazioni sono variabili d'ambiente, elencate (vuote) in `.env.example`.
 - Gli strumenti di prova passano da `demoOnly()` in `api/portal.ts`, così si spengono con `DISABLE_DEMO_TOOLS=1`.
 
+### Archivio documenti
+- Il resto dell'app usa solo le funzioni di `api/_blob.ts` (apri, elimina, scrivi, autorizza caricamento), mai direttamente Vercel Blob o Google Cloud Storage: l'archivio si sceglie con `STORAGE_PROVIDER` (`vercel` predefinito, `gcs`).
+
 ### Database
 - Lo schema è in `api/_db.ts` (`ensureSchema`): solo istruzioni idempotenti (`create table if not exists`, `alter table … add column if not exists`, `create index if not exists`). Mai `drop` o cambi distruttivi su dati esistenti.
 - Lo schema si riapplica solo quando cambia (impronta salvata in `settings.schema_hash`), con un blocco che evita due avvii contemporanei.
@@ -73,7 +76,7 @@ Prima di considerare finita una modifica devono passare tutti: `format:check`, `
 - Una modifica che cambia comportamento, configurazione o sicurezza aggiorna anche `README.md` e il documento giusto in `docs/` (e `.env.example` per una nuova variabile).
 
 ## Cosa non fare
-- Non aggiungere dipendenze di produzione senza motivo: oggi sono sei, ed è una scelta (elenco in `docs/SBOM.cdx.json`).
+- Non aggiungere dipendenze di produzione senza motivo: oggi sono sette, ed è una scelta (elenco in `docs/SBOM.cdx.json`).
 - Non disattivare test o controlli per far passare una modifica.
 - Non modificare dati di produzione con script: le correzioni passano dal codice e dai test.
 - Non rimuovere i controlli di quattro occhi (eccezioni al confronto, clausole) né il blocco della firma senza i pareri richiesti.

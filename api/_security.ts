@@ -3,6 +3,7 @@ import type { ReadinessCheck, SecurityEvent, User } from "../src/types.ts";
 import { getPool } from "./_db.js";
 import { HttpError } from "./_http.js";
 import { aiConfigured, aiProvider } from "./_docai.js";
+import { storageProvider } from "./_blob.js";
 
 const must = (u: User) => {
   if (u.role !== "manager") throw new HttpError(403, "Solo il Manager vede il registro di sicurezza");
@@ -59,12 +60,20 @@ export async function readiness(user: User): Promise<ReadinessCheck[]> {
     env("CRON_SECRET") ? "ok" : "warn",
     env("CRON_SECRET") ? "Impostata" : "Non impostata: promemoria, conservazione dati e solleciti non partono",
   );
-  add(
-    "blob",
-    "Archivio documenti (Blob privato)",
-    env("BLOB_STORE_ID") || env("BLOB_READ_WRITE_TOKEN") ? "ok" : "error",
-    env("BLOB_STORE_ID") || env("BLOB_READ_WRITE_TOKEN") ? "Collegato" : "Non collegato: i file non si possono caricare",
-  );
+  if (storageProvider() === "gcs")
+    add(
+      "blob",
+      "Archivio documenti (Google Cloud Storage)",
+      env("GCS_BUCKET") ? "ok" : "error",
+      env("GCS_BUCKET") ? `Bucket ${process.env.GCS_BUCKET?.trim()}` : "Non collegato: manca GCS_BUCKET, i file non si possono caricare",
+    );
+  else
+    add(
+      "blob",
+      "Archivio documenti (Blob privato)",
+      env("BLOB_STORE_ID") || env("BLOB_READ_WRITE_TOKEN") ? "ok" : "error",
+      env("BLOB_STORE_ID") || env("BLOB_READ_WRITE_TOKEN") ? "Collegato" : "Non collegato: i file non si possono caricare",
+    );
   add(
     "mail",
     "Email (Resend)",

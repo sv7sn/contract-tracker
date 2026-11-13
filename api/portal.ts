@@ -1,5 +1,5 @@
 import { requireRole, requireUser } from "./_auth.js";
-import { deleteDocuments, handleUploadPresigned, issueSignedToken, openDocument } from "./_blob.js";
+import { authorizeUpload, deleteDocuments, openDocument } from "./_blob.js";
 import { createSessionToken, sessionCookie } from "./_crypto.js";
 import { checkStoredDocument } from "./_docai.js";
 import { monitorData, remindSupplier, runReminders } from "./_docs.js";
@@ -238,25 +238,14 @@ async function handle(request: Request): Promise<Response> {
       if (op === "supplier-save" && method === "POST") return json({ supplier: await saveMyData(user, await readJson(request), origin) });
       if (op === "supplier-submit" && method === "POST") return json({ supplier: await submitMyRegistration(user, origin) });
       if (op === "supplier-upload-token" && method === "POST") {
-        const body = (await readJson(request)) as Parameters<typeof handleUploadPresigned>[0]["body"];
-        if (!body || typeof body !== "object" || typeof (body as { type?: unknown }).type !== "string")
-          throw new HttpError(400, "Richiesta di caricamento non valida");
-        const result = await handleUploadPresigned({
-          request,
-          body,
-          getSignedToken: async pathname => {
-            const m = SUPPLIER_FILE_PATH_RE.exec(pathname);
+        const result = await authorizeUpload(request, await readJson(request), {
+          checkPath: pathname => {
             const ext = pathname.toLowerCase().split(".").pop() ?? "";
-            if (!m || !DOC_EXTENSIONS.includes(ext)) throw new HttpError(400, "Percorso del documento non valido");
-            return {
-              token: await issueSignedToken({
-                pathname,
-                operations: ["put"],
-                allowedContentTypes: Object.values(DOC_MIME),
-                maximumSizeInBytes: MAX_DOC_BYTES,
-              }),
-            };
+            if (!SUPPLIER_FILE_PATH_RE.test(pathname) || !DOC_EXTENSIONS.includes(ext))
+              throw new HttpError(400, "Percorso del documento non valido");
           },
+          contentTypes: Object.values(DOC_MIME),
+          maxBytes: MAX_DOC_BYTES,
         });
         return json(result);
       }

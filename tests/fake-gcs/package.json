@@ -1,0 +1,6 @@
+{
+  "name": "@google-cloud/storage",
+  "version": "0.0.0-test",
+  "type": "module",
+  "main": "index.js"
+}

@@ -39,9 +39,11 @@ Fuori ambito (non realizzato): firma elettronica, funzioni AI sui contratti, int
  SAP  ──►  file XLS/XLSX (RDA aperte, ordini) caricati a mano o inoltrati a un endpoint con segreto
 ```
 
+L'archivio documenti si sceglie con `STORAGE_PROVIDER`: Vercel Blob (predefinito, ambiente di prova) oppure Google Cloud Storage (`gcs`, per GKE). Il resto dell'app passa sempre da `api/_blob.ts`; dettagli in `OPERATIONS.md`.
+
 **Scelte di fondo**
 - **Un'unica applicazione, un solo database.** I moduli condividono i dati (task ↔ fornitori ↔ contratti ↔ budget ↔ bozze). Non sono servizi separati.
-- **Nessun framework lato server e nessun ORM:** funzioni Vercel con SQL scritto a mano (libreria `pg`). Le dipendenze di produzione sono sei: `react`, `react-dom`, `pg`, `@vercel/blob`, `lucide-react`, un font.
+- **Nessun framework lato server e nessun ORM:** funzioni Vercel con SQL scritto a mano (libreria `pg`). Le dipendenze di produzione sono sette: `@google-cloud/storage` (caricata solo con `STORAGE_PROVIDER=gcs`), `react`, `react-dom`, `pg`, `@vercel/blob`, `lucide-react`, un font.
 - **Logica condivisa tra server e interfaccia** in `api/` (permessi, passaggi dei task, regole del CLM) e riesportata in `src/`: server e interfaccia usano le stesse regole.
 - **Schema autogestito:** `ensureSchema` (`api/_db.ts`) esegue all'avvio istruzioni idempotenti (`create table if not exists`, `add column if not exists`). Non esiste una cartella di migrazioni da lanciare.
 

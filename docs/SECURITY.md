@@ -20,7 +20,7 @@ Controlli presenti nel codice, minacce considerate e limiti noti. Per l'architet
 | **Strumenti di prova** | Accessi di prova, simulazione del budget e fornitori di prova si spengono con `DISABLE_DEMO_TOOLS=1`; il controllo di configurazione segnala se sono ancora attivi |
 | **Avvio concorrente** | La creazione dello schema è protetta da un blocco del database: più istanze che partono insieme non si ostacolano (provato con sei avvii contemporanei) |
 | **Segreti** | Solo in variabili d'ambiente; nessun segreto nel repository. Il Manager vede in Configurazione un controllo che segnala quali mancano, senza mostrarne i valori |
-| **Dipendenze** | Sei dipendenze di produzione; `npm audit` senza vulnerabilità note; elenco in `SBOM.cdx.json` (CycloneDX); controllo automatico nella CI |
+| **Dipendenze** | Sette dipendenze di produzione; `npm audit` senza vulnerabilità note; elenco in `SBOM.cdx.json` (CycloneDX); controllo automatico nella CI |
 | **Verifica continua** | CI su ogni modifica: lint, build, oltre 700 controlli di integrazione (34 suite), audit delle dipendenze |
 
 ## 1 bis. Verifica di sicurezza interna (automatica)

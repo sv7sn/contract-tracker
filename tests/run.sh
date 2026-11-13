@@ -4,7 +4,7 @@
 #       tests/run.sh renewal clm  solo alcune
 # Variabile: PGADMIN_URL = connessione con permesso di creare database (default postgres://postgres:pw@localhost:5432/postgres).
 # SAP_SAMPLES = cartella con gli export SAP reali (pr.xls, po.xls) e mp27.xlsx: servono a 5 suite (budget, purchase, sourcing, spend, tasks), non sono nel repository.
-# Richiede: Node 22+, psql, `npm install`. Gli upload su Vercel Blob e le email sono simulati (tests/fake-blob, VIES/sanzioni "mock").
+# Richiede: Node 22+, psql, `npm install`. Gli upload su Vercel Blob e Google Cloud Storage e le email sono simulati (tests/fake-blob, tests/fake-gcs, VIES/sanzioni "mock").
 set -uo pipefail
 cd "$(dirname "$0")/.."
 ADMIN="${PGADMIN_URL:-postgres://postgres:pw@localhost:5432/postgres}"
@@ -13,6 +13,7 @@ BUILD="$PWD/tests/.build"
 rm -rf "$BUILD" && mkdir -p "$BUILD/node_modules/@vercel"
 npx tsc -p tests/tsconfig.sim.json || exit 1
 cp -r tests/fake-blob "$BUILD/node_modules/@vercel/blob"
+mkdir -p "$BUILD/node_modules/@google-cloud" && cp -r tests/fake-gcs "$BUILD/node_modules/@google-cloud/storage"
 ln -s "$PWD/node_modules/pg" "$BUILD/node_modules/pg"
 echo '{"type":"module"}' > "$BUILD/package.json"
 NEEDS_SAMPLES=" budget purchase sourcing spend tasks "

@@ -405,6 +405,9 @@ const en: Record<string, string> = {
   "I fornitori più a rischio vanno controllati più spesso: giorni alto ≤ medio ≤ basso": "Higher-risk suppliers must be checked more often: days high ≤ medium ≤ low",
   "Funzione troppo lunga (massimo 80 caratteri)": "Job title too long (maximum 80 characters)",
   "Numero di telefono non valido": "Invalid phone number",
-  "Gli indicatori sono riservati al Manager": "KPIs are reserved for the Manager"
+  "Gli indicatori sono riservati al Manager": "KPIs are reserved for the Manager",
+  "Formato del file non ammesso": "File format not allowed",
+  "Dimensione del file non ammessa": "File size not allowed",
+  "Archivio documenti non configurato (manca GCS_BUCKET)": "Document store not configured (GCS_BUCKET missing)",
 };
 export default en;

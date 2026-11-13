@@ -1,6 +1,6 @@
 // Fornitore di prova: già registrato e in regola su tutto, per provare contratti, acquisti e rinnovi senza fare l'intero onboarding.
 import { randomBytes, randomUUID } from "node:crypto";
-import { put } from "@vercel/blob";
+import { putDocument } from "./_blob.js";
 import type { SupplierData, User } from "../src/types.ts";
 import { hashPassword } from "./_crypto.js";
 import { getPool, inTransaction } from "./_db.js";
@@ -87,7 +87,7 @@ export async function createDemoSupplier(
   const files: { type: string; name: string; path: string; expires: boolean }[] = [];
   for (const t of docTypes) {
     const path = `suppliers/${randomUUID()}/${t.key}.pdf`;
-    await put(path, PDF, { access: "private", contentType: "application/pdf", addRandomSuffix: false });
+    await putDocument(path, PDF, "application/pdf");
     files.push({ type: t.key, name: `${t.label} (prova).pdf`, path, expires: t.expires });
   }
   const password = `Prova-${randomBytes(4).toString("hex")}!`;

@@ -423,6 +423,7 @@ const en: Record<string, string> = {
   "Filtri": "Filters",
   "Tutte le origini": "All sources",
   "Attesa BO": "Awaiting BO",
-  "Da gestire": "To handle"
+  "Da gestire": "To handle",
+  "Caricamento nell'archivio non riuscito (errore {status})": "Upload to the document store failed (error {status})",
 };
 export default en;

@@ -20,6 +20,22 @@ Variabili in `.env.example`. Il **Manager** vede in *Configurazione → Sicurezz
 - Account di servizio intestati all'azienda (oggi Vercel e Neon sono su un account personale, piano gratuito; il piano Hobby di Vercel non è previsto per uso aziendale).
 - Togliere dall'ambiente Vercel le variabili non usate dal codice (es. `VITE_SUPABASE_*`, `TSC_COMPILE_ON_ERROR`).
 
+### Archivio documenti su Google Cloud Storage (GKE)
+Con `STORAGE_PROVIDER=gcs` e `GCS_BUCKET=<nome>` l'app usa Google Cloud Storage invece di Vercel Blob (codice in `api/_blob.ts` e `api/_storage-gcs.ts`). Il browser carica i file con URL firmati V4 (validi 10 minuti, un solo percorso, tipo di file e dimensione massima vincolati dalla firma); la lettura passa sempre dal server, dopo il controllo dei permessi.
+
+Da preparare su Google Cloud:
+- **Bucket privato**: accesso uniforme a livello di bucket, *public access prevention* attivo, regione UE. Consigliato il versioning degli oggetti.
+- **Identità dell'app** (Workload Identity, nessuna chiave): sul bucket il ruolo `roles/storage.objectAdmin` (lettura, scrittura, eliminazione); sull'account di servizio stesso il ruolo `roles/iam.serviceAccountTokenCreator`, necessario per firmare gli URL senza chiave privata.
+- **CORS del bucket**, per il caricamento dal browser (sostituire il dominio):
+  ```json
+  [{ "origin": ["https://procurement.example.com"], "method": ["PUT"], "responseHeader": ["Content-Type", "x-goog-content-length-range"], "maxAgeSeconds": 3600 }]
+  ```
+  (`gcloud storage buckets update gs://<bucket> --cors-file=cors.json`)
+- **Content-Security-Policy** del server che serve l'app: in `connect-src` va aggiunto `https://storage.googleapis.com` (su Vercel le intestazioni sono in `vercel.json` e restano quelle di Vercel Blob).
+- Il **controllo di configurazione** del Manager mostra quale archivio è attivo e se manca `GCS_BUCKET`.
+
+Configurazione su Kubernetes: tutte le impostazioni sono variabili d'ambiente; valori normali in una ConfigMap, riservati in un Secret (o Secret Manager), passati al container con `env`/`envFrom`. Nessun file di configurazione da montare; i segreti non vanno montati come file.
+
 ## 3. Monitoraggio
 - `GET /api/portal?op=health` risponde `{"ok":true}` se il database è raggiungibile (503 altrimenti): adatto a un controllo di disponibilità esterno.
 - Log delle funzioni: pannello Vercel. Eventi di accesso: registro di sicurezza nell'applicazione.

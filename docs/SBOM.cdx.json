@@ -2,10 +2,10 @@
   "$schema": "http://cyclonedx.org/schema/bom-1.5.schema.json",
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
-  "serialNumber": "urn:uuid:17553871-c077-4490-bac7-c89a65450f76",
+  "serialNumber": "urn:uuid:27cc86a2-4b30-42de-9889-dfb17c906573",
   "version": 1,
   "metadata": {
-    "timestamp": "2026-10-20T07:51:46.863Z",
+    "timestamp": "2026-11-13T10:00:46.421Z",
     "lifecycles": [
       {
         "phase": "build"
@@ -15,7 +15,7 @@
       {
         "vendor": "npm",
         "name": "cli",
-        "version": "10.9.4"
+        "version": "10.9.9"
       }
     ],
     "component": {
@@ -82,6 +82,241 @@
         {
           "license": {
             "id": "OFL-1.1"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@google-cloud/paginator@7.2.0",
+      "type": "library",
+      "name": "@google-cloud/paginator",
+      "version": "7.2.0",
+      "scope": "required",
+      "author": "Google Inc.",
+      "description": "A result paging utility used by Google node.js modules",
+      "purl": "pkg:npm/%40google-cloud/paginator@7.2.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@google-cloud/paginator"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@google-cloud/paginator/-/paginator-7.2.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/googleapis/google-cloud-node.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/googleapis/google-cloud-node/tree/main/core/paginator"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/googleapis/google-cloud-node/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "97ec7a60e6c7193baa04232f0b4497a370a7caa838164596298469b5fe3a3c008727918052e86c7766f7c298601ab835c9bb3f2c06feab9327513b86ff7fafef"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@google-cloud/projectify@6.2.1",
+      "type": "library",
+      "name": "@google-cloud/projectify",
+      "version": "6.2.1",
+      "scope": "required",
+      "author": "Google Inc.",
+      "description": "A simple utility for replacing the projectid token in objects.",
+      "purl": "pkg:npm/%40google-cloud/projectify@6.2.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@google-cloud/projectify"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@google-cloud/projectify/-/projectify-6.2.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/googleapis/google-cloud-node.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/googleapis/google-cloud-node/tree/main/core/projectify"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/googleapis/google-cloud-node/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "3d5f68cbb5694115cbbaa2ae539452387150c9682fc36b13f4ca131b29236bd8fa73da6fe7eb6d29326216c71cbb9d346182068b3f0908eb1beb43df2a6895ff"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@google-cloud/promisify@6.2.1",
+      "type": "library",
+      "name": "@google-cloud/promisify",
+      "version": "6.2.1",
+      "scope": "required",
+      "author": "Google Inc.",
+      "description": "A simple utility for promisifying functions and classes.",
+      "purl": "pkg:npm/%40google-cloud/promisify@6.2.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@google-cloud/promisify"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@google-cloud/promisify/-/promisify-6.2.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/googleapis/google-cloud-node.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/googleapis/google-cloud-node/tree/main/core/promisify"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/googleapis/google-cloud-node/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "ffe46f2c9e6ef968466b2e99dda63a380a4342636aab5e36ecc9adec4a2ff64629ebd81d522192c059f281e4f17f3ebd5c1b5864b0275a2906308a055ed2adf8"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@google-cloud/storage@8.4.0",
+      "type": "library",
+      "name": "@google-cloud/storage",
+      "version": "8.4.0",
+      "scope": "required",
+      "author": "Google Inc.",
+      "description": "Cloud Storage Client Library for Node.js",
+      "purl": "pkg:npm/%40google-cloud/storage@8.4.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@google-cloud/storage"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@google-cloud/storage/-/storage-8.4.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/googleapis/google-cloud-node.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/googleapis/google-cloud-node/tree/main/handwritten/storage"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/googleapis/google-cloud-node/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "337900e940364e3a796b39c2ae029c9bd0b33a3890c91327aaea9a96a5c0792e70be4aaa67137cc293638c769f39262cea543cd94edfda2f307b87937c8ae990"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "@nodable/entities@3.1.0",
+      "type": "library",
+      "name": "@nodable/entities",
+      "version": "3.1.0",
+      "scope": "required",
+      "author": "Amit Gupta",
+      "description": "Entity parser for XML, HTML, External entites with security and NCR control",
+      "purl": "pkg:npm/%40nodable/entities@3.1.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/@nodable/entities"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/@nodable/entities/-/entities-3.1.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/nodable/val-parsers.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/nodable/val-parsers#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/nodable/val-parsers/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "2ec4bf0e31ebfae0cceb8ec6aeefdc03cf89ddadc77e1b6dc0228bcaea3237bc974c50b1281b5280c401beb5bdc8d3dadbfcc345436e18f687e50505a1ae1aad"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
           }
         }
       ]
@@ -179,53 +414,6 @@
       ]
     },
     {
-      "bom-ref": "zod@4.1.11",
-      "type": "library",
-      "name": "zod",
-      "version": "4.1.11",
-      "scope": "required",
-      "author": "Colin McDonnell",
-      "description": "TypeScript-first schema declaration and validation library with static type inference",
-      "purl": "pkg:npm/zod@4.1.11",
-      "properties": [
-        {
-          "name": "cdx:npm:package:path",
-          "value": "node_modules/@vercel/cli-config/node_modules/zod"
-        }
-      ],
-      "externalReferences": [
-        {
-          "type": "distribution",
-          "url": "https://registry.npmjs.org/zod/-/zod-4.1.11.tgz"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/colinhacks/zod.git"
-        },
-        {
-          "type": "website",
-          "url": "https://zod.dev"
-        },
-        {
-          "type": "issue-tracker",
-          "url": "https://github.com/colinhacks/zod/issues"
-        }
-      ],
-      "hashes": [
-        {
-          "alg": "SHA-512",
-          "content": "58fb2ac312134b6b73c756f38482ac12cd7d0010f9be60956b8c41a36b6afd2ad5e11359b5fc2cd449c25905cceb287c6c3d3c6b589dbe4079319481899b23c2"
-        }
-      ],
-      "licenses": [
-        {
-          "license": {
-            "id": "MIT"
-          }
-        }
-      ]
-    },
-    {
       "bom-ref": "@vercel/cli-exec@1.0.1",
       "type": "library",
       "name": "@vercel/cli-exec",
@@ -318,6 +506,147 @@
       ]
     },
     {
+      "bom-ref": "abort-controller@3.0.0",
+      "type": "library",
+      "name": "abort-controller",
+      "version": "3.0.0",
+      "scope": "required",
+      "author": "Toru Nagashima",
+      "description": "An implementation of WHATWG AbortController interface.",
+      "purl": "pkg:npm/abort-controller@3.0.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/abort-controller"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/abort-controller/-/abort-controller-3.0.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/mysticatea/abort-controller.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/mysticatea/abort-controller#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/mysticatea/abort-controller/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "87c950f2d69c6589d1def3504e089b8feb4e0c7239ffe974e80bb63dcae2bff1a67add1e6a3e13c161f8d6c3bdc271c3890b048f5f6ad1daf375675e007b707a"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "agent-base@7.1.4",
+      "type": "library",
+      "name": "agent-base",
+      "version": "7.1.4",
+      "scope": "required",
+      "author": "Nathan Rajlich",
+      "description": "Turn a function into an `http.Agent` instance",
+      "purl": "pkg:npm/agent-base@7.1.4",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/agent-base"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/agent-base/-/agent-base-7.1.4.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TooTallNate/proxy-agents.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/TooTallNate/proxy-agents#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/TooTallNate/proxy-agents/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "32703e613f1fc1f24f801c779bad0c36a6a49b7d173a4c88a07d72ea1b9342f0b43f0646ee48bc35a70b05cacf6cda28f2f119cbb269ba4efe8cc3be094a2f4d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "anynum@1.0.1",
+      "type": "library",
+      "name": "anynum",
+      "version": "1.0.1",
+      "scope": "required",
+      "author": "Amit Gupta",
+      "description": "Normalize all Unicode decimal digits (Devanagari, Arabic, Thai, etc.) to ASCII numerals. Zero dependencies, performance-first.",
+      "purl": "pkg:npm/anynum@1.0.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/anynum"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/anynum/-/anynum-1.0.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/NaturalIntelligence/anynum.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/NaturalIntelligence/anynum#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/NaturalIntelligence/anynum/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "37afff14b113fed5d834cfc5e8005c6b5a07e9f581f8a953b7dd3d2dedbc58c0c193ca1a4f8bd8d7b0c2af083632f9aea942addcd8b837974627f12806070ee8"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
       "bom-ref": "async-retry@1.3.3",
       "type": "library",
       "name": "async-retry",
@@ -353,6 +682,382 @@
         {
           "alg": "SHA-512",
           "content": "c1faff8ecb70f71362ff4b5e307ad15bb76ccf72ede4046160d6767b0a5a76785a229e666c02e13803fe10076c0bbb7867ac2ab0356ff7e5ba826d4393d984cb"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "base64-js@1.5.1",
+      "type": "library",
+      "name": "base64-js",
+      "version": "1.5.1",
+      "scope": "required",
+      "author": "T. Jameson Little",
+      "description": "Base64 encoding/decoding in pure JS",
+      "purl": "pkg:npm/base64-js@1.5.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/base64-js"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/base64-js/-/base64-js-1.5.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/beatgammit/base64-js.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/beatgammit/base64-js"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/beatgammit/base64-js/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "00aa5a6251e7f2de1255b3870b2f9be7e28a82f478bebb03f2f6efadb890269b3b7ca0d3923903af2ea38b4ad42630b49336cd78f2f0cf1abc8b2a68e35a9e58"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "bignumber.js@9.3.1",
+      "type": "library",
+      "name": "bignumber.js",
+      "version": "9.3.1",
+      "scope": "required",
+      "author": "Michael Mclaughlin",
+      "description": "A library for arbitrary-precision decimal and non-decimal arithmetic",
+      "purl": "pkg:npm/bignumber.js@9.3.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/bignumber.js"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/bignumber.js/-/bignumber.js-9.3.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/MikeMcl/bignumber.js.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/MikeMcl/bignumber.js#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/MikeMcl/bignumber.js/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "2a8d2e5f5e682144bbc09dd16f7d05b3a4a455b2e63c100a7659bbabdf9a93d6db21e15fd0cc2e06c415eb3efe5fbebcfdc1ec7e0f96972b03589726b618ec8d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "buffer-equal-constant-time@1.0.1",
+      "type": "library",
+      "name": "buffer-equal-constant-time",
+      "version": "1.0.1",
+      "scope": "required",
+      "author": "GoInstant Inc., a salesforce.com company",
+      "description": "Constant-time comparison of Buffers",
+      "purl": "pkg:npm/buffer-equal-constant-time@1.0.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/buffer-equal-constant-time"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/buffer-equal-constant-time/-/buffer-equal-constant-time-1.0.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+ssh://git@github.com/goinstant/buffer-equal-constant-time.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/goinstant/buffer-equal-constant-time#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/goinstant/buffer-equal-constant-time/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "cd1a54883c1dff193a003a8f3004c6f2f73d54fae4724ed3d3b388c748278e62409c79d35573501b7bdfbd636e899224c2ef4aaca740d6224a7ec7d357113a34"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "BSD-3-Clause"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "data-uri-to-buffer@4.0.1",
+      "type": "library",
+      "name": "data-uri-to-buffer",
+      "version": "4.0.1",
+      "scope": "required",
+      "author": "Nathan Rajlich",
+      "description": "Generate a Buffer instance from a Data URI string",
+      "purl": "pkg:npm/data-uri-to-buffer@4.0.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/data-uri-to-buffer"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/data-uri-to-buffer/-/data-uri-to-buffer-4.0.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/TooTallNate/node-data-uri-to-buffer.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/TooTallNate/node-data-uri-to-buffer"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/TooTallNate/node-data-uri-to-buffer/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "d11f629116faebc1c1ed00f14f5be4a6e501b6a739dd8c80c0cc0679414a4688d8fcd58abdd67ef5462d45f1a686a35b4644d256931b9b28578a9145bf671bfc"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "duplexify@4.1.3",
+      "type": "library",
+      "name": "duplexify",
+      "version": "4.1.3",
+      "scope": "required",
+      "author": "Mathias Buus",
+      "description": "Turn a writable and readable stream into a streams2 duplex stream with support for async initialization and streams1/streams2 input",
+      "purl": "pkg:npm/duplexify@4.1.3",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/duplexify"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/duplexify/-/duplexify-4.1.3.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/mafintosh/duplexify.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/mafintosh/duplexify"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/mafintosh/duplexify/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "337066061c09459b12c77f25672844e770ac75d83397947bc4624d93b09575d643e82726c0c087f09fbb029ac8ad0287ed3a272b16828dcbf6ed099ffac43ea0"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "ecdsa-sig-formatter@1.0.11",
+      "type": "library",
+      "name": "ecdsa-sig-formatter",
+      "version": "1.0.11",
+      "scope": "required",
+      "author": "D2L Corporation",
+      "description": "Translate ECDSA signatures between ASN.1/DER and JOSE-style concatenation",
+      "purl": "pkg:npm/ecdsa-sig-formatter@1.0.11",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/ecdsa-sig-formatter"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/ecdsa-sig-formatter/-/ecdsa-sig-formatter-1.0.11.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+ssh://git@github.com/Brightspace/node-ecdsa-sig-formatter.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/Brightspace/node-ecdsa-sig-formatter#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/Brightspace/node-ecdsa-sig-formatter/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "9da825dd162b6cdbfa91091e248a6de8d259cbcb702c1ff6bedcfac8df59e2f44a1cde3f41924811baa88402d283029d9e4b2e63793901d769e6583cb15a1571"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "end-of-stream@1.4.5",
+      "type": "library",
+      "name": "end-of-stream",
+      "version": "1.4.5",
+      "scope": "required",
+      "author": "Mathias Buus",
+      "description": "Call a callback when a readable/writable/duplex stream has completed or failed.",
+      "purl": "pkg:npm/end-of-stream@1.4.5",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/end-of-stream"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/end-of-stream/-/end-of-stream-1.4.5.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/mafintosh/end-of-stream.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/mafintosh/end-of-stream"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/mafintosh/end-of-stream/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "a2810673a1cfdbac57abf37e18218e4f424a08b0c6aead9b41466b43b832ac989900d27ff180d3c53a5005718c9fe59b2105cd569c96ca69bb2985480909f23a"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "event-target-shim@5.0.1",
+      "type": "library",
+      "name": "event-target-shim",
+      "version": "5.0.1",
+      "scope": "required",
+      "author": "Toru Nagashima",
+      "description": "An implementation of WHATWG EventTarget interface.",
+      "purl": "pkg:npm/event-target-shim@5.0.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/event-target-shim"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/event-target-shim/-/event-target-shim-5.0.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/mysticatea/event-target-shim.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/mysticatea/event-target-shim"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/mysticatea/event-target-shim/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "8bfd976e74b3feec51094ebe35d54980a5834cce36efe32a61b910cc3df6d43b8240952a3ae24a200d08336f96db1b581dd28e999e1d47a7c4c6c7784972fe59"
         }
       ],
       "licenses": [
@@ -411,6 +1116,382 @@
       ]
     },
     {
+      "bom-ref": "extend@3.0.2",
+      "type": "library",
+      "name": "extend",
+      "version": "3.0.2",
+      "scope": "required",
+      "author": "Stefan Thomas",
+      "description": "Port of jQuery.extend for node.js and the browser",
+      "purl": "pkg:npm/extend@3.0.2",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/extend"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/extend/-/extend-3.0.2.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/justmoon/node-extend.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/justmoon/node-extend#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/justmoon/node-extend/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "7e3aae0b9f5c0fb0b25babab3572b4141b9f9197288861bcd304ee3ee8d7e7dd1c0794ed967db4136501e12fd601156a8577df665d8b3604be81074f2088a6fe"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "fast-xml-builder@1.3.2",
+      "type": "library",
+      "name": "fast-xml-builder",
+      "version": "1.3.2",
+      "scope": "required",
+      "author": "Amit Gupta",
+      "description": "Build XML from JSON without C/C++ based libraries",
+      "purl": "pkg:npm/fast-xml-builder@1.3.2",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/fast-xml-builder"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/fast-xml-builder/-/fast-xml-builder-1.3.2.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/NaturalIntelligence/fast-xml-builder.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/NaturalIntelligence/fast-xml-builder#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/NaturalIntelligence/fast-xml-builder/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "397f7555295284b3c3811655eed93f610e25f2d4fbe50ce217923183c8383c56c254f8ee4d6c0dfb241f0312c9d1db9f269a6b74e77a1e533be0985ddfd4dc05"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "fast-xml-parser@5.12.0",
+      "type": "library",
+      "name": "fast-xml-parser",
+      "version": "5.12.0",
+      "scope": "required",
+      "author": "Amit Gupta",
+      "description": "Validate XML, Parse XML, Build XML without C/C++ based libraries",
+      "purl": "pkg:npm/fast-xml-parser@5.12.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/fast-xml-parser"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/fast-xml-parser/-/fast-xml-parser-5.12.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/NaturalIntelligence/fast-xml-parser.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/NaturalIntelligence/fast-xml-parser#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/NaturalIntelligence/fast-xml-parser/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "fe95f1441b70c58f70f33ed86e0b2f20f3dc3ef143b136c8916c134098733493e8923f936cde9fb6672fe23fe91100ef3823672860f3ba4e41a36a288083a216"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "fetch-blob@3.2.0",
+      "type": "library",
+      "name": "fetch-blob",
+      "version": "3.2.0",
+      "scope": "required",
+      "author": "Jimmy Wärting",
+      "description": "Blob & File implementation in Node.js, originally from node-fetch.",
+      "purl": "pkg:npm/fetch-blob@3.2.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/fetch-blob"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/fetch-blob/-/fetch-blob-3.2.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/node-fetch/fetch-blob.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/node-fetch/fetch-blob#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/node-fetch/fetch-blob/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "ef2010a43d94309ccb8b50eabfba856273db68fc7b65f14ae8f888c50e0f7e418fc8dca5d94831f9afee994a2798aaa384ce039df6ccbdd5faa2d5eaf37b2841"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "formdata-polyfill@4.0.10",
+      "type": "library",
+      "name": "formdata-polyfill",
+      "version": "4.0.10",
+      "scope": "required",
+      "author": "Jimmy Wärting",
+      "description": "HTML5 `FormData` for Browsers and Node.",
+      "purl": "pkg:npm/formdata-polyfill@4.0.10",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/formdata-polyfill"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/formdata-polyfill/-/formdata-polyfill-4.0.10.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://jimmywarting@github.com/jimmywarting/FormData.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/jimmywarting/FormData#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/jimmywarting/FormData/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "6ee7b01f332f60bdbd8dd7904d520b79c49a64a9edfd12568e8642179396eb467aeff1a648b06438533baa1d4f237cc536d25b6992f9790bb5bcb7daccec23e2"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "gaxios@7.3.1",
+      "type": "library",
+      "name": "gaxios",
+      "version": "7.3.1",
+      "scope": "required",
+      "author": "Google, LLC",
+      "description": "A simple common HTTP client specifically for Google APIs and services.",
+      "purl": "pkg:npm/gaxios@7.3.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/gaxios"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/gaxios/-/gaxios-7.3.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/googleapis/google-cloud-node.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/googleapis/google-cloud-node/tree/main/core/packages/gaxios"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/googleapis/google-cloud-node/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "901debcc957b77d8ee2d987cff9e904d70b041fc7285d38c772624d47750285b45f132530d365026d8b1588c17744f498e2f75982e350d43698e57a8e0be1e01"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "gcp-metadata@9.2.3",
+      "type": "library",
+      "name": "gcp-metadata",
+      "version": "9.2.3",
+      "scope": "required",
+      "author": "Google LLC",
+      "description": "Get the metadata from a Google Cloud Platform environment",
+      "purl": "pkg:npm/gcp-metadata@9.2.3",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/gcp-metadata"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/gcp-metadata/-/gcp-metadata-9.2.3.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/googleapis/google-cloud-node.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/googleapis/google-cloud-node/tree/main/core/packages/gcp-metadata"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/googleapis/google-cloud-node/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "776388fdd249dc821a78ecf773d8efaf98f91b96de2397d0cdb82294d896843286c2f24df68d7442e6fbd0d91b17a3cd25252834a67bec92981b3d05b38fbd2e"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "gaxios@8.3.2",
+      "type": "library",
+      "name": "gaxios",
+      "version": "8.3.2",
+      "scope": "required",
+      "author": "Google, LLC",
+      "description": "A simple common HTTP client specifically for Google APIs and services.",
+      "purl": "pkg:npm/gaxios@8.3.2",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/gcp-metadata/node_modules/gaxios"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/gaxios/-/gaxios-8.3.2.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/googleapis/google-cloud-node.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/googleapis/google-cloud-node/tree/main/core/packages/gaxios"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/googleapis/google-cloud-node/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "ed5b1a4c4c718db0efd992b562e0b88db81f377dcd23febfef37585941c1ea6720e75bf8b420597bec738ea3f33a957323e0b99352a4f4e43cd1656b5c01ceab"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
       "bom-ref": "get-stream@6.0.1",
       "type": "library",
       "name": "get-stream",
@@ -447,6 +1528,288 @@
         {
           "alg": "SHA-512",
           "content": "b6ce968beda3de3423aa2ef4c3902537c0c59e44b00be32a9b113374400b076a976585775ff6f50937e03cb18934c7805b174f7d4f053b59acdcd51f68708f62"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "google-auth-library@11.3.4",
+      "type": "library",
+      "name": "google-auth-library",
+      "version": "11.3.4",
+      "scope": "required",
+      "author": "Google Inc.",
+      "description": "Google APIs Authentication Client Library for Node.js",
+      "purl": "pkg:npm/google-auth-library@11.3.4",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/google-auth-library"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/google-auth-library/-/google-auth-library-11.3.4.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/googleapis/google-cloud-node.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/googleapis/google-cloud-node/tree/main/core/packages/google-auth-library-nodejs"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/googleapis/google-cloud-node/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "45a6020e87982081534601fc85eb12c6a2eb9ad0b697e0c1ddc4824bf48dd533c68c8d95a4f749985ddb7d12d49fc56f3ffe08d807fd7ec92dc367fd4af55256"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "gaxios@8.3.2",
+      "type": "library",
+      "name": "gaxios",
+      "version": "8.3.2",
+      "scope": "required",
+      "author": "Google, LLC",
+      "description": "A simple common HTTP client specifically for Google APIs and services.",
+      "purl": "pkg:npm/gaxios@8.3.2",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/google-auth-library/node_modules/gaxios"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/gaxios/-/gaxios-8.3.2.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/googleapis/google-cloud-node.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/googleapis/google-cloud-node/tree/main/core/packages/gaxios"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/googleapis/google-cloud-node/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "ed5b1a4c4c718db0efd992b562e0b88db81f377dcd23febfef37585941c1ea6720e75bf8b420597bec738ea3f33a957323e0b99352a4f4e43cd1656b5c01ceab"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "google-logging-utils@2.2.0",
+      "type": "library",
+      "name": "google-logging-utils",
+      "version": "2.2.0",
+      "scope": "required",
+      "author": "Google API Authors",
+      "description": "A debug logger package for other Google libraries",
+      "purl": "pkg:npm/google-logging-utils@2.2.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/google-logging-utils"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/google-logging-utils/-/google-logging-utils-2.2.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/googleapis/google-cloud-node.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/googleapis/google-cloud-node/tree/main/core/packages/logging-utils"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/googleapis/google-cloud-node/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "43a1ee484ca86b18b4020a94ace61bda073bedf0e5e10ba04681e9ade23c5695bf5733eca0acb18cbf2d18a2e66695a5bc2d6e5415ccf39b72928429086045e6"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "html-entities@2.6.0",
+      "type": "library",
+      "name": "html-entities",
+      "version": "2.6.0",
+      "scope": "required",
+      "author": "Marat Dulin",
+      "description": "Fastest HTML entities encode/decode library.",
+      "purl": "pkg:npm/html-entities@2.6.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/html-entities"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/html-entities/-/html-entities-2.6.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/mdevils/html-entities.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/mdevils/html-entities#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/mdevils/html-entities/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "92283eacc9ff40e551bebedcf3a810f25597abe1e4bfa09b007d612eef911b7dfc4ad4e913c6746f8e120d56aa56eec718a7f6edfadd994604b3d853517fdc2d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "http-proxy-agent@7.0.2",
+      "type": "library",
+      "name": "http-proxy-agent",
+      "version": "7.0.2",
+      "scope": "required",
+      "author": "Nathan Rajlich",
+      "description": "An HTTP(s) proxy `http.Agent` implementation for HTTP",
+      "purl": "pkg:npm/http-proxy-agent@7.0.2",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/http-proxy-agent"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/http-proxy-agent/-/http-proxy-agent-7.0.2.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TooTallNate/proxy-agents.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/TooTallNate/proxy-agents#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/TooTallNate/proxy-agents/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "4f58240226180d6631dd5e419b2bbb1dc7dcbcbee652b4d688ceb239f6b73c8a6156227f8053dbbe2750faf7aa48e1dc8bf3f105c0da6de50d0b3a4e3832598a"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "https-proxy-agent@7.0.6",
+      "type": "library",
+      "name": "https-proxy-agent",
+      "version": "7.0.6",
+      "scope": "required",
+      "author": "Nathan Rajlich",
+      "description": "An HTTP(s) proxy `http.Agent` implementation for HTTPS",
+      "purl": "pkg:npm/https-proxy-agent@7.0.6",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/https-proxy-agent"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/https-proxy-agent/-/https-proxy-agent-7.0.6.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TooTallNate/proxy-agents.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/TooTallNate/proxy-agents#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/TooTallNate/proxy-agents/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "bcaf4fe7f8947dd97de4023e255c94b88715b5de287efb6b3abdc736d336cb10bd6e731b11da77c74d4e8503678dbf082588b7f159531379815f071fbf2c2e4b"
         }
       ],
       "licenses": [
@@ -500,6 +1863,52 @@
         {
           "license": {
             "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "inherits@2.0.4",
+      "type": "library",
+      "name": "inherits",
+      "version": "2.0.4",
+      "scope": "required",
+      "description": "Browser-friendly inheritance fully compatible with standard node.js inherits()",
+      "purl": "pkg:npm/inherits@2.0.4",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/inherits"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/inherits/-/inherits-2.0.4.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/isaacs/inherits.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/isaacs/inherits#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/isaacs/inherits/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "93fbc6697e3f6256b75b3c8c0af4d039761e207bea38ab67a8176ecd31e9ce9419cc0b2428c859d8af849c189233dcc64a820578ca572b16b8758799210a9ec1"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
           }
         }
       ]
@@ -645,6 +2054,53 @@
       ]
     },
     {
+      "bom-ref": "is-unsafe@2.0.3",
+      "type": "library",
+      "name": "is-unsafe",
+      "version": "2.0.3",
+      "scope": "required",
+      "author": "Amit Gupta",
+      "description": "Zero-dependency, DOM-free, pure predicate for detecting unsafe strings across HTML, XML, SVG, SQL, SHELL, and REGEX contexts",
+      "purl": "pkg:npm/is-unsafe@2.0.3",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/is-unsafe"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/is-unsafe/-/is-unsafe-2.0.3.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/NaturalIntelligence/is-unsafe.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/NaturalIntelligence/is-unsafe#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/NaturalIntelligence/is-unsafe/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "6419657330823b6ebbbe07456fa4eade9bfe2e11da0a218c76bf99b2e2fe3a8a6bb8083b4bedd90ecd6f0f444f0b4b92ae48f36eb6b16868ed5f5601c633de15"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
       "bom-ref": "jose@5.10.0",
       "type": "library",
       "name": "jose",
@@ -681,6 +2137,147 @@
         {
           "alg": "SHA-512",
           "content": "b3edc097fa7d837d88abea2a5f1916fffee393656283a145d4216acd55e84d45eddaacfcf5859b2fe3b04b5ecd15812fc42df99f414a7863b62c6612c5e3361a"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "json-bigint@1.0.0",
+      "type": "library",
+      "name": "json-bigint",
+      "version": "1.0.0",
+      "scope": "required",
+      "author": "Andrey Sidorov",
+      "description": "JSON.parse with bigints support",
+      "purl": "pkg:npm/json-bigint@1.0.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/json-bigint"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/json-bigint/-/json-bigint-1.0.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+ssh://git@github.com/sidorares/json-bigint.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/sidorares/json-bigint#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/sidorares/json-bigint/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "4a23efffc56966e59bbcb48cb530d4f2111fad95a0fe61ff9d5fdbe28d0261b4b1bb550840f2ddc0a3822322d05fe5483cee6facb5f78bcaada85ca174f49449"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "jwa@2.0.1",
+      "type": "library",
+      "name": "jwa",
+      "version": "2.0.1",
+      "scope": "required",
+      "author": "Brian J. Brennan",
+      "description": "JWA implementation (supports all JWS algorithms)",
+      "purl": "pkg:npm/jwa@2.0.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/jwa"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/jwa/-/jwa-2.0.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/brianloveswords/node-jwa.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/brianloveswords/node-jwa#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/brianloveswords/node-jwa/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "851174e1fa8920ff006db92ae4d28637405baf7271950faa859b9f5d5af40efba32b2f776426d764c1c32f810eb687526c25b13aa47c312d6d5c0e61c2a0970e"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "jws@4.0.1",
+      "type": "library",
+      "name": "jws",
+      "version": "4.0.1",
+      "scope": "required",
+      "author": "Brian J Brennan",
+      "description": "Implementation of JSON Web Signatures",
+      "purl": "pkg:npm/jws@4.0.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/jws"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/jws/-/jws-4.0.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/brianloveswords/node-jws.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/brianloveswords/node-jws#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/brianloveswords/node-jws/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "10a23f33fcaa3e7706514878e31cf43f14a275716bffeaf4a40ef4fa0218863bfe7adef2c4cfacdbd63e5460e4a2f4687d07a6d1fb3b52f7f8f9898077245db8"
         }
       ],
       "licenses": [
@@ -786,6 +2383,53 @@
       ]
     },
     {
+      "bom-ref": "mime@3.0.0",
+      "type": "library",
+      "name": "mime",
+      "version": "3.0.0",
+      "scope": "required",
+      "author": "Robert Kieffer",
+      "description": "A comprehensive library for mime-type mapping",
+      "purl": "pkg:npm/mime@3.0.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/mime"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/mime/-/mime-3.0.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/broofa/mime.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/broofa/mime#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/broofa/mime/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "8d2094eff541d65a0858165ed7868460753ffb550c107a1a3bbab108e5493b0f46807ef65405a9a7135c8d4fb1f5ada4dc648805734ac57405a91bef67bbebdc"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
       "bom-ref": "mimic-fn@2.1.0",
       "type": "library",
       "name": "mimic-fn",
@@ -822,6 +2466,100 @@
         {
           "alg": "SHA-512",
           "content": "3aa6ce939a0441e019f165d6c9d96ef47263cfd59574422f6a63027179aea946234e49c7fecaac5af850def830285451d47a63bcd04a437ee76c9818cc6a8672"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "node-domexception@1.0.0",
+      "type": "library",
+      "name": "node-domexception",
+      "version": "1.0.0",
+      "scope": "required",
+      "author": "Jimmy Wärting",
+      "description": "An implementation of the DOMException class from NodeJS",
+      "purl": "pkg:npm/node-domexception@1.0.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/node-domexception"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/node-domexception/-/node-domexception-1.0.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/jimmywarting/node-domexception.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/jimmywarting/node-domexception#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/jimmywarting/node-domexception/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "fe3299a0ca70d05f06470978fde2d138f03771f717b4b0293f44332e6513fc7b8f0995b207b218f59acc78ac363bf9c522a3d00773d533d6989b4177d760170d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "node-fetch@3.3.2",
+      "type": "library",
+      "name": "node-fetch",
+      "version": "3.3.2",
+      "scope": "required",
+      "author": "David Frank",
+      "description": "A light-weight module that brings Fetch API to node.js",
+      "purl": "pkg:npm/node-fetch@3.3.2",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/node-fetch"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/node-fetch/-/node-fetch-3.3.2.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/node-fetch/node-fetch.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/node-fetch/node-fetch"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/node-fetch/node-fetch/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "75107bf2cacdfe5ea0a96ba56a1f52af17989f179d7481b7d3e18ea8affd3a52d5c8b8371cf9ebe92a8e59358e5ca4700b6786602919e7d34db9282f4aba6038"
         }
       ],
       "licenses": [
@@ -875,6 +2613,53 @@
         {
           "license": {
             "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "once@1.4.0",
+      "type": "library",
+      "name": "once",
+      "version": "1.4.0",
+      "scope": "required",
+      "author": "Isaac Z. Schlueter",
+      "description": "Run a function exactly one time",
+      "purl": "pkg:npm/once@1.4.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/once"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/once/-/once-1.4.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/isaacs/once.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/isaacs/once#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/isaacs/once/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "94d689808fb643951140191c7042874d038f697754c67659125413658d0c15402e684a9ed44f8dcaf81dcff688c8d8ba67d3333b976fd47f27e7cfc610ba77fb"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
           }
         }
       ]
@@ -963,6 +2748,53 @@
         {
           "alg": "SHA-512",
           "content": "c2b03039e5e9d5144c15f418f12cbb55a19598fa1c68bc1214e60218a4b2a3caa627eff269a7c2979042035210656a8549106b283605791f5dfd5c90cdf1ff8e"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "path-expression-matcher@1.6.2",
+      "type": "library",
+      "name": "path-expression-matcher",
+      "version": "1.6.2",
+      "scope": "required",
+      "author": "Amit Gupta",
+      "description": "Efficient path tracking and pattern matching for XML/JSON parsers",
+      "purl": "pkg:npm/path-expression-matcher@1.6.2",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/path-expression-matcher"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/path-expression-matcher/-/path-expression-matcher-1.6.2.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/NaturalIntelligence/path-expression-matcher.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/NaturalIntelligence/path-expression-matcher#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/NaturalIntelligence/path-expression-matcher/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "7a74a56a26add3989ab27ce680dc518fcade15d8f7a6e6364293603f568f21a55f4fa9e7f480ae3e816528793c10ddb61dcc1ec2c84efa63760c66e40843ada9"
         }
       ],
       "licenses": [
@@ -1300,6 +3132,52 @@
       ]
     },
     {
+      "bom-ref": "readable-stream@3.6.2",
+      "type": "library",
+      "name": "readable-stream",
+      "version": "3.6.2",
+      "scope": "required",
+      "description": "Streams3, a user-land copy of the stream library from Node.js",
+      "purl": "pkg:npm/readable-stream@3.6.2",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/readable-stream"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/readable-stream/-/readable-stream-3.6.2.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/nodejs/readable-stream.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/nodejs/readable-stream#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/nodejs/readable-stream/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "f6efec9e20ab6370f959db04447cc71381b66025eaa06e454c7522082e1221bafa5dc2d9058d39c9af442a361e93d3b9c4e0308c6abed497460404bb43d49ca0"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
       "bom-ref": "retry@0.13.1",
       "type": "library",
       "name": "retry",
@@ -1336,6 +3214,100 @@
         {
           "alg": "SHA-512",
           "content": "5d0050dc8f16d4281ed127a1fba8238f4dcb6e64455aea2cce02bda280a9c1822b861a0ef34a5fab8714914e439249f07ce7c5b5e470959e7a3d838663215676"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "retry-request@9.1.0",
+      "type": "library",
+      "name": "retry-request",
+      "version": "9.1.0",
+      "scope": "required",
+      "author": "Stephen Sawchuk",
+      "description": "Retry a request.",
+      "purl": "pkg:npm/retry-request@9.1.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/retry-request"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/retry-request/-/retry-request-9.1.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/googleapis/google-cloud-node.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/googleapis/google-cloud-node/tree/main/core/packages/retry-request"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/googleapis/google-cloud-node/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "1482f255b8acf834e8dca45bb4a71eaa98f5e7de70205f974055bff8054e05d0909b1c0d0e070d5d7af614d334123daa0fbcd55db2467c7ee5a388c1d30c2128"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "safe-buffer@5.2.1",
+      "type": "library",
+      "name": "safe-buffer",
+      "version": "5.2.1",
+      "scope": "required",
+      "author": "Feross Aboukhadijeh",
+      "description": "Safer Node.js Buffer API",
+      "purl": "pkg:npm/safe-buffer@5.2.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/safe-buffer"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/safe-buffer/-/safe-buffer-5.2.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/feross/safe-buffer.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/feross/safe-buffer"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/feross/safe-buffer/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "ae9dd2a34eca71d9a629b1af81a37141226bedb1954959394bd12ad45fa9a5b468ef4f9879a0f1930e4377c34f37e183e9b8e7626d95b8fb825e6a6e62f9825d"
         }
       ],
       "licenses": [
@@ -1487,6 +3459,146 @@
       ]
     },
     {
+      "bom-ref": "stream-events@1.0.5",
+      "type": "library",
+      "name": "stream-events",
+      "version": "1.0.5",
+      "scope": "required",
+      "author": "Stephen Sawchuk",
+      "description": "Get an event when you're being sent data or asked for it.",
+      "purl": "pkg:npm/stream-events@1.0.5",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/stream-events"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/stream-events/-/stream-events-1.0.5.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/stephenplusplus/stream-events.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/stephenplusplus/stream-events"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/stephenplusplus/stream-events/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "135194cc14a0bdcb7c26c6f7bf65f5e698f3375b5879bb5b2da320f9e04e50e03181b2e849b4f6352f757247399490f529f2e321dfa35c9460a34aa757935eae"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "stream-shift@1.0.3",
+      "type": "library",
+      "name": "stream-shift",
+      "version": "1.0.3",
+      "scope": "required",
+      "author": "Mathias Buus",
+      "description": "Returns the next buffer/object in a stream's readable queue",
+      "purl": "pkg:npm/stream-shift@1.0.3",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/stream-shift"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/stream-shift/-/stream-shift-1.0.3.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/mafintosh/stream-shift.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/mafintosh/stream-shift"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/mafintosh/stream-shift/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "efa3914740ced68d6194ac136e2fc33371175867f764960ef1c5d7e512709ee9760c4836a32a19ca32cda1033c5acbd988528245f0b53b427b882be27b745999"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "string_decoder@1.3.0",
+      "type": "library",
+      "name": "string_decoder",
+      "version": "1.3.0",
+      "scope": "required",
+      "description": "The string_decoder module from Node core",
+      "purl": "pkg:npm/string_decoder@1.3.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/string_decoder"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/string_decoder/-/string_decoder-1.3.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/nodejs/string_decoder.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/nodejs/string_decoder"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/nodejs/string_decoder/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "864457f14d568c915df0bb03276c90ff0596c5aa2912c0015355df90cf00fa3d3ef392401a9a6dd7a72bd56860e8a21b6f8a2453a32a97a04e8febaea7fc0a78"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
       "bom-ref": "strip-final-newline@2.0.0",
       "type": "library",
       "name": "strip-final-newline",
@@ -1529,6 +3641,147 @@
         {
           "license": {
             "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "strnum@2.5.1",
+      "type": "library",
+      "name": "strnum",
+      "version": "2.5.1",
+      "scope": "required",
+      "author": "Amit Gupta",
+      "description": "Parse String to Number based on configuration",
+      "purl": "pkg:npm/strnum@2.5.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/strnum"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/strnum/-/strnum-2.5.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/NaturalIntelligence/strnum.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/NaturalIntelligence/strnum#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/NaturalIntelligence/strnum/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "50ce274cb5b34220c1b1e571506c4dd30273224d1453cf508bba4a5f3f6a212a3e961be2262913ba2901b0afe8151969bd81ef49dcf44d5a0bc90fac129630c4"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "stubs@3.0.0",
+      "type": "library",
+      "name": "stubs",
+      "version": "3.0.0",
+      "scope": "required",
+      "author": "Stephen Sawchuk",
+      "description": "Easy method stubber.",
+      "purl": "pkg:npm/stubs@3.0.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/stubs"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/stubs/-/stubs-3.0.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/stephenplusplus/stubs.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/stephenplusplus/stubs"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/stephenplusplus/stubs/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "3dd1edee11d424ac6f4c281b297f42d55fdfb4e723250833f0167035f57973807a75c1aa9697a54db27df7d8c1199da36223c0c1c5f974fea807056506551bc7"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "teeny-request@11.1.1",
+      "type": "library",
+      "name": "teeny-request",
+      "version": "11.1.1",
+      "scope": "required",
+      "author": "fhinkel",
+      "description": "Like request, but smaller.",
+      "purl": "pkg:npm/teeny-request@11.1.1",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/teeny-request"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/teeny-request/-/teeny-request-11.1.1.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/googleapis/google-cloud-node.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/googleapis/google-cloud-node/tree/main/core/packages/teeny-request"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/googleapis/google-cloud-node/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "23938b3a43cddd00cdda5d47fde1ae7ae29aab7d82740717b7dd56385fdb39f69db590f5590f3f164dbc5aca837068c8ca1016fc64036a06215448e1b99505c9"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
           }
         }
       ]
@@ -1580,13 +3833,13 @@
       ]
     },
     {
-      "bom-ref": "undici@6.29.0",
+      "bom-ref": "undici@6.29.1",
       "type": "library",
       "name": "undici",
-      "version": "6.29.0",
+      "version": "6.29.1",
       "scope": "required",
       "description": "An HTTP/1.1 client, written from scratch for Node.js",
-      "purl": "pkg:npm/undici@6.29.0",
+      "purl": "pkg:npm/undici@6.29.1",
       "properties": [
         {
           "name": "cdx:npm:package:path",
@@ -1596,7 +3849,7 @@
       "externalReferences": [
         {
           "type": "distribution",
-          "url": "https://registry.npmjs.org/undici/-/undici-6.29.0.tgz"
+          "url": "https://registry.npmjs.org/undici/-/undici-6.29.1.tgz"
         },
         {
           "type": "vcs",
@@ -1614,13 +3867,154 @@
       "hashes": [
         {
           "alg": "SHA-512",
-          "content": "47e44e0c1aa9ea2da93df94676afb120e52497e44d7c6807c288a779c2aefc90ae7f6b8ed3a70e2a80db2363fb0e7e8a72cc1d2b0adccdb53a21827a2bc5fec2"
+          "content": "12f46552dfd0a8012f5dd41e44c6147f0390b1fce90f3b7292b1b6a3018413fac1381a18bfdb85dfd673b0d0e1e254c51e14ebd973998ca91882e783d7666618"
         }
       ],
       "licenses": [
         {
           "license": {
             "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "util-deprecate@1.0.2",
+      "type": "library",
+      "name": "util-deprecate",
+      "version": "1.0.2",
+      "scope": "required",
+      "author": "Nathan Rajlich",
+      "description": "The Node.js `util.deprecate()` function with browser support",
+      "purl": "pkg:npm/util-deprecate@1.0.2",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/util-deprecate"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git://github.com/TooTallNate/util-deprecate.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/TooTallNate/util-deprecate"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/TooTallNate/util-deprecate/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "10f0f9ab5b97c85c49a42acb9c27359c79eade039ae83641a1c008888d93692080ed5089d5424331a802cc891736c5187c3d5d68afff2d3110f318886eb1ed73"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "web-streams-polyfill@3.3.3",
+      "type": "library",
+      "name": "web-streams-polyfill",
+      "version": "3.3.3",
+      "scope": "required",
+      "author": "Mattias Buelens",
+      "description": "Web Streams, based on the WHATWG spec reference implementation",
+      "purl": "pkg:npm/web-streams-polyfill@3.3.3",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/web-streams-polyfill"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/web-streams-polyfill/-/web-streams-polyfill-3.3.3.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/MattiasBuelens/web-streams-polyfill.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/MattiasBuelens/web-streams-polyfill#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/MattiasBuelens/web-streams-polyfill/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "7762562c28af999613488a207bd32c805099aede7bd418a47161989230b59219656d3783946a99d83f2f0fc13f9496bc58659b6fb3e59bcfd725857b2091d967"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    },
+    {
+      "bom-ref": "wrappy@1.0.2",
+      "type": "library",
+      "name": "wrappy",
+      "version": "1.0.2",
+      "scope": "required",
+      "author": "Isaac Z. Schlueter",
+      "description": "Callback wrapping utility",
+      "purl": "pkg:npm/wrappy@1.0.2",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/wrappy"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/wrappy/-/wrappy-1.0.2.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/npm/wrappy.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/npm/wrappy"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/npm/wrappy/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "9784a9fc346c7a8afdc0be84bd5dbe4ee427eb774c90f8d9feca7d5e48214c46d5f4a94f4b5c54b19deeeff2103b8c31b5c141e1b82940f45c477402bdeccf71"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "ISC"
           }
         }
       ]
@@ -1718,6 +4112,53 @@
           }
         }
       ]
+    },
+    {
+      "bom-ref": "xml-naming@0.3.0",
+      "type": "library",
+      "name": "xml-naming",
+      "version": "0.3.0",
+      "scope": "required",
+      "author": "Amit Gupta",
+      "description": "Validates XML name productions — Name, NCName, QName, NMToken, NMTokens — for XML 1.0 and 1.1",
+      "purl": "pkg:npm/xml-naming@0.3.0",
+      "properties": [
+        {
+          "name": "cdx:npm:package:path",
+          "value": "node_modules/xml-naming"
+        }
+      ],
+      "externalReferences": [
+        {
+          "type": "distribution",
+          "url": "https://registry.npmjs.org/xml-naming/-/xml-naming-0.3.0.tgz"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/NaturalIntelligence/xml-naming.git"
+        },
+        {
+          "type": "website",
+          "url": "https://github.com/NaturalIntelligence/xml-naming#readme"
+        },
+        {
+          "type": "issue-tracker",
+          "url": "https://github.com/NaturalIntelligence/xml-naming/issues"
+        }
+      ],
+      "hashes": [
+        {
+          "alg": "SHA-512",
+          "content": "8218a0d93044fc7d7568e56099a840dcc8629af901afa2486249c7fc385d935d275f075b22a049b1b7ccc69bc53c6f1b030efb80ddbd6905af2a9995a0f96f3d"
+        }
+      ],
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
     }
   ],
   "dependencies": [
@@ -1725,6 +4166,7 @@
       "ref": "contract-tracker@0.0.0",
       "dependsOn": [
         "@fontsource-variable/inter@5.3.0",
+        "@google-cloud/storage@8.4.0",
         "@vercel/blob@2.8.1",
         "lucide-react@1.53.0",
         "pg@8.23.1",
@@ -1737,6 +4179,42 @@
       "dependsOn": []
     },
     {
+      "ref": "@google-cloud/paginator@7.2.0",
+      "dependsOn": [
+        "extend@3.0.2"
+      ]
+    },
+    {
+      "ref": "@google-cloud/projectify@6.2.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "@google-cloud/promisify@6.2.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "@google-cloud/storage@8.4.0",
+      "dependsOn": [
+        "@google-cloud/paginator@7.2.0",
+        "@google-cloud/projectify@6.2.1",
+        "@google-cloud/promisify@6.2.1",
+        "abort-controller@3.0.0",
+        "async-retry@1.3.3",
+        "duplexify@4.1.3",
+        "fast-xml-parser@5.12.0",
+        "gaxios@7.3.1",
+        "google-auth-library@11.3.4",
+        "html-entities@2.6.0",
+        "mime@3.0.0",
+        "retry-request@9.1.0",
+        "teeny-request@11.1.1"
+      ]
+    },
+    {
+      "ref": "@nodable/entities@3.1.0",
+      "dependsOn": []
+    },
+    {
       "ref": "@vercel/blob@2.8.1",
       "dependsOn": [
         "@vercel/oidc@3.8.10",
@@ -1744,19 +4222,14 @@
         "is-buffer@2.0.5",
         "is-node-process@1.2.0",
         "throttleit@2.1.0",
-        "undici@6.29.0"
+        "undici@6.29.1"
       ]
     },
     {
       "ref": "@vercel/cli-config@0.3.1",
       "dependsOn": [
-        "zod@4.1.11",
         "xdg-app-paths@5.5.1"
       ]
-    },
-    {
-      "ref": "zod@4.1.11",
-      "dependsOn": []
     },
     {
       "ref": "@vercel/cli-exec@1.0.1",
@@ -1773,10 +4246,65 @@
       ]
     },
     {
+      "ref": "abort-controller@3.0.0",
+      "dependsOn": [
+        "event-target-shim@5.0.1"
+      ]
+    },
+    {
+      "ref": "agent-base@7.1.4",
+      "dependsOn": []
+    },
+    {
+      "ref": "anynum@1.0.1",
+      "dependsOn": []
+    },
+    {
       "ref": "async-retry@1.3.3",
       "dependsOn": [
         "retry@0.13.1"
       ]
+    },
+    {
+      "ref": "base64-js@1.5.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "bignumber.js@9.3.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "buffer-equal-constant-time@1.0.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "data-uri-to-buffer@4.0.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "duplexify@4.1.3",
+      "dependsOn": [
+        "end-of-stream@1.4.5",
+        "inherits@2.0.4",
+        "readable-stream@3.6.2",
+        "stream-shift@1.0.3"
+      ]
+    },
+    {
+      "ref": "ecdsa-sig-formatter@1.0.11",
+      "dependsOn": [
+        "safe-buffer@5.2.1"
+      ]
+    },
+    {
+      "ref": "end-of-stream@1.4.5",
+      "dependsOn": [
+        "once@1.4.0"
+      ]
+    },
+    {
+      "ref": "event-target-shim@5.0.1",
+      "dependsOn": []
     },
     {
       "ref": "execa@5.1.1",
@@ -1792,11 +4320,113 @@
       ]
     },
     {
+      "ref": "extend@3.0.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "fast-xml-builder@1.3.2",
+      "dependsOn": [
+        "path-expression-matcher@1.6.2",
+        "xml-naming@0.3.0"
+      ]
+    },
+    {
+      "ref": "fast-xml-parser@5.12.0",
+      "dependsOn": [
+        "@nodable/entities@3.1.0",
+        "fast-xml-builder@1.3.2",
+        "is-unsafe@2.0.3",
+        "path-expression-matcher@1.6.2",
+        "strnum@2.5.1",
+        "xml-naming@0.3.0"
+      ]
+    },
+    {
+      "ref": "fetch-blob@3.2.0",
+      "dependsOn": [
+        "node-domexception@1.0.0",
+        "web-streams-polyfill@3.3.3"
+      ]
+    },
+    {
+      "ref": "formdata-polyfill@4.0.10",
+      "dependsOn": [
+        "fetch-blob@3.2.0"
+      ]
+    },
+    {
+      "ref": "gaxios@7.3.1",
+      "dependsOn": [
+        "extend@3.0.2",
+        "https-proxy-agent@7.0.6",
+        "node-fetch@3.3.2"
+      ]
+    },
+    {
+      "ref": "gcp-metadata@9.2.3",
+      "dependsOn": [
+        "gaxios@8.3.2",
+        "google-logging-utils@2.2.0",
+        "json-bigint@1.0.0"
+      ]
+    },
+    {
+      "ref": "gaxios@8.3.2",
+      "dependsOn": [
+        "extend@3.0.2",
+        "https-proxy-agent@7.0.6",
+        "node-fetch@3.3.2"
+      ]
+    },
+    {
       "ref": "get-stream@6.0.1",
       "dependsOn": []
     },
     {
+      "ref": "google-auth-library@11.3.4",
+      "dependsOn": [
+        "base64-js@1.5.1",
+        "ecdsa-sig-formatter@1.0.11",
+        "gaxios@8.3.2",
+        "gcp-metadata@9.2.3",
+        "google-logging-utils@2.2.0",
+        "jws@4.0.1"
+      ]
+    },
+    {
+      "ref": "gaxios@8.3.2",
+      "dependsOn": [
+        "extend@3.0.2",
+        "https-proxy-agent@7.0.6",
+        "node-fetch@3.3.2"
+      ]
+    },
+    {
+      "ref": "google-logging-utils@2.2.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "html-entities@2.6.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "http-proxy-agent@7.0.2",
+      "dependsOn": [
+        "agent-base@7.1.4"
+      ]
+    },
+    {
+      "ref": "https-proxy-agent@7.0.6",
+      "dependsOn": [
+        "agent-base@7.1.4"
+      ]
+    },
+    {
       "ref": "human-signals@2.1.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "inherits@2.0.4",
       "dependsOn": []
     },
     {
@@ -1812,8 +4442,33 @@
       "dependsOn": []
     },
     {
+      "ref": "is-unsafe@2.0.3",
+      "dependsOn": []
+    },
+    {
       "ref": "jose@5.10.0",
       "dependsOn": []
+    },
+    {
+      "ref": "json-bigint@1.0.0",
+      "dependsOn": [
+        "bignumber.js@9.3.1"
+      ]
+    },
+    {
+      "ref": "jwa@2.0.1",
+      "dependsOn": [
+        "buffer-equal-constant-time@1.0.1",
+        "ecdsa-sig-formatter@1.0.11",
+        "safe-buffer@5.2.1"
+      ]
+    },
+    {
+      "ref": "jws@4.0.1",
+      "dependsOn": [
+        "jwa@2.0.1",
+        "safe-buffer@5.2.1"
+      ]
     },
     {
       "ref": "lucide-react@1.53.0",
@@ -1826,12 +4481,34 @@
       "dependsOn": []
     },
     {
+      "ref": "mime@3.0.0",
+      "dependsOn": []
+    },
+    {
       "ref": "mimic-fn@2.1.0",
       "dependsOn": []
     },
     {
+      "ref": "node-domexception@1.0.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "node-fetch@3.3.2",
+      "dependsOn": [
+        "data-uri-to-buffer@4.0.1",
+        "fetch-blob@3.2.0",
+        "formdata-polyfill@4.0.10"
+      ]
+    },
+    {
       "ref": "npm-run-path@4.0.1",
       "dependsOn": []
+    },
+    {
+      "ref": "once@1.4.0",
+      "dependsOn": [
+        "wrappy@1.0.2"
+      ]
     },
     {
       "ref": "onetime@5.1.2",
@@ -1841,6 +4518,10 @@
     },
     {
       "ref": "os-paths@4.4.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "path-expression-matcher@1.6.2",
       "dependsOn": []
     },
     {
@@ -1884,7 +4565,25 @@
       ]
     },
     {
+      "ref": "readable-stream@3.6.2",
+      "dependsOn": [
+        "inherits@2.0.4",
+        "string_decoder@1.3.0",
+        "util-deprecate@1.0.2"
+      ]
+    },
+    {
       "ref": "retry@0.13.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "retry-request@9.1.0",
+      "dependsOn": [
+        "extend@3.0.2"
+      ]
+    },
+    {
+      "ref": "safe-buffer@5.2.1",
       "dependsOn": []
     },
     {
@@ -1900,15 +4599,62 @@
       "dependsOn": []
     },
     {
+      "ref": "stream-events@1.0.5",
+      "dependsOn": [
+        "stubs@3.0.0"
+      ]
+    },
+    {
+      "ref": "stream-shift@1.0.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "string_decoder@1.3.0",
+      "dependsOn": [
+        "safe-buffer@5.2.1"
+      ]
+    },
+    {
       "ref": "strip-final-newline@2.0.0",
       "dependsOn": []
+    },
+    {
+      "ref": "strnum@2.5.1",
+      "dependsOn": [
+        "anynum@1.0.1"
+      ]
+    },
+    {
+      "ref": "stubs@3.0.0",
+      "dependsOn": []
+    },
+    {
+      "ref": "teeny-request@11.1.1",
+      "dependsOn": [
+        "http-proxy-agent@7.0.2",
+        "https-proxy-agent@7.0.6",
+        "node-fetch@3.3.2",
+        "stream-events@1.0.5"
+      ]
     },
     {
       "ref": "throttleit@2.1.0",
       "dependsOn": []
     },
     {
-      "ref": "undici@6.29.0",
+      "ref": "undici@6.29.1",
+      "dependsOn": []
+    },
+    {
+      "ref": "util-deprecate@1.0.2",
+      "dependsOn": []
+    },
+    {
+      "ref": "web-streams-polyfill@3.3.3",
+      "dependsOn": []
+    },
+    {
+      "ref": "wrappy@1.0.2",
       "dependsOn": []
     },
     {
@@ -1923,6 +4669,10 @@
       "dependsOn": [
         "os-paths@4.4.0"
       ]
+    },
+    {
+      "ref": "xml-naming@0.3.0",
+      "dependsOn": []
     }
   ]
 }
